@@ -3,11 +3,12 @@
 namespace App\Http\Controllers\MasterData;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\MasterData\StoreServiceRequest;
+use App\Http\Requests\MasterData\UpdateServiceRequest;
 use App\Models\ActivityLog;
 use App\Models\Service;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class ServiceController extends Controller
@@ -30,16 +31,21 @@ class ServiceController extends Controller
             $query->where('status', $status);
         }
 
+        $totalServices = Service::count();
         $services = $query->orderBy('name', 'asc')->paginate(10)->withQueryString();
 
-        return view('master-data.services.index', compact('services', 'search', 'status'));
+        return view('master-data.services.index', compact('services', 'search', 'status', 'totalServices'));
     }
 
     /**
      * Show the form for creating a new service.
      */
-    public function create(): View
+    public function create(Request $request): View
     {
+        if (!$request->user()->isAdmin()) {
+            abort(403, 'Unauthorized. Administrator access is required to add services.');
+        }
+
         // Suggest next service code, e.g., SRV-001, SRV-002
         $count = Service::count() + 1;
         $suggestedCode = 'SRV-' . str_pad((string) $count, 3, '0', STR_PAD_LEFT);
@@ -50,20 +56,9 @@ class ServiceController extends Controller
     /**
      * Store a newly created service in storage.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(StoreServiceRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'code' => ['required', 'string', 'max:50', 'unique:services,code'],
-            'name' => ['required', 'string', 'max:150'],
-            'description' => ['nullable', 'string', 'max:1000'],
-            'status' => ['required', 'in:active,inactive'],
-        ], [
-            'code.required' => 'Service code is required.',
-            'code.unique' => 'This service code has already been registered.',
-            'name.required' => 'Service name is required.',
-        ]);
-
-        $service = Service::create($validated);
+        $service = Service::create($request->validated());
 
         ActivityLog::log(
             action: 'created',
@@ -72,34 +67,27 @@ class ServiceController extends Controller
         );
 
         return redirect()->route('master-data.services.index')
-            ->with('success', "Service '{$service->name}' added successfully.");
+            ->with('success', 'Service added successfully.');
     }
 
     /**
      * Show the form for editing the specified service.
      */
-    public function edit(Service $service): View
+    public function edit(Request $request, Service $service): View
     {
+        if (!$request->user()->isAdmin()) {
+            abort(403, 'Unauthorized. Administrator access is required to edit services.');
+        }
+
         return view('master-data.services.edit', compact('service'));
     }
 
     /**
      * Update the specified service in storage.
      */
-    public function update(Request $request, Service $service): RedirectResponse
+    public function update(UpdateServiceRequest $request, Service $service): RedirectResponse
     {
-        $validated = $request->validate([
-            'code' => ['required', 'string', 'max:50', Rule::unique('services', 'code')->ignore($service->id)],
-            'name' => ['required', 'string', 'max:150'],
-            'description' => ['nullable', 'string', 'max:1000'],
-            'status' => ['required', 'in:active,inactive'],
-        ], [
-            'code.required' => 'Service code is required.',
-            'code.unique' => 'This service code is already in use by another service.',
-            'name.required' => 'Service name is required.',
-        ]);
-
-        $service->update($validated);
+        $service->update($request->validated());
 
         ActivityLog::log(
             action: 'updated',
@@ -108,14 +96,18 @@ class ServiceController extends Controller
         );
 
         return redirect()->route('master-data.services.index')
-            ->with('success', "Service '{$service->name}' updated successfully.");
+            ->with('success', 'Service updated successfully.');
     }
 
     /**
      * Toggle the active/inactive status of a service.
      */
-    public function toggleStatus(Service $service): RedirectResponse
+    public function toggleStatus(Request $request, Service $service): RedirectResponse
     {
+        if (!$request->user()->isAdmin()) {
+            abort(403, 'Unauthorized. Administrator access is required to change service status.');
+        }
+
         $newStatus = $service->status === 'active' ? 'inactive' : 'active';
         $service->update(['status' => $newStatus]);
 
