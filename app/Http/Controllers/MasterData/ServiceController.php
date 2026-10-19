@@ -123,4 +123,17 @@ class ServiceController extends Controller
 
         return back()->with('success', $message);
     }
+
+    /**
+     * Prevent permanent deletion of services used in transactions.
+     */
+    public function destroy(Request $request, Service $service): RedirectResponse
+    {
+        if (!$request->user()->isAdmin()) {
+            abort(403, 'Unauthorized. Administrator access is required.');
+        }
+
+        return redirect()->route('master-data.services.index')
+            ->with('error', 'Services cannot be permanently deleted once created. You may deactivate the service instead.');
+    }
 }

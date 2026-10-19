@@ -119,4 +119,17 @@ class VehicleTypeController extends Controller
 
         return back()->with('success', $message);
     }
+
+    /**
+     * Prevent permanent deletion of vehicle types.
+     */
+    public function destroy(Request $request, VehicleType $vehicleType): RedirectResponse
+    {
+        if (!$request->user()->isAdmin()) {
+            abort(403, 'Unauthorized. Administrator access is required.');
+        }
+
+        return redirect()->route('master-data.vehicle-types.index')
+            ->with('error', 'Vehicle types cannot be permanently deleted once created. You may deactivate the vehicle type instead.');
+    }
 }

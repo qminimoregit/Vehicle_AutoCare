@@ -3,51 +3,42 @@
 @section('title', 'Vehicle Types')
 
 @section('content')
-    <!-- Page Header -->
-    <div class="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-            <div class="flex items-center space-x-3">
-                <h1 class="text-2xl font-bold tracking-tight text-gray-900">Vehicle Types</h1>
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-800 border border-gray-200">
-                    Total: {{ $totalVehicleTypes }} {{ Str::plural('type', $totalVehicleTypes) }}
-                </span>
-            </div>
-            <p class="mt-1 text-sm text-gray-500">Manage vehicle categories.</p>
-        </div>
-        @if(Auth::user()->isAdmin())
-            <div>
-                <a 
-                    href="{{ route('master-data.vehicle-types.create') }}" 
-                    class="inline-flex items-center justify-center px-5 py-2.5 bg-[#0B1849] hover:bg-[#15286e] text-white font-semibold text-sm rounded-lg shadow-xs transition duration-150"
-                >
-                    <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                    </svg>
-                    + Add Vehicle Type
-                </a>
-            </div>
-        @endif
-    </div>
-
-    <!-- Simple Search Bar -->
-    <div class="mb-6 bg-white p-4 rounded-xl border border-gray-200 shadow-xs">
-        <form method="GET" action="{{ route('master-data.vehicle-types.index') }}" class="flex flex-col sm:flex-row gap-3">
-            <!-- Search Input -->
-            <div class="relative flex-1">
-                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
+    <div x-data="{ 
+        showAddModal: {{ $errors->any() && old('_form_type') === 'create_vehicle_type' ? 'true' : 'false' }} 
+    }">
+        <!-- Page Header -->
+        <x-page-header 
+            title="Vehicle Types" 
+            description="Manage vehicle categories."
+        >
+            <x-slot:actions>
+                <div class="flex items-center space-x-3">
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-800 border border-gray-200">
+                        Total: {{ $totalVehicleTypes }} {{ Str::plural('type', $totalVehicleTypes) }}
+                    </span>
+                    @if(Auth::user()->isAdmin())
+                        <button 
+                            type="button" 
+                            @click="showAddModal = true" 
+                            class="inline-flex items-center justify-center px-5 py-2.5 bg-[#0B1849] hover:bg-[#15286e] text-white font-semibold text-sm rounded-lg shadow-xs transition duration-150 cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0B1849]"
+                        >
+                            <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                            + Add Vehicle Type
+                        </button>
+                    @endif
                 </div>
-                <input 
-                    type="text" 
-                    name="search" 
-                    value="{{ request('search') }}" 
-                    placeholder="Search Vehicle Types..." 
-                    class="block w-full pl-9 pr-3 py-2.5 text-sm text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849]"
-                />
-            </div>
+            </x-slot:actions>
+        </x-page-header>
 
+        <!-- Search Bar -->
+        <x-search-bar 
+            :action="route('master-data.vehicle-types.index')" 
+            :search="$search" 
+            placeholder="Search Vehicle Types..."
+            :resetUrl="route('master-data.vehicle-types.index')"
+        >
             <!-- Status Filter -->
             <div class="w-full sm:w-44">
                 <select 
@@ -60,140 +51,243 @@
                     <option value="inactive" {{ request('status') === 'inactive' ? 'selected' : '' }}>Inactive Only</option>
                 </select>
             </div>
+        </x-search-bar>
 
-            <!-- Actions -->
-            <div class="flex items-center space-x-2">
-                <button 
-                    type="submit" 
-                    class="px-5 py-2.5 text-sm font-semibold text-white bg-[#0B1849] hover:bg-[#15286e] rounded-lg transition shadow-xs"
-                >
-                    Search
-                </button>
-                @if(request('search') || request('status'))
-                    <a 
-                        href="{{ route('master-data.vehicle-types.index') }}" 
-                        class="px-4 py-2.5 text-sm font-semibold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
-                    >
-                        Reset
-                    </a>
-                @endif
-            </div>
-        </form>
-    </div>
-
-    <!-- Vehicle Types Data Table -->
-    <div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50/80">
-                    <tr>
-                        <th scope="col" class="px-6 py-3.5 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                            Vehicle Type
-                        </th>
-                        <th scope="col" class="px-6 py-3.5 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                            Status
-                        </th>
-                        <th scope="col" class="px-6 py-3.5 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
-                            Actions
-                        </th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-200 bg-white">
-                    @forelse($vehicleTypes as $type)
-                        <tr class="hover:bg-gray-50/70 transition">
-                            <!-- Vehicle Type Name & Description -->
-                            <td class="px-6 py-4">
-                                <div class="flex items-center space-x-3">
-                                    <div class="w-9 h-9 rounded-lg bg-gray-100 text-[#0B1849] flex items-center justify-center font-bold text-xs uppercase border border-gray-200">
-                                        {{ substr($type->name, 0, 2) }}
-                                    </div>
-                                    <div>
-                                        <div class="text-sm font-bold text-gray-900">{{ $type->name }}</div>
-                                        @if($type->description)
-                                            <div class="text-xs text-gray-500 mt-0.5 line-clamp-1">{{ $type->description }}</div>
-                                        @endif
-                                    </div>
-                                </div>
-                            </td>
-
-                            <!-- Status -->
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <x-status-badge :status="$type->status" />
-                            </td>
-
-                            <!-- Actions -->
-                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                @if(Auth::user()->isAdmin())
-                                    <div class="inline-flex items-center space-x-2">
-                                        <!-- Edit Action -->
-                                        <a 
-                                            href="{{ route('master-data.vehicle-types.edit', $type) }}" 
-                                            class="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-md text-gray-700 bg-gray-100 hover:bg-gray-200 transition"
-                                        >
-                                            <svg class="w-3.5 h-3.5 mr-1 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                            </svg>
-                                            Edit
-                                        </a>
-
-                                        <!-- Activate / Deactivate Toggle -->
-                                        <form 
-                                            method="POST" 
-                                            action="{{ route('master-data.vehicle-types.toggle-status', $type) }}" 
-                                            onsubmit="return confirm('Are you sure you want to {{ $type->isActive() ? 'deactivate' : 'activate' }} {{ $type->name }}?')"
-                                        >
-                                            @csrf
-                                            @method('PATCH')
-                                            @if($type->isActive())
-                                                <button 
-                                                    type="submit" 
-                                                    class="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-md text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition"
-                                                >
-                                                    Deactivate
-                                                </button>
-                                            @else
-                                                <button 
-                                                    type="submit" 
-                                                    class="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-md text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition"
-                                                >
-                                                    Activate
-                                                </button>
-                                            @endif
-                                        </form>
-                                    </div>
-                                @else
-                                    <span class="text-xs text-gray-400 italic">View Only</span>
-                                @endif
-                            </td>
-                        </tr>
-                    @empty
+        <!-- Vehicle Types Data Table -->
+        <div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50/80">
                         <tr>
-                            <td colspan="3" class="px-6 py-12 text-center">
-                                <x-empty-state 
-                                    title="No vehicle types added yet."
-                                    description="Add vehicle classifications such as Car, Van, SUV, Motorbike, Lorry, Bus, or Three Wheeler."
-                                >
-                                    @if(Auth::user()->isAdmin())
-                                        <x-slot:action>
-                                            <a 
-                                                href="{{ route('master-data.vehicle-types.create') }}" 
-                                                class="inline-flex items-center px-4 py-2 text-xs font-semibold rounded-lg text-white bg-[#0B1849] hover:bg-[#15286e] shadow-xs transition"
-                                            >
-                                                + Add Vehicle Type
-                                            </a>
-                                        </x-slot:action>
-                                    @endif
-                                </x-empty-state>
-                            </td>
+                            <th scope="col" class="px-6 py-3.5 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Vehicle Type
+                            </th>
+                            <th scope="col" class="px-6 py-3.5 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Status
+                            </th>
+                            <th scope="col" class="px-6 py-3.5 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Actions
+                            </th>
                         </tr>
-                    @endforelse
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 bg-white">
+                        @forelse($vehicleTypes as $type)
+                            <tr class="hover:bg-gray-50/70 transition">
+                                <!-- Vehicle Type Name -->
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-bold text-gray-900">{{ $type->name }}</div>
+                                    @if($type->description)
+                                        <div class="text-xs text-gray-500 mt-0.5 line-clamp-1">{{ $type->description }}</div>
+                                    @endif
+                                </td>
+
+                                <!-- Status -->
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <x-status-badge :status="$type->status" />
+                                </td>
+
+                                <!-- Actions -->
+                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    @if(Auth::user()->isAdmin())
+                                        <div class="inline-flex items-center space-x-2">
+                                            <!-- Edit Action -->
+                                            <a 
+                                                href="{{ route('master-data.vehicle-types.edit', $type) }}" 
+                                                class="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-md text-gray-700 bg-gray-100 hover:bg-gray-200 transition cursor-pointer"
+                                            >
+                                                <svg class="w-3.5 h-3.5 mr-1 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                </svg>
+                                                Edit
+                                            </a>
+
+                                            <!-- Activate / Deactivate Toggle -->
+                                            <form 
+                                                method="POST" 
+                                                action="{{ route('master-data.vehicle-types.toggle-status', $type) }}" 
+                                                onsubmit="return confirm('Are you sure you want to {{ $type->isActive() ? 'deactivate' : 'activate' }} {{ $type->name }}?')"
+                                            >
+                                                @csrf
+                                                @method('PATCH')
+                                                @if($type->isActive())
+                                                    <button 
+                                                        type="submit" 
+                                                        class="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-md text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition cursor-pointer"
+                                                    >
+                                                        Deactivate
+                                                    </button>
+                                                @else
+                                                    <button 
+                                                        type="submit" 
+                                                        class="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-md text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition cursor-pointer"
+                                                    >
+                                                        Activate
+                                                    </button>
+                                                @endif
+                                            </form>
+                                        </div>
+                                    @else
+                                        <span class="text-xs text-gray-400 italic">View Only</span>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="3" class="px-6 py-12 text-center">
+                                    <x-empty-state 
+                                        title="No vehicle types found." 
+                                        description="Start by registering the first category of vehicles supported by the center."
+                                    >
+                                        @if(Auth::user()->isAdmin())
+                                            <x-slot:action>
+                                                <button 
+                                                    type="button" 
+                                                    @click="showAddModal = true" 
+                                                    class="inline-flex items-center px-5 py-2.5 text-xs font-semibold rounded-lg text-white bg-[#0B1849] hover:bg-[#15286e] shadow-xs transition"
+                                                >
+                                                    + Add Vehicle Type
+                                                </button>
+                                            </x-slot:action>
+                                        @endif
+                                    </x-empty-state>
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            @if($vehicleTypes->hasPages())
+                <div class="px-6 py-4 border-t border-gray-200 bg-gray-50/50">
+                    {{ $vehicleTypes->links() }}
+                </div>
+            @endif
         </div>
 
-        @if($vehicleTypes->hasPages())
-            <div class="px-6 py-4 border-t border-gray-200 bg-gray-50/50">
-                {{ $vehicleTypes->links() }}
+        @if(Auth::user()->isAdmin())
+            <!-- Add Vehicle Type Modal Dialog -->
+            <div 
+                x-show="showAddModal" 
+                class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4"
+                style="display: none;"
+                x-on:keydown.escape.window="showAddModal = false"
+            >
+                <!-- Backdrop -->
+                <div 
+                    x-show="showAddModal" 
+                    @click="showAddModal = false"
+                    x-transition:enter="ease-out duration-200"
+                    x-transition:enter-start="opacity-0"
+                    x-transition:enter-end="opacity-100"
+                    x-transition:leave="ease-in duration-150"
+                    x-transition:leave-start="opacity-100"
+                    x-transition:leave-end="opacity-0"
+                    class="fixed inset-0 bg-gray-900/50 backdrop-blur-xs"
+                ></div>
+
+                <!-- Modal Box -->
+                <div 
+                    x-show="showAddModal" 
+                    x-transition:enter="ease-out duration-200"
+                    x-transition:enter-start="opacity-0 scale-95"
+                    x-transition:enter-end="opacity-100 scale-100"
+                    x-transition:leave="ease-in duration-150"
+                    x-transition:leave-start="opacity-100 scale-100"
+                    x-transition:leave-end="opacity-0 scale-95"
+                    class="relative bg-white rounded-xl shadow-xl max-w-lg w-full border border-gray-200 z-10 overflow-hidden"
+                >
+                    <div class="px-6 py-4 bg-gray-50/80 border-b border-gray-200 flex items-center justify-between">
+                        <h3 class="text-lg font-bold text-gray-900">Add Vehicle Type</h3>
+                        <button 
+                            type="button" 
+                            @click="showAddModal = false" 
+                            class="text-gray-400 hover:text-gray-600 transition p-1 rounded-lg"
+                        >
+                            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <form method="POST" action="{{ route('master-data.vehicle-types.store') }}" class="p-6 space-y-4" novalidate>
+                        @csrf
+                        <input type="hidden" name="_form_type" value="create_vehicle_type">
+
+                        <!-- 1. Vehicle Type Name -->
+                        <div>
+                            <label for="modal_vtype_name" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+                                Vehicle Type Name <span class="text-rose-500">*</span>
+                            </label>
+                            <div class="mt-1">
+                                <input 
+                                    type="text" 
+                                    name="name" 
+                                    id="modal_vtype_name" 
+                                    required 
+                                    value="{{ old('name') }}" 
+                                    placeholder="e.g. Car, Van, SUV, Motorbike, Lorry"
+                                    class="block w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] @error('name') border-rose-400 bg-rose-50/30 @enderror"
+                                />
+                            </div>
+                            <p class="mt-1 text-xs text-gray-400">Examples: Car, Van, SUV, Motorbike, Lorry, Bus, Three Wheeler.</p>
+                            <x-input-error for="name" />
+                        </div>
+
+                        <!-- 2. Description (Optional) -->
+                        <div>
+                            <label for="modal_vtype_description" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+                                Description <span class="text-gray-400 font-normal">(Optional)</span>
+                            </label>
+                            <div class="mt-1">
+                                <textarea 
+                                    name="description" 
+                                    id="modal_vtype_description" 
+                                    rows="3" 
+                                    placeholder="Optional description or classification notes..."
+                                    class="block w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] @error('description') border-rose-400 bg-rose-50/30 @enderror"
+                                >{{ old('description') }}</textarea>
+                            </div>
+                            <x-input-error for="description" />
+                        </div>
+
+                        <!-- 3. Status -->
+                        <div>
+                            <label for="modal_vtype_status" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+                                Status <span class="text-rose-500">*</span>
+                            </label>
+                            <div class="mt-1">
+                                <select 
+                                    name="status" 
+                                    id="modal_vtype_status" 
+                                    required
+                                    class="block w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] bg-white"
+                                >
+                                    <option value="active" {{ old('status', 'active') === 'active' ? 'selected' : '' }}>Active</option>
+                                    <option value="inactive" {{ old('status') === 'inactive' ? 'selected' : '' }}>Inactive</option>
+                                </select>
+                            </div>
+                            <x-input-error for="status" />
+                        </div>
+
+                        <!-- Buttons: [Cancel] [Save Vehicle Type] -->
+                        <div class="pt-4 border-t border-gray-100 flex items-center justify-end space-x-3">
+                            <button 
+                                type="button" 
+                                @click="showAddModal = false" 
+                                class="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                type="submit" 
+                                class="px-5 py-2 text-sm font-semibold text-white bg-[#0B1849] hover:bg-[#15286e] rounded-lg shadow-xs transition"
+                            >
+                                Save Vehicle Type
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         @endif
     </div>

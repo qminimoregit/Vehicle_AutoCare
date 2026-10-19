@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\MasterData;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\MasterData\CompanyDetailsRequest;
 use App\Models\ActivityLog;
 use App\Models\CompanySetting;
 use Illuminate\Http\RedirectResponse;
@@ -15,32 +16,21 @@ class CompanyDetailController extends Controller
     /**
      * Display and edit the auto care center's company information.
      */
-    public function edit(): View
+    public function edit(Request $request): View
     {
         $company = CompanySetting::getSettings();
+        $canEdit = $request->user() && $request->user()->isAdmin();
 
-        return view('master-data.company-details.edit', compact('company'));
+        return view('master-data.company-details.edit', compact('company', 'canEdit'));
     }
 
     /**
      * Update the company information and logo.
      */
-    public function update(Request $request): RedirectResponse
+    public function update(CompanyDetailsRequest $request): RedirectResponse
     {
         $company = CompanySetting::getSettings();
-
-        $validated = $request->validate([
-            'company_name' => ['required', 'string', 'max:255'],
-            'registration_number' => ['nullable', 'string', 'max:100'],
-            'address' => ['nullable', 'string', 'max:500'],
-            'phone' => ['nullable', 'string', 'max:50'],
-            'email' => ['nullable', 'email', 'max:150'],
-            'tax_number' => ['nullable', 'string', 'max:100'],
-            'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,svg,webp', 'max:2048'],
-        ], [
-            'company_name.required' => 'Company Name is required.',
-            'logo.max' => 'The logo file size cannot exceed 2MB.',
-        ]);
+        $validated = $request->validated();
 
         if ($request->hasFile('logo')) {
             // Delete previous logo file if exists
