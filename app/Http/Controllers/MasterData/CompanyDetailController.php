@@ -48,7 +48,7 @@ class CompanyDetailController extends Controller
 
         ActivityLog::log(
             action: 'updated',
-            description: "Updated Auto Care Center business details.",
+            description: 'Updated Auto Care Center business details.',
             module: 'Company Details'
         );
 

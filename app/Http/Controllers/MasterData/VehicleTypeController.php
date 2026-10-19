@@ -42,7 +42,7 @@ class VehicleTypeController extends Controller
      */
     public function create(Request $request): View
     {
-        if (!$request->user()->isAdmin()) {
+        if (! $request->user()->isAdmin()) {
             abort(403, 'Unauthorized. Administrator access is required to add vehicle types.');
         }
 
@@ -71,7 +71,7 @@ class VehicleTypeController extends Controller
      */
     public function edit(Request $request, VehicleType $vehicleType): View
     {
-        if (!$request->user()->isAdmin()) {
+        if (! $request->user()->isAdmin()) {
             abort(403, 'Unauthorized. Administrator access is required to edit vehicle types.');
         }
 
@@ -100,7 +100,7 @@ class VehicleTypeController extends Controller
      */
     public function toggleStatus(Request $request, VehicleType $vehicleType): RedirectResponse
     {
-        if (!$request->user()->isAdmin()) {
+        if (! $request->user()->isAdmin()) {
             abort(403, 'Unauthorized. Administrator access is required to change vehicle type status.');
         }
 
@@ -125,7 +125,7 @@ class VehicleTypeController extends Controller
      */
     public function destroy(Request $request, VehicleType $vehicleType): RedirectResponse
     {
-        if (!$request->user()->isAdmin()) {
+        if (! $request->user()->isAdmin()) {
             abort(403, 'Unauthorized. Administrator access is required.');
         }
 

@@ -42,13 +42,13 @@ class ServiceController extends Controller
      */
     public function create(Request $request): View
     {
-        if (!$request->user()->isAdmin()) {
+        if (! $request->user()->isAdmin()) {
             abort(403, 'Unauthorized. Administrator access is required to add services.');
         }
 
         // Suggest next service code, e.g., SRV-001, SRV-002
         $count = Service::count() + 1;
-        $suggestedCode = 'SRV-' . str_pad((string) $count, 3, '0', STR_PAD_LEFT);
+        $suggestedCode = 'SRV-'.str_pad((string) $count, 3, '0', STR_PAD_LEFT);
 
         return view('master-data.services.create', compact('suggestedCode'));
     }
@@ -75,7 +75,7 @@ class ServiceController extends Controller
      */
     public function edit(Request $request, Service $service): View
     {
-        if (!$request->user()->isAdmin()) {
+        if (! $request->user()->isAdmin()) {
             abort(403, 'Unauthorized. Administrator access is required to edit services.');
         }
 
@@ -104,7 +104,7 @@ class ServiceController extends Controller
      */
     public function toggleStatus(Request $request, Service $service): RedirectResponse
     {
-        if (!$request->user()->isAdmin()) {
+        if (! $request->user()->isAdmin()) {
             abort(403, 'Unauthorized. Administrator access is required to change service status.');
         }
 
@@ -129,7 +129,7 @@ class ServiceController extends Controller
      */
     public function destroy(Request $request, Service $service): RedirectResponse
     {
-        if (!$request->user()->isAdmin()) {
+        if (! $request->user()->isAdmin()) {
             abort(403, 'Unauthorized. Administrator access is required.');
         }
 
