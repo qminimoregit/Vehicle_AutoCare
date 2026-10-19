@@ -3,11 +3,12 @@
 namespace App\Http\Controllers\MasterData;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\MasterData\StoreVehicleTypeRequest;
+use App\Http\Requests\MasterData\UpdateVehicleTypeRequest;
 use App\Models\ActivityLog;
 use App\Models\VehicleType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class VehicleTypeController extends Controller
@@ -30,34 +31,30 @@ class VehicleTypeController extends Controller
             $query->where('status', $status);
         }
 
+        $totalVehicleTypes = VehicleType::count();
         $vehicleTypes = $query->orderBy('name', 'asc')->paginate(10)->withQueryString();
 
-        return view('master-data.vehicle-types.index', compact('vehicleTypes', 'search', 'status'));
+        return view('master-data.vehicle-types.index', compact('vehicleTypes', 'search', 'status', 'totalVehicleTypes'));
     }
 
     /**
      * Show the form for creating a new vehicle type.
      */
-    public function create(): View
+    public function create(Request $request): View
     {
+        if (!$request->user()->isAdmin()) {
+            abort(403, 'Unauthorized. Administrator access is required to add vehicle types.');
+        }
+
         return view('master-data.vehicle-types.create');
     }
 
     /**
      * Store a newly created vehicle type in storage.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(StoreVehicleTypeRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:100', 'unique:vehicle_types,name'],
-            'description' => ['nullable', 'string', 'max:1000'],
-            'status' => ['required', 'in:active,inactive'],
-        ], [
-            'name.required' => 'Vehicle type name is required.',
-            'name.unique' => 'This vehicle type name already exists.',
-        ]);
-
-        $vehicleType = VehicleType::create($validated);
+        $vehicleType = VehicleType::create($request->validated());
 
         ActivityLog::log(
             action: 'created',
@@ -66,32 +63,27 @@ class VehicleTypeController extends Controller
         );
 
         return redirect()->route('master-data.vehicle-types.index')
-            ->with('success', "Vehicle type '{$vehicleType->name}' added successfully.");
+            ->with('success', 'Vehicle type added successfully.');
     }
 
     /**
      * Show the form for editing the specified vehicle type.
      */
-    public function edit(VehicleType $vehicleType): View
+    public function edit(Request $request, VehicleType $vehicleType): View
     {
+        if (!$request->user()->isAdmin()) {
+            abort(403, 'Unauthorized. Administrator access is required to edit vehicle types.');
+        }
+
         return view('master-data.vehicle-types.edit', compact('vehicleType'));
     }
 
     /**
      * Update the specified vehicle type in storage.
      */
-    public function update(Request $request, VehicleType $vehicleType): RedirectResponse
+    public function update(UpdateVehicleTypeRequest $request, VehicleType $vehicleType): RedirectResponse
     {
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:100', Rule::unique('vehicle_types', 'name')->ignore($vehicleType->id)],
-            'description' => ['nullable', 'string', 'max:1000'],
-            'status' => ['required', 'in:active,inactive'],
-        ], [
-            'name.required' => 'Vehicle type name is required.',
-            'name.unique' => 'This vehicle type name is already in use.',
-        ]);
-
-        $vehicleType->update($validated);
+        $vehicleType->update($request->validated());
 
         ActivityLog::log(
             action: 'updated',
@@ -100,14 +92,18 @@ class VehicleTypeController extends Controller
         );
 
         return redirect()->route('master-data.vehicle-types.index')
-            ->with('success', "Vehicle type '{$vehicleType->name}' updated successfully.");
+            ->with('success', 'Vehicle type updated successfully.');
     }
 
     /**
      * Toggle the active/inactive status of a vehicle type.
      */
-    public function toggleStatus(VehicleType $vehicleType): RedirectResponse
+    public function toggleStatus(Request $request, VehicleType $vehicleType): RedirectResponse
     {
+        if (!$request->user()->isAdmin()) {
+            abort(403, 'Unauthorized. Administrator access is required to change vehicle type status.');
+        }
+
         $newStatus = $vehicleType->status === 'active' ? 'inactive' : 'active';
         $vehicleType->update(['status' => $newStatus]);
 
