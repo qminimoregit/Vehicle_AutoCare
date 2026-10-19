@@ -11,6 +11,7 @@ class VehicleType extends Model
 
     protected $fillable = [
         'name',
+        'image',
         'description',
         'status',
     ];
@@ -34,12 +35,22 @@ class VehicleType extends Model
 
         return $query->where(function ($q) use ($term) {
             $q->where('name', 'like', "%{$term}%")
-              ->orWhere('description', 'like', "%{$term}%");
+                ->orWhere('description', 'like', "%{$term}%");
         });
     }
 
     public function isActive(): bool
     {
         return $this->status === 'active';
+    }
+
+    public function servicePrices()
+    {
+        return $this->hasMany(ServiceVehiclePrice::class);
+    }
+
+    public function getImageUrlAttribute(): ?string
+    {
+        return $this->image ? asset('storage/'.$this->image) : null;
     }
 }

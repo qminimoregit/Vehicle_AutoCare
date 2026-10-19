@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\MasterData;
 
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -18,7 +19,7 @@ class UpdateVehicleTypeRequest extends FormRequest
     /**
      * Get the validation rules that apply to the request.
      *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
@@ -27,8 +28,9 @@ class UpdateVehicleTypeRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'max:100', Rule::unique('vehicle_types', 'name')->ignore($id)],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'description' => ['nullable', 'string', 'max:1000'],
-            'status' => ['required', 'in:active,inactive'],
+            'status' => ['nullable', 'in:active,inactive'],
         ];
     }
 
@@ -38,10 +40,11 @@ class UpdateVehicleTypeRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'name.required' => 'Vehicle Type Name is required.',
-            'name.unique' => 'This vehicle type name is already in use.',
-            'status.required' => 'Please select whether the vehicle type is Active or Inactive.',
-            'status.in' => 'Status must be either Active or Inactive.',
+            'name.required' => 'Vehicle type name is required.',
+            'name.unique' => 'This vehicle type already exists.',
+            'image.image' => 'Please select a valid image.',
+            'image.mimes' => 'Vehicle image must be a file of type: jpg, jpeg, png, webp.',
+            'image.max' => 'Vehicle image size cannot exceed 2 MB.',
         ];
     }
 }

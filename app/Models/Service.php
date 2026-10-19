@@ -35,13 +35,18 @@ class Service extends Model
 
         return $query->where(function ($q) use ($term) {
             $q->where('name', 'like', "%{$term}%")
-              ->orWhere('code', 'like', "%{$term}%")
-              ->orWhere('description', 'like', "%{$term}%");
+                ->orWhere('code', 'like', "%{$term}%")
+                ->orWhere('description', 'like', "%{$term}%");
         });
     }
 
     public function isActive(): bool
     {
         return $this->status === 'active';
+    }
+
+    public function vehiclePrices()
+    {
+        return $this->hasMany(ServiceVehiclePrice::class);
     }
 }
