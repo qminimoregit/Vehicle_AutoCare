@@ -18,7 +18,7 @@
     class="fixed top-16 bottom-0 left-0 z-20 w-64 bg-white border-r border-gray-200 transition-transform duration-200 ease-in-out flex flex-col justify-between overflow-y-auto"
 >
     <div class="py-5 px-3 space-y-6">
-        <!-- Main Navigation -->
+        <!-- Dashboard Navigation -->
         <div>
             <div class="px-3 mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
                 Core
@@ -26,9 +26,9 @@
             <nav class="space-y-1">
                 <a 
                     href="{{ route('dashboard') }}" 
-                    class="group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition {{ request()->routeIs('dashboard', 'home') ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-[#4A4A4A] hover:bg-gray-100 hover:text-gray-900' }}"
+                    class="group flex items-center px-3 py-2.5 text-sm rounded-lg transition {{ request()->routeIs('dashboard', 'home') ? 'bg-slate-100 text-[#0B1849] font-bold border-l-4 border-[#0B1849]' : 'text-[#4A4A4A] font-medium hover:bg-gray-100 hover:text-gray-900' }}"
                 >
-                    <svg class="mr-3 h-5 w-5 flex-shrink-0 {{ request()->routeIs('dashboard', 'home') ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg class="mr-3 h-5 w-5 flex-shrink-0 {{ request()->routeIs('dashboard', 'home') ? 'text-[#0B1849]' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                     </svg>
                     Dashboard
@@ -36,19 +36,39 @@
             </nav>
         </div>
 
-        <!-- Master Data Module -->
-        <div>
-            <div class="px-3 mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400 flex items-center justify-between">
-                <span>Master Data</span>
-                <span class="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.2 rounded font-semibold border border-emerald-200">Active</span>
-            </div>
-            <nav class="space-y-1">
+        <!-- Master Data Collapsible Section -->
+        <div x-data="{ masterDataOpen: true }">
+            <button 
+                type="button" 
+                @click="masterDataOpen = !masterDataOpen"
+                class="w-full flex items-center justify-between px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-gray-500 hover:text-gray-900 transition rounded-md group focus:outline-none"
+            >
+                <span class="flex items-center space-x-2">
+                    <svg class="w-4 h-4 text-gray-400 group-hover:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7c-2 0-3 1-3 3z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m-6-8h6" />
+                    </svg>
+                    <span class="text-gray-700">MASTER DATA</span>
+                </span>
+                <svg 
+                    :class="masterDataOpen ? 'rotate-180 text-gray-600' : 'text-gray-400'" 
+                    class="w-4 h-4 transform transition-transform duration-150" 
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke="currentColor"
+                >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+            </button>
+
+            <!-- Collapsible Sub-menu -->
+            <nav x-show="masterDataOpen" x-transition.duration.150ms class="mt-2 space-y-1 pl-1">
                 <!-- Service Lists -->
                 <a 
                     href="{{ route('master-data.services.index') }}" 
-                    class="group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition {{ request()->routeIs('master-data.services.*') ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-[#4A4A4A] hover:bg-gray-100 hover:text-gray-900' }}"
+                    class="group flex items-center px-3 py-2 text-sm rounded-lg transition {{ request()->routeIs('master-data.services.*') ? 'bg-slate-100 text-[#0B1849] font-bold border-l-4 border-[#0B1849]' : 'text-[#4A4A4A] font-medium hover:bg-gray-100 hover:text-gray-900' }}"
                 >
-                    <svg class="mr-3 h-4 w-4 flex-shrink-0 {{ request()->routeIs('master-data.services.*') ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg class="mr-3 h-4 w-4 flex-shrink-0 {{ request()->routeIs('master-data.services.*') ? 'text-[#0B1849]' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
                     </svg>
                     Service Lists
@@ -57,9 +77,9 @@
                 <!-- Vehicle Types -->
                 <a 
                     href="{{ route('master-data.vehicle-types.index') }}" 
-                    class="group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition {{ request()->routeIs('master-data.vehicle-types.*') ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-[#4A4A4A] hover:bg-gray-100 hover:text-gray-900' }}"
+                    class="group flex items-center px-3 py-2 text-sm rounded-lg transition {{ request()->routeIs('master-data.vehicle-types.*') ? 'bg-slate-100 text-[#0B1849] font-bold border-l-4 border-[#0B1849]' : 'text-[#4A4A4A] font-medium hover:bg-gray-100 hover:text-gray-900' }}"
                 >
-                    <svg class="mr-3 h-4 w-4 flex-shrink-0 {{ request()->routeIs('master-data.vehicle-types.*') ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg class="mr-3 h-4 w-4 flex-shrink-0 {{ request()->routeIs('master-data.vehicle-types.*') ? 'text-[#0B1849]' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                     </svg>
                     Vehicle Types
@@ -68,9 +88,9 @@
                 <!-- Manage Service Payment -->
                 <a 
                     href="{{ route('master-data.service-payments.index') }}" 
-                    class="group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition {{ request()->routeIs('master-data.service-payments.*') ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-[#4A4A4A] hover:bg-gray-100 hover:text-gray-900' }}"
+                    class="group flex items-center px-3 py-2 text-sm rounded-lg transition {{ request()->routeIs('master-data.service-payments.*') ? 'bg-slate-100 text-[#0B1849] font-bold border-l-4 border-[#0B1849]' : 'text-[#4A4A4A] font-medium hover:bg-gray-100 hover:text-gray-900' }}"
                 >
-                    <svg class="mr-3 h-4 w-4 flex-shrink-0 {{ request()->routeIs('master-data.service-payments.*') ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg class="mr-3 h-4 w-4 flex-shrink-0 {{ request()->routeIs('master-data.service-payments.*') ? 'text-[#0B1849]' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
                     Manage Service Payment
@@ -79,9 +99,9 @@
                 <!-- Company Details -->
                 <a 
                     href="{{ route('master-data.company-details.edit') }}" 
-                    class="group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition {{ request()->routeIs('master-data.company-details.*') ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-[#4A4A4A] hover:bg-gray-100 hover:text-gray-900' }}"
+                    class="group flex items-center px-3 py-2 text-sm rounded-lg transition {{ request()->routeIs('master-data.company-details.*') ? 'bg-slate-100 text-[#0B1849] font-bold border-l-4 border-[#0B1849]' : 'text-[#4A4A4A] font-medium hover:bg-gray-100 hover:text-gray-900' }}"
                 >
-                    <svg class="mr-3 h-4 w-4 flex-shrink-0 {{ request()->routeIs('master-data.company-details.*') ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg class="mr-3 h-4 w-4 flex-shrink-0 {{ request()->routeIs('master-data.company-details.*') ? 'text-[#0B1849]' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                     </svg>
                     Company Details
@@ -90,9 +110,9 @@
                 <!-- Search Client SMS -->
                 <a 
                     href="{{ route('master-data.client-sms.index') }}" 
-                    class="group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition {{ request()->routeIs('master-data.client-sms.*') ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-[#4A4A4A] hover:bg-gray-100 hover:text-gray-900' }}"
+                    class="group flex items-center px-3 py-2 text-sm rounded-lg transition {{ request()->routeIs('master-data.client-sms.*') ? 'bg-slate-100 text-[#0B1849] font-bold border-l-4 border-[#0B1849]' : 'text-[#4A4A4A] font-medium hover:bg-gray-100 hover:text-gray-900' }}"
                 >
-                    <svg class="mr-3 h-4 w-4 flex-shrink-0 {{ request()->routeIs('master-data.client-sms.*') ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg class="mr-3 h-4 w-4 flex-shrink-0 {{ request()->routeIs('master-data.client-sms.*') ? 'text-[#0B1849]' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                     </svg>
                     Search Client SMS
@@ -109,18 +129,18 @@
                 <nav class="space-y-1">
                     <a 
                         href="{{ route('admin.staff.index') }}" 
-                        class="group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition {{ request()->routeIs('admin.staff.*') ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-[#4A4A4A] hover:bg-gray-100 hover:text-gray-900' }}"
+                        class="group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition {{ request()->routeIs('admin.staff.*') ? 'bg-slate-100 text-[#0B1849] font-bold border-l-4 border-[#0B1849]' : 'text-[#4A4A4A] hover:bg-gray-100 hover:text-gray-900' }}"
                     >
-                        <svg class="mr-3 h-4 w-4 flex-shrink-0 {{ request()->routeIs('admin.staff.*') ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg class="mr-3 h-4 w-4 flex-shrink-0 {{ request()->routeIs('admin.staff.*') ? 'text-[#0B1849]' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                         </svg>
                         Staff Accounts
                     </a>
                     <a 
                         href="{{ route('admin.activity-logs.index') }}" 
-                        class="group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition {{ request()->routeIs('admin.activity-logs.*') ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-[#4A4A4A] hover:bg-gray-100 hover:text-gray-900' }}"
+                        class="group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition {{ request()->routeIs('admin.activity-logs.*') ? 'bg-slate-100 text-[#0B1849] font-bold border-l-4 border-[#0B1849]' : 'text-[#4A4A4A] hover:bg-gray-100 hover:text-gray-900' }}"
                     >
-                        <svg class="mr-3 h-4 w-4 flex-shrink-0 {{ request()->routeIs('admin.activity-logs.*') ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg class="mr-3 h-4 w-4 flex-shrink-0 {{ request()->routeIs('admin.activity-logs.*') ? 'text-[#0B1849]' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         Activity Logs
@@ -129,7 +149,7 @@
             </div>
         @endif
 
-        <!-- Future Modules (Clear Coming Soon badges) -->
+        <!-- Future Modules (Clearly marked as Soon) -->
         <div>
             <div class="px-3 mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400 flex items-center justify-between">
                 <span>Future Modules</span>
