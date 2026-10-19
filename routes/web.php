@@ -42,6 +42,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/services/{service}/edit', [ServiceController::class, 'edit'])->name('services.edit');
         Route::put('/services/{service}', [ServiceController::class, 'update'])->name('services.update');
         Route::patch('/services/{service}/toggle-status', [ServiceController::class, 'toggleStatus'])->name('services.toggle-status');
+        Route::delete('/services/{service}', [ServiceController::class, 'destroy'])->name('services.destroy');
 
         // Vehicle Types
         Route::get('/vehicle-types', [VehicleTypeController::class, 'index'])->name('vehicle-types.index');
@@ -50,9 +51,12 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/vehicle-types/{vehicleType}/edit', [VehicleTypeController::class, 'edit'])->name('vehicle-types.edit');
         Route::put('/vehicle-types/{vehicleType}', [VehicleTypeController::class, 'update'])->name('vehicle-types.update');
         Route::patch('/vehicle-types/{vehicleType}/toggle-status', [VehicleTypeController::class, 'toggleStatus'])->name('vehicle-types.toggle-status');
+        Route::delete('/vehicle-types/{vehicleType}', [VehicleTypeController::class, 'destroy'])->name('vehicle-types.destroy');
 
         // Manage Service Payment
         Route::get('/service-payments', [ServicePaymentController::class, 'index'])->name('service-payments.index');
+        Route::get('/service-payments/{service}/prices', [ServicePaymentController::class, 'edit'])->name('service-payments.edit');
+        Route::put('/service-payments/{service}/prices', [ServicePaymentController::class, 'update'])->name('service-payments.update');
 
         // Company Details
         Route::get('/company-details', [CompanyDetailController::class, 'edit'])->name('company-details.edit');
