@@ -50,7 +50,7 @@ class AuthController extends Controller
 
         $remember = $request->boolean('remember');
 
-        if (!Auth::attempt($credentials, $remember)) {
+        if (! Auth::attempt($credentials, $remember)) {
             RateLimiter::hit($throttleKey);
 
             return back()->withInput($request->only('email', 'remember'))->withErrors([
@@ -60,7 +60,7 @@ class AuthController extends Controller
 
         $user = Auth::user();
 
-        if (!$user->isActive()) {
+        if (! $user->isActive()) {
             Auth::logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();

@@ -53,6 +53,7 @@ class CreateAdminUser extends Command
             foreach ($validator->errors()->all() as $error) {
                 $this->error("Validation Error: {$error}");
             }
+
             return Command::FAILURE;
         }
 
@@ -63,12 +64,14 @@ class CreateAdminUser extends Command
 
             if ($password !== $passwordConfirmation) {
                 $this->error('Error: Passwords do not match.');
+
                 return Command::FAILURE;
             }
         }
 
         if (strlen($password) < 8) {
             $this->error('Error: Password must be at least 8 characters in length.');
+
             return Command::FAILURE;
         }
 
