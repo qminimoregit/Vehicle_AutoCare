@@ -76,6 +76,12 @@ class User extends Authenticatable
             'update_jobs',
             'process_sales',
             'generate_invoices',
+            'view_quotations',
+            'create_quotations',
+            'edit_quotations',
+            'convert_quotations',
+            'view_invoices',
+            'record_payments',
             'view_employees',
             'mark_attendance',
             'view_expenses',
@@ -89,4 +95,64 @@ class User extends Authenticatable
     {
         return $this->hasMany(ActivityLog::class);
     }
+
+    /**
+     * Branches assigned to this user.
+     */
+    public function branches()
+    {
+        return $this->belongsToMany(Branch::class, 'branch_user')->withTimestamps();
+    }
+
+    /**
+     * Branches managed by this user.
+     */
+    public function managedBranches()
+    {
+        return $this->hasMany(Branch::class, 'manager_id');
+    }
+
+    /**
+     * Check if user can access a specific branch.
+     */
+    public function canAccessBranch(int|string|null $branchId): bool
+    {
+        if (! $branchId) {
+            return false;
+        }
+
+        if ($this->isAdmin()) {
+            return Branch::where('id', $branchId)->where('is_active', true)->exists();
+        }
+
+        return $this->branches()->where('branches.id', $branchId)->where('branches.is_active', true)->exists();
+    }
+
+    /**
+     * Get collection of branches accessible to this user.
+     */
+    public function getAccessibleBranches()
+    {
+        if ($this->isAdmin()) {
+            return Branch::where('is_active', true)
+                ->orderByDesc('is_main_branch')
+                ->orderBy('branch_name')
+                ->get();
+        }
+
+        return $this->branches()
+            ->where('branches.is_active', true)
+            ->orderByDesc('branches.is_main_branch')
+            ->orderBy('branches.branch_name')
+            ->get();
+    }
+
+    /**
+     * Check if user has permission to manage branches.
+     */
+    public function canManageBranches(): bool
+    {
+        return $this->isAdmin();
+    }
 }
+

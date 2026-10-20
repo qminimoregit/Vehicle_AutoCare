@@ -14,6 +14,7 @@ class Employee extends Model
 
     protected $fillable = [
         'employee_number',
+        'branch_id',
         'name',
         'mobile',
         'address',
@@ -123,4 +124,10 @@ class Employee extends Model
 
         return sprintf('EMP-%04d', $latest->id + 1);
     }
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class, 'branch_id');
+    }
 }
+

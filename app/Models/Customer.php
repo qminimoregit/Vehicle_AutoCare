@@ -42,8 +42,25 @@ class Customer extends Model
         return $this->hasMany(Invoice::class);
     }
 
-    public function directSales()
+    public function quotations()
     {
-        return $this->hasMany(DirectSale::class);
+        return $this->hasMany(Quotation::class);
+    }
+
+    public function payments()
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    public function isCompany(): bool
+    {
+        return $this->customer_type === 'company';
+    }
+
+    public function getDisplayNameAttribute(): string
+    {
+        return ($this->customer_type === 'company' && $this->company_name)
+            ? "{$this->company_name} ({$this->customer_name})"
+            : $this->customer_name;
     }
 }

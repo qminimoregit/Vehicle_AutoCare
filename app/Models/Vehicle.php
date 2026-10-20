@@ -11,6 +11,7 @@ class Vehicle extends Model
 
     protected $fillable = [
         'customer_id',
+        'branch_id',
         'vehicle_type_id',
         'vehicle_number',
         'vehicle_number_normalized',
@@ -32,6 +33,15 @@ class Vehicle extends Model
     public static function normalizeNumber(string $number): string
     {
         return strtoupper((string) preg_replace('/[^A-Za-z0-9]/', '', $number));
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function ($vehicle) {
+            if (!empty($vehicle->vehicle_number) && empty($vehicle->vehicle_number_normalized)) {
+                $vehicle->vehicle_number_normalized = static::normalizeNumber($vehicle->vehicle_number);
+            }
+        });
     }
 
     public function customer()
@@ -58,4 +68,15 @@ class Vehicle extends Model
     {
         return $this->hasMany(JobCard::class)->whereIn('status', ['completed', 'delivered'])->orderBy('date', 'desc');
     }
+
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class, 'branch_id');
+    }
+
+    public function quotations()
+    {
+        return $this->hasMany(Quotation::class);
+    }
 }
+
