@@ -11,6 +11,7 @@ use App\Models\InvoiceItem;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\StockBatch;
+use App\Services\BranchContext;
 use App\Services\Inventory\StockService;
 use Exception;
 use Illuminate\Http\JsonResponse;
@@ -172,9 +173,11 @@ class DirectSaleController extends Controller
                 $actualReceived = min($amountPaid, $grandTotal);
 
                 // 3. Create Direct Sale
+                $activeBranchId = BranchContext::getActiveBranchId();
                 $saleNumber = DirectSale::generateSaleNumber();
                 $directSale = DirectSale::create([
                     'sale_number' => $saleNumber,
+                    'branch_id' => $activeBranchId,
                     'customer_id' => $customer->id,
                     'sale_date' => now()->toDateString(),
                     'subtotal' => $subtotal,
@@ -193,6 +196,7 @@ class DirectSaleController extends Controller
                 $invoiceNumber = Invoice::generateInvoiceNumber();
                 $invoice = Invoice::create([
                     'invoice_number' => $invoiceNumber,
+                    'branch_id' => $activeBranchId,
                     'invoice_date' => now()->toDateString(),
                     'due_date' => now()->toDateString(),
                     'customer_id' => $customer->id,

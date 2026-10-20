@@ -476,6 +476,7 @@ class JobCardController extends Controller
 
             $invoice = Invoice::create([
                 'invoice_number' => $invoiceNumber,
+                'branch_id' => $jobCard->branch_id,
                 'invoice_date' => now()->toDateString(),
                 'due_date' => now()->toDateString(),
                 'customer_id' => $jobCard->customer_id,

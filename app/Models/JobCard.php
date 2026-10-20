@@ -11,6 +11,7 @@ class JobCard extends Model
 
     protected $fillable = [
         'job_number',
+        'branch_id',
         'date',
         'customer_id',
         'vehicle_id',
@@ -123,4 +124,10 @@ class JobCard extends Model
         $this->grand_total = max(0, $subtotal - $discount + $tax);
         $this->save();
     }
+
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class, 'branch_id');
+    }
 }
+

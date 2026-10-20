@@ -17,19 +17,11 @@
     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
             <div class="flex items-center space-x-3">
-                @if($invoice->jobCard)
-                    <a href="{{ route('operations.job-cards.show', $invoice->jobCard) }}" class="text-gray-400 hover:text-gray-600 transition">
-                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                        </svg>
-                    </a>
-                @else
-                    <a href="{{ route('operations.direct-sales.index') }}" class="text-gray-400 hover:text-gray-600 transition">
-                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                        </svg>
-                    </a>
-                @endif
+                <a href="{{ route('operations.invoices.index') }}" class="text-gray-400 hover:text-gray-600 transition" title="Back to Invoices">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                    </svg>
+                </a>
                 <h1 class="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
                     Invoice #{{ $invoice->invoice_number }}
                 </h1>
@@ -46,10 +38,17 @@
             </div>
             <p class="text-xs sm:text-sm text-gray-500 mt-1 ml-8">
                 Issued on {{ $invoice->invoice_date ? $invoice->invoice_date->format('M d, Y') : '' }}
+                @if($invoice->due_date)
+                    • Due: {{ $invoice->due_date->format('M d, Y') }}
+                @endif
                 @if($invoice->jobCard)
-                    • Linked to Job Card #{{ $invoice->jobCard->job_number }}
-                @else
+                    • Linked to <a href="{{ route('operations.job-cards.show', $invoice->jobCard) }}" class="text-blue-600 hover:underline font-semibold">Job Card #{{ $invoice->jobCard->job_number }}</a>
+                @elseif($invoice->quotation)
+                    • Converted from <a href="{{ route('billing.quotations.show', $invoice->quotation) }}" class="text-purple-600 hover:underline font-semibold">Quotation #{{ $invoice->quotation->quotation_number }}</a>
+                @elseif($invoice->invoice_type === 'direct_sale')
                     • Direct POS Sale
+                @else
+                    • Direct Invoice
                 @endif
             </p>
         </div>
@@ -58,12 +57,22 @@
             <a 
                 href="{{ route('operations.invoices.print', $invoice) }}" 
                 target="_blank"
-                class="inline-flex items-center justify-center px-4 py-2.5 bg-white border border-gray-300 text-gray-700 font-bold text-sm rounded-lg hover:bg-gray-50 shadow-xs transition min-h-[44px]"
+                class="inline-flex items-center justify-center px-3.5 py-2.5 bg-white border border-gray-300 text-gray-700 font-bold text-xs rounded-lg hover:bg-gray-50 shadow-xs transition min-h-[44px]"
             >
                 <svg class="w-4 h-4 mr-1.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                 </svg>
-                Print Invoice
+                Print
+            </a>
+
+            <a 
+                href="{{ route('operations.invoices.pdf', $invoice) }}" 
+                class="inline-flex items-center justify-center px-3.5 py-2.5 bg-white border border-gray-300 text-gray-700 font-bold text-xs rounded-lg hover:bg-gray-50 shadow-xs transition min-h-[44px]"
+            >
+                <svg class="w-4 h-4 mr-1.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                PDF
             </a>
 
             @if($invoice->balance_amount > 0 && $invoice->status !== 'cancelled')
@@ -194,7 +203,32 @@
         </div>
 
         <!-- Totals & Balances -->
-        <div class="flex flex-col sm:flex-row justify-end pt-4 border-t border-gray-100">
+        <div class="flex flex-col sm:flex-row justify-between items-start gap-6 pt-4 border-t border-gray-100">
+            <!-- Left: Words, Notes, Terms -->
+            <div class="flex-1 space-y-4 max-w-md">
+                @if(!empty($amountInWords))
+                    <div class="bg-slate-50 border-l-4 border-[#0B1849] p-3 rounded-r-lg text-xs text-gray-700">
+                        <span class="font-bold text-gray-900 block text-[10px] uppercase tracking-wider mb-0.5">Amount in Words</span>
+                        {{ $amountInWords }}
+                    </div>
+                @endif
+
+                @if($invoice->notes)
+                    <div class="bg-gray-50/70 border border-gray-200/80 p-3 rounded-lg text-xs">
+                        <span class="font-bold text-gray-700 block text-[10px] uppercase tracking-wider mb-1">Notes / Instructions</span>
+                        <p class="text-gray-600 whitespace-pre-line">{{ $invoice->notes }}</p>
+                    </div>
+                @endif
+
+                @if($invoice->terms_conditions)
+                    <div class="bg-gray-50/70 border border-gray-200/80 p-3 rounded-lg text-xs">
+                        <span class="font-bold text-gray-700 block text-[10px] uppercase tracking-wider mb-1">Terms & Conditions</span>
+                        <p class="text-gray-600 whitespace-pre-line">{{ $invoice->terms_conditions }}</p>
+                    </div>
+                @endif
+            </div>
+
+            <!-- Right: Calculation summary -->
             <div class="w-full sm:w-80 space-y-2 text-xs sm:text-sm">
                 <div class="flex justify-between text-gray-600">
                     <span>Subtotal:</span>
@@ -208,8 +242,14 @@
                 @endif
                 @if($invoice->tax_amount > 0)
                     <div class="flex justify-between text-gray-600">
-                        <span>Tax:</span>
+                        <span>Tax / VAT ({{ (float)$invoice->tax_percentage }}%):</span>
                         <span class="font-semibold">LKR {{ number_format($invoice->tax_amount, 2) }}</span>
+                    </div>
+                @endif
+                @if($invoice->additional_charges > 0)
+                    <div class="flex justify-between text-gray-600">
+                        <span>Additional Charges:</span>
+                        <span class="font-semibold">LKR {{ number_format($invoice->additional_charges, 2) }}</span>
                     </div>
                 @endif
                 <div class="pt-2 border-t border-gray-200 flex justify-between text-base font-black text-[#0B1849]">

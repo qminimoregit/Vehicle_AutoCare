@@ -11,6 +11,7 @@ class DirectSale extends Model
 
     protected $fillable = [
         'sale_number',
+        'branch_id',
         'invoice_id',
         'customer_id',
         'sale_date',
@@ -72,4 +73,10 @@ class DirectSale extends Model
     {
         return $this->belongsTo(User::class, 'created_by');
     }
+
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class, 'branch_id');
+    }
 }
+
