@@ -1,0 +1,262 @@
+<?php
+
+namespace App\Http\Controllers\Reports;
+
+use App\Http\Controllers\Controller;
+use App\Models\Branch;
+use App\Models\Invoice;
+use App\Models\Payment;
+use App\Services\BranchContext;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+
+class MoneyBookController extends Controller
+{
+    public function index(Request $request): View
+    {
+        $user = $request->user();
+        $accessibleBranches = BranchContext::getAccessibleBranches($user);
+
+        // Branch scoping
+        $branchId = $request->input('branch_id');
+        if ($user->isAdmin()) {
+            if ($branchId === null) {
+                $branchId = BranchContext::getActiveBranchId() ?: 'all';
+            }
+        } else {
+            $branchId = BranchContext::getActiveBranchId();
+        }
+
+        // Date filter: defaults to today
+        $period = $request->input('period', 'today');
+        $dateFrom = $request->input('date_from');
+        $dateTo = $request->input('date_to');
+
+        if ($period === 'today' && empty($dateFrom)) {
+            $dateFrom = Carbon::today()->format('Y-m-d');
+            $dateTo = Carbon::today()->format('Y-m-d');
+        } elseif ($period === 'this_month' && empty($dateFrom)) {
+            $dateFrom = Carbon::today()->startOfMonth()->format('Y-m-d');
+            $dateTo = Carbon::today()->format('Y-m-d');
+        } elseif (empty($dateFrom)) {
+            $dateFrom = Carbon::today()->format('Y-m-d');
+            $dateTo = Carbon::today()->format('Y-m-d');
+        }
+
+        $methodFilter = $request->input('payment_method', 'all');
+
+        // Query payments received on payment_date between dateFrom and dateTo
+        $paymentQuery = Payment::with(['invoice.customer', 'invoice.branch', 'customer', 'receipt'])
+            ->whereDate('payment_date', '>=', $dateFrom)
+            ->whereDate('payment_date', '<=', $dateTo);
+
+        if ($branchId && $branchId !== 'all') {
+            $paymentQuery->whereHas('invoice', function ($iq) use ($branchId) {
+                $iq->where('branch_id', $branchId);
+            });
+        }
+
+        if ($methodFilter !== 'all') {
+            $paymentQuery->where('payment_method', $methodFilter);
+        }
+
+        $payments = $paymentQuery->orderBy('payment_date', 'desc')
+            ->orderBy('id', 'desc')
+            ->get();
+
+        // Query Credit Sales Created in this date range (Invoices issued with remaining credit balance)
+        $creditSalesQuery = Invoice::with(['customer', 'branch'])
+            ->where('status', '!=', 'cancelled')
+            ->where('balance_amount', '>', 0)
+            ->whereDate('invoice_date', '>=', $dateFrom)
+            ->whereDate('invoice_date', '<=', $dateTo);
+
+        if ($branchId && $branchId !== 'all') {
+            $creditSalesQuery->where('branch_id', $branchId);
+        }
+
+        $creditSales = $creditSalesQuery->get();
+
+        // Calculate summary cards
+        $cashReceived = 0.0;
+        $cardReceived = 0.0;
+        $chequeReceived = 0.0;
+        $bankTransferReceived = 0.0;
+        $refundsReversals = 0.0;
+        $creditPaymentsCollected = 0.0;
+
+        foreach ($payments as $p) {
+            $amt = (float) $p->amount;
+
+            if ($p->isReversed()) {
+                $refundsReversals += $amt;
+
+                continue;
+            }
+
+            $method = strtolower($p->payment_method ?? 'cash');
+            if (str_contains($method, 'cash')) {
+                $cashReceived += $amt;
+            } elseif (str_contains($method, 'card')) {
+                $cardReceived += $amt;
+            } elseif (str_contains($method, 'cheque')) {
+                $chequeReceived += $amt;
+            } elseif (str_contains($method, 'bank') || str_contains($method, 'transfer')) {
+                $bankTransferReceived += $amt;
+            } else {
+                $cashReceived += $amt;
+            }
+
+            // Check if collection against an invoice issued on an earlier date or marked credit
+            if ($p->invoice && $p->invoice->invoice_date && $p->invoice->invoice_date->format('Y-m-d') < $p->payment_date->format('Y-m-d')) {
+                $creditPaymentsCollected += $amt;
+            }
+        }
+
+        $creditSalesCreated = (float) $creditSales->sum('balance_amount');
+        $totalLiquidInflow = round($cashReceived + $cardReceived + $bankTransferReceived, 2); // Excludes uncleared cheques per rule
+
+        $selectedBranch = ($branchId && $branchId !== 'all') ? Branch::find($branchId) : null;
+
+        return view('reports.money-book.index', compact(
+            'payments',
+            'creditSales',
+            'dateFrom',
+            'dateTo',
+            'period',
+            'branchId',
+            'methodFilter',
+            'accessibleBranches',
+            'selectedBranch',
+            'cashReceived',
+            'cardReceived',
+            'chequeReceived',
+            'bankTransferReceived',
+            'refundsReversals',
+            'creditSalesCreated',
+            'creditPaymentsCollected',
+            'totalLiquidInflow'
+        ));
+    }
+
+    public function print(Request $request): View
+    {
+        $user = $request->user();
+        $branchId = $request->input('branch_id', 'all');
+        if (! $user->isAdmin()) {
+            $branchId = BranchContext::getActiveBranchId();
+        }
+
+        $dateFrom = $request->input('date_from', Carbon::today()->format('Y-m-d'));
+        $dateTo = $request->input('date_to', Carbon::today()->format('Y-m-d'));
+
+        $paymentQuery = Payment::with(['invoice.customer', 'invoice.branch', 'customer'])
+            ->whereDate('payment_date', '>=', $dateFrom)
+            ->whereDate('payment_date', '<=', $dateTo);
+
+        if ($branchId && $branchId !== 'all') {
+            $paymentQuery->whereHas('invoice', fn ($q) => $q->where('branch_id', $branchId));
+        }
+
+        $payments = $paymentQuery->orderBy('payment_date', 'desc')->get();
+
+        $creditSalesQuery = Invoice::with(['customer', 'branch'])
+            ->where('status', '!=', 'cancelled')
+            ->where('balance_amount', '>', 0)
+            ->whereDate('invoice_date', '>=', $dateFrom)
+            ->whereDate('invoice_date', '<=', $dateTo);
+
+        if ($branchId && $branchId !== 'all') {
+            $creditSalesQuery->where('branch_id', $branchId);
+        }
+        $creditSales = $creditSalesQuery->get();
+
+        $cashReceived = (float) $payments->where('status', '!=', 'reversed')->filter(fn ($p) => str_contains(strtolower($p->payment_method), 'cash'))->sum('amount');
+        $cardReceived = (float) $payments->where('status', '!=', 'reversed')->filter(fn ($p) => str_contains(strtolower($p->payment_method), 'card'))->sum('amount');
+        $chequeReceived = (float) $payments->where('status', '!=', 'reversed')->filter(fn ($p) => str_contains(strtolower($p->payment_method), 'cheque'))->sum('amount');
+        $bankTransferReceived = (float) $payments->where('status', '!=', 'reversed')->filter(fn ($p) => str_contains(strtolower($p->payment_method), 'bank') || str_contains(strtolower($p->payment_method), 'transfer'))->sum('amount');
+        $creditSalesCreated = (float) $creditSales->sum('balance_amount');
+
+        $selectedBranch = ($branchId && $branchId !== 'all') ? Branch::find($branchId) : null;
+
+        return view('reports.money-book.print', compact(
+            'payments',
+            'creditSales',
+            'dateFrom',
+            'dateTo',
+            'selectedBranch',
+            'cashReceived',
+            'cardReceived',
+            'chequeReceived',
+            'bankTransferReceived',
+            'creditSalesCreated'
+        ));
+    }
+
+    public function export(Request $request): StreamedResponse
+    {
+        $user = $request->user();
+        $branchId = $request->input('branch_id', 'all');
+        if (! $user->isAdmin()) {
+            $branchId = BranchContext::getActiveBranchId();
+        }
+
+        $dateFrom = $request->input('date_from', Carbon::today()->format('Y-m-d'));
+        $dateTo = $request->input('date_to', Carbon::today()->format('Y-m-d'));
+
+        $paymentQuery = Payment::with(['invoice.customer', 'invoice.branch', 'customer'])
+            ->whereDate('payment_date', '>=', $dateFrom)
+            ->whereDate('payment_date', '<=', $dateTo);
+
+        if ($branchId && $branchId !== 'all') {
+            $paymentQuery->whereHas('invoice', fn ($q) => $q->where('branch_id', $branchId));
+        }
+
+        $payments = $paymentQuery->orderBy('payment_date', 'desc')->get();
+        $fileName = 'money_book_'.now()->format('Y_m_d_His').'.csv';
+
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$fileName}\"",
+        ];
+
+        return response()->streamDownload(function () use ($payments, $dateFrom, $dateTo) {
+            $file = fopen('php://output', 'w');
+            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
+
+            fputcsv($file, ['MONEY BOOK', "Period: {$dateFrom} to {$dateTo}"]);
+            fputcsv($file, []);
+
+            fputcsv($file, [
+                'Payment Date',
+                'Payment / Receipt #',
+                'Invoice #',
+                'Customer / Company',
+                'Payment Method',
+                'Reference / Cheque Details',
+                'Amount Received (LKR)',
+                'Status',
+                'Notes',
+            ]);
+
+            foreach ($payments as $p) {
+                $cust = $p->invoice?->customer?->display_name ?? ($p->customer?->display_name ?? 'Guest Customer');
+                fputcsv($file, [
+                    $p->payment_date?->format('Y-m-d') ?? '-',
+                    $p->payment_number,
+                    $p->invoice?->invoice_number ?? 'Multiple Invoices',
+                    $cust,
+                    ucfirst(str_replace('_', ' ', $p->payment_method ?? 'cash')),
+                    $p->reference_number ?? '-',
+                    number_format($p->amount, 2, '.', ''),
+                    ucfirst($p->status ?? 'completed'),
+                    $p->notes ?? '',
+                ]);
+            }
+
+            fclose($file);
+        }, $fileName, $headers);
+    }
+}
