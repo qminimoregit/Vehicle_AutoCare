@@ -405,7 +405,7 @@
                         @endif
                     </td>
                     <td class="text-right">{{ number_format($item->unit_price, 2) }}</td>
-                    <td class="text-center">{{ (float) $item->quantity }}</td>
+                    <td class="text-center">@quantity($item->quantity)</td>
                     <td class="text-right">
                         @if($item->discount_amount > 0)
                             <span style="color: #16a34a;">-{{ number_format($item->discount_amount, 2) }}</span>

@@ -81,7 +81,7 @@
                             </td>
                             <td class="p-2 border-r border-gray-200">
                                 @foreach($job->products as $p)
-                                    <div>• {{ $p->product_name ?? 'Item' }} (×{{ $p->quantity }})</div>
+                                    <div>• {{ $p->product_name ?? 'Item' }} (×@quantity($p->quantity))</div>
                                 @endforeach
                             </td>
                             <td class="p-2 border-r border-gray-200 font-mono">{{ $job->invoice?->invoice_number ?? '-' }}</td>

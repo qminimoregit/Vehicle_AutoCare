@@ -394,7 +394,7 @@
                             {{ $item->item_type }}
                         </td>
                         <td class="text-right">LKR {{ number_format($item->unit_price, 2) }}</td>
-                        <td class="text-center">{{ (float) $item->quantity }}</td>
+                        <td class="text-center">@quantity($item->quantity)</td>
                         <td class="text-right" style="font-weight: 700;">LKR {{ number_format($item->line_total, 2) }}</td>
                     </tr>
                 @endforeach

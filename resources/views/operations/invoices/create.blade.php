@@ -236,7 +236,7 @@
                                             @foreach($products as $p)
                                                 <option value="{{ $p->id }}">
                                                     {{ $p->name }} [{{ $p->sku }}] 
-                                                    (LKR {{ number_format($p->selling_price, 2) }} | Avail: {{ (float)$p->available_stock }})
+                                                    (LKR {{ number_format($p->selling_price, 2) }} | Avail: @quantity($p->available_stock))
                                                 </option>
                                             @endforeach
                                         </select>

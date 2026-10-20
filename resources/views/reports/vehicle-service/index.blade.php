@@ -203,7 +203,7 @@
                                     <div class="flex flex-wrap gap-1">
                                         @forelse($job->products as $jp)
                                             <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] bg-gray-100 text-gray-700">
-                                                {{ $jp->product_name ?? 'Item' }} (×{{ $jp->quantity }})
+                                                {{ $jp->product_name ?? 'Item' }} (×@quantity($jp->quantity))
                                             </span>
                                         @empty
                                             <span class="text-gray-400 italic">No parts charged</span>

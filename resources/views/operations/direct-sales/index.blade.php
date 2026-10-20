@@ -28,6 +28,15 @@
             window.__posCartHasItems = () => this.cart && this.cart.length > 0;
         },
 
+        formatQty(val) {
+            if (val === null || val === undefined || isNaN(val)) return '0';
+            let num = parseFloat(val);
+            if (Number.isInteger(num)) {
+                return num.toLocaleString();
+            }
+            return parseFloat(num.toFixed(4)).toLocaleString();
+        },
+
         // Filtered products list
         get filteredProducts() {
             if (!this.searchTerm.trim()) {
@@ -52,7 +61,7 @@
             let existing = this.cart.find(item => item.product_id === product.id);
             if (existing) {
                 if (existing.quantity + 1 > product.available_stock) {
-                    alert('Cannot add more than available stock (' + product.available_stock + ' units).');
+                    alert('Cannot add more than available stock (' + this.formatQty(product.available_stock) + ' units).');
                     return;
                 }
                 existing.quantity += 1;
@@ -76,7 +85,7 @@
         increaseQty(index) {
             let item = this.cart[index];
             if (item.quantity + 1 > item.available_stock) {
-                alert('Cannot exceed available stock (' + item.available_stock + ' units).');
+                alert('Cannot exceed available stock (' + this.formatQty(item.available_stock) + ' units).');
                 return;
             }
             item.quantity += 1;
@@ -208,13 +217,6 @@
         description="Over-the-counter spare parts, lubricants, and accessory sales with instant FIFO deduction."
     />
 
-    @if(session('success'))
-        <x-alert type="success" :message="session('success')" />
-    @endif
-    @if(session('error'))
-        <x-alert type="error" :message="session('error')" />
-    @endif
-
     <!-- Split Layout: Desktop 2-column, Mobile responsive stack -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
@@ -287,7 +289,7 @@
                                     <span 
                                         class="px-2 py-0.5 rounded-full font-bold whitespace-nowrap text-[10px]"
                                         :class="product.available_stock > 0 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'"
-                                        x-text="product.available_stock > 0 ? product.available_stock + ' in Stock' : 'Out of stock'"
+                                        x-text="product.available_stock > 0 ? (product.formatted_stock || formatQty(product.available_stock)) + ' in Stock' : 'Out of stock'"
                                     ></span>
                                 </div>
                             </div>
@@ -383,7 +385,7 @@
                                         @click="decreaseQty(index)" 
                                         class="px-2 py-1 text-gray-600 hover:bg-gray-100 font-bold min-h-[30px] min-w-[26px]"
                                     >-</button>
-                                    <span class="px-2 text-xs font-bold text-gray-900" x-text="item.quantity"></span>
+                                    <span class="px-2 text-xs font-bold text-gray-900" x-text="formatQty(item.quantity)"></span>
                                     <button 
                                         type="button" 
                                         @click="increaseQty(index)" 

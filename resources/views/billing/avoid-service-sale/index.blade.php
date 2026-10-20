@@ -165,7 +165,7 @@
                             @forelse($services as $item)
                                 <tr>
                                     <td class="px-4 py-2.5 font-medium text-gray-900">{{ $item->item_name }}</td>
-                                    <td class="px-4 py-2.5 text-center">{{ number_format($item->quantity, 1) }}</td>
+                                    <td class="px-4 py-2.5 text-center">@quantity($item->quantity)</td>
                                     <td class="px-4 py-2.5 text-right">LKR {{ number_format($item->unit_price, 2) }}</td>
                                     <td class="px-4 py-2.5 text-right font-semibold text-gray-900">LKR {{ number_format($item->line_total, 2) }}</td>
                                 </tr>
@@ -197,7 +197,7 @@
                             @forelse($products as $item)
                                 <tr>
                                     <td class="px-4 py-2.5 font-medium text-gray-900">{{ $item->item_name }}</td>
-                                    <td class="px-4 py-2.5 text-center">{{ number_format($item->quantity, 1) }}</td>
+                                    <td class="px-4 py-2.5 text-center">@quantity($item->quantity)</td>
                                     <td class="px-4 py-2.5 text-right">LKR {{ number_format($item->unit_price, 2) }}</td>
                                     <td class="px-4 py-2.5 text-right font-semibold text-gray-900">LKR {{ number_format($item->line_total, 2) }}</td>
                                 </tr>

@@ -110,16 +110,6 @@
         </x-slot:actions>
     </x-page-header>
 
-    @if(session('success'))
-        <x-alert type="success" :message="session('success')" />
-    @endif
-    @if(session('warning'))
-        <x-alert type="warning" :message="session('warning')" />
-    @endif
-    @if(session('error'))
-        <x-alert type="error" :message="session('error')" />
-    @endif
-
     <!-- 1. VEHICLE LOOKUP & REGISTRATION FORM -->
     <div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
         <div class="px-5 py-4 border-b border-gray-100 bg-slate-50/60 flex items-center justify-between">

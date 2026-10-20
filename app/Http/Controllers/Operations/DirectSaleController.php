@@ -13,6 +13,7 @@ use App\Models\Product;
 use App\Models\StockBatch;
 use App\Services\BranchContext;
 use App\Services\Inventory\StockService;
+use App\Services\QuantityFormatter;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -40,6 +41,9 @@ class DirectSaleController extends Controller
                 $product->available_stock = (float) StockBatch::where('product_id', $product->id)
                     ->where('status', 'active')
                     ->sum('remaining_quantity');
+                $product->formatted_stock = QuantityFormatter::format($product->available_stock);
+                $product->allows_fractional = $product->allowsFractionalQuantity();
+                $product->quantity_step = $product->quantity_step;
 
                 return $product;
             });
@@ -80,6 +84,9 @@ class DirectSaleController extends Controller
                 'unit' => $product->uom?->abbreviation ?? 'Unit',
                 'selling_price' => (float) $product->selling_price,
                 'available_stock' => $stock,
+                'formatted_stock' => QuantityFormatter::format($stock),
+                'allows_fractional' => $product->allowsFractionalQuantity(),
+                'quantity_step' => $product->quantity_step,
                 'image_url' => $product->image_url,
             ];
         });
@@ -141,12 +148,18 @@ class DirectSaleController extends Controller
                     $qty = (float) $itemData['quantity'];
                     $unitPrice = (float) $itemData['unit_price'];
 
+                    if (! $product->allowsFractionalQuantity() && floor($qty) != $qty) {
+                        throw new Exception("Product '{$product->product_name}' ({$product->uom?->name}) requires a whole-number quantity.");
+                    }
+
                     $availableStock = (float) StockBatch::where('product_id', $product->id)
                         ->where('status', 'active')
                         ->sum('remaining_quantity');
 
                     if ($availableStock < $qty) {
-                        throw new Exception("Insufficient stock for '{$product->product_name}'. Requested: {$qty}, Available: {$availableStock}.");
+                        $fmtReq = QuantityFormatter::format($qty);
+                        $fmtAvail = QuantityFormatter::format($availableStock);
+                        throw new Exception("Insufficient stock for '{$product->product_name}'. Requested: {$fmtReq}, Available: {$fmtAvail}.");
                     }
 
                     $lineTotal = round($qty * $unitPrice, 2);

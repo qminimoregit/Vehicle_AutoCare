@@ -294,7 +294,7 @@
                                 @endif
                             </td>
                             <td class="py-3 text-center">
-                                {{ number_format($item->quantity, 2) }} {{ $item->unit }}
+                                @quantity($item->quantity) {{ $item->unit }}
                             </td>
                             <td class="py-3 text-right">
                                 {{ number_format($item->unit_price, 2) }}

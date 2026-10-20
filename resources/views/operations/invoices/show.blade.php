@@ -236,7 +236,7 @@
                                 LKR {{ number_format($item->unit_price, 2) }}
                             </td>
                             <td class="py-3 px-3 text-right font-medium text-gray-600">
-                                {{ (float) $item->quantity }}
+                                @quantity($item->quantity)
                             </td>
                             <td class="py-3 px-3 text-right font-bold text-gray-900 whitespace-nowrap">
                                 LKR {{ number_format($item->line_total, 2) }}

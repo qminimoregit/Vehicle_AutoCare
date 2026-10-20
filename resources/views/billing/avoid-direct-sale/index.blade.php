@@ -149,7 +149,7 @@
                                         @endif
                                     </td>
                                     <td class="px-4 py-3 text-center font-medium">
-                                        {{ number_format($item->quantity, 2) }}
+                                        @quantity($item->quantity)
                                     </td>
                                     <td class="px-4 py-3 text-right">
                                         LKR {{ number_format($item->unit_price, 2) }}
@@ -161,7 +161,7 @@
                                         @if(!empty($item->batch_allocations) && is_array($item->batch_allocations))
                                             @foreach($item->batch_allocations as $alloc)
                                                 <span class="inline-block bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded text-[11px] mr-1">
-                                                    {{ $alloc['batch_number'] ?? ('Batch #' . $alloc['batch_id']) }} ({{ $alloc['quantity'] }})
+                                                    {{ $alloc['batch_number'] ?? ('Batch #' . $alloc['batch_id']) }} (@quantity($alloc['quantity']))
                                                 </span>
                                             @endforeach
                                         @else

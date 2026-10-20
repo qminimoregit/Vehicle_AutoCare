@@ -58,7 +58,7 @@
                             <td class="p-2 border-r border-gray-200 font-semibold">{{ $b->product?->name }}</td>
                             <td class="p-2 border-r border-gray-200">{{ $b->grn?->grn_number ?? '-' }}</td>
                             <td class="p-2 border-r border-gray-200">{{ $b->supplier?->name ?? 'N/A' }}</td>
-                            <td class="p-2 border-r border-gray-200 text-right font-bold">{{ number_format($b->remaining_quantity, 2) }}</td>
+                            <td class="p-2 border-r border-gray-200 text-right font-bold">@quantity($b->remaining_quantity)</td>
                             <td class="p-2 border-r border-gray-200 text-right font-mono">LKR {{ number_format($b->inventory_unit_cost, 2) }}</td>
                             <td class="p-2 border-r border-gray-200 text-right font-bold">LKR {{ number_format($val, 2) }}</td>
                             <td class="p-2">{{ $b->branch?->branch_name ?? 'Main Branch' }}</td>
@@ -68,7 +68,13 @@
                 <tfoot class="bg-gray-100 font-bold border-t border-gray-300">
                     <tr>
                         <td colspan="4" class="p-2 text-right">Total:</td>
-                        <td class="p-2 text-right">{{ number_format($grandTotalUnits, 2) }}</td>
+                        <td class="p-2 text-right">
+                            @if(!empty($hasMultipleUoms))
+                                Mixed Units
+                            @else
+                                @quantity($grandTotalUnits) {{ $singleUomName ?? '' }}
+                            @endif
+                        </td>
                         <td></td>
                         <td class="p-2 text-right text-emerald-800">LKR {{ number_format($grandTotalStockValue, 2) }}</td>
                         <td></td>
@@ -99,7 +105,7 @@
                             <td class="p-2 border-r border-gray-200 font-mono">{{ $item['product']->sku ?? '-' }}</td>
                             <td class="p-2 border-r border-gray-200">{{ $item['supplier_name'] }}</td>
                             <td class="p-2 border-r border-gray-200 text-center">{{ $item['batches_count'] }}</td>
-                            <td class="p-2 border-r border-gray-200 text-center font-bold">{{ number_format($item['total_quantity'], 2) }}</td>
+                            <td class="p-2 border-r border-gray-200 text-center font-bold">@quantity($item['total_quantity']) {{ $item['product']->uom?->name ?? '' }}</td>
                             <td class="p-2 border-r border-gray-200 text-right font-mono">LKR {{ number_format($item['weighted_avg_cost'], 2) }}</td>
                             <td class="p-2 border-r border-gray-200 text-right">LKR {{ number_format($item['selling_price'], 2) }}</td>
                             <td class="p-2 text-right font-bold text-emerald-800">LKR {{ number_format($item['total_valuation'], 2) }}</td>
@@ -109,7 +115,13 @@
                 <tfoot class="bg-gray-100 font-bold border-t border-gray-300">
                     <tr>
                         <td colspan="5" class="p-2 text-right">Grand Total:</td>
-                        <td class="p-2 text-center">{{ number_format($grandTotalUnits, 2) }}</td>
+                        <td class="p-2 text-center">
+                            @if(!empty($hasMultipleUoms))
+                                Mixed Units
+                            @else
+                                @quantity($grandTotalUnits) {{ $singleUomName ?? '' }}
+                            @endif
+                        </td>
                         <td colspan="2"></td>
                         <td class="p-2 text-right text-emerald-800">LKR {{ number_format($grandTotalStockValue, 2) }}</td>
                     </tr>

@@ -140,6 +140,11 @@ class Invoice extends Model
         return $this->hasOne(JobCard::class, 'invoice_id');
     }
 
+    public function supplementaryJobIssues()
+    {
+        return $this->hasMany(JobIssue::class, 'supplementary_invoice_id');
+    }
+
     public function getDocumentStatusAttribute(): string
     {
         if ($this->status === 'cancelled') {
