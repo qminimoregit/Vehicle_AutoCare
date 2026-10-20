@@ -60,6 +60,31 @@ class User extends Authenticatable
         return $this->status === 'active';
     }
 
+    public function hasPermission(string $permission): bool
+    {
+        if ($this->isAdmin()) {
+            return true;
+        }
+
+        // Staff default permissions for Stage 3:
+        // Staff can register vehicles, create jobs, update jobs, process sales, generate invoices.
+        // Price override and job cancellations require admin role or specific permission.
+        $staffAllowed = [
+            'register_vehicles',
+            'view_history',
+            'create_jobs',
+            'update_jobs',
+            'process_sales',
+            'generate_invoices',
+            'view_employees',
+            'mark_attendance',
+            'view_expenses',
+            'create_expenses',
+        ];
+
+        return in_array($permission, $staffAllowed);
+    }
+
     public function activityLogs()
     {
         return $this->hasMany(ActivityLog::class);
