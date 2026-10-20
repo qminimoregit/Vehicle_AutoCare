@@ -38,7 +38,7 @@ class Vehicle extends Model
     protected static function booted(): void
     {
         static::saving(function ($vehicle) {
-            if (!empty($vehicle->vehicle_number) && empty($vehicle->vehicle_number_normalized)) {
+            if (! empty($vehicle->vehicle_number) && empty($vehicle->vehicle_number_normalized)) {
                 $vehicle->vehicle_number_normalized = static::normalizeNumber($vehicle->vehicle_number);
             }
         });
@@ -79,4 +79,3 @@ class Vehicle extends Model
         return $this->hasMany(Quotation::class);
     }
 }
-

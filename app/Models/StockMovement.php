@@ -51,4 +51,3 @@ class StockMovement extends Model
         return $this->belongsTo(Branch::class, 'branch_id');
     }
 }
-

@@ -82,4 +82,3 @@ class StockBatch extends Model
         return $this->belongsTo(Branch::class, 'branch_id');
     }
 }
-

@@ -57,6 +57,26 @@ class Customer extends Model
         return $this->hasMany(PaymentReceipt::class);
     }
 
+    public function creditAccount()
+    {
+        return $this->hasOne(CustomerCreditAccount::class);
+    }
+
+    public function hasCreditAccount(): bool
+    {
+        return $this->creditAccount()->where('status', 'active')->exists();
+    }
+
+    public function getOutstandingCreditAttribute(): float
+    {
+        return $this->creditAccount ? $this->creditAccount->outstanding_balance : 0.0;
+    }
+
+    public function getAvailableCreditAttribute(): float
+    {
+        return $this->creditAccount ? $this->creditAccount->available_credit : 0.0;
+    }
+
     public function isCompany(): bool
     {
         return $this->customer_type === 'company';

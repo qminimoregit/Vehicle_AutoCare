@@ -200,7 +200,8 @@ class StockService
     /**
      * Reverse previously allocated FIFO stock batches back into inventory.
      *
-     * @param array<int, array{batch_id: int, quantity: float, unit_cost?: float}> $allocations
+     * @param  array<int, array{batch_id: int, quantity: float, unit_cost?: float}>  $allocations
+     *
      * @throws RuntimeException
      */
     public function reverseStockFifo(
@@ -214,12 +215,12 @@ class StockService
                 $batchId = $alloc['batch_id'] ?? null;
                 $qty = (float) ($alloc['quantity'] ?? 0);
 
-                if (!$batchId || $qty <= 0) {
+                if (! $batchId || $qty <= 0) {
                     continue;
                 }
 
                 $batch = StockBatch::where('id', $batchId)->lockForUpdate()->first();
-                if (!$batch) {
+                if (! $batch) {
                     continue;
                 }
 
@@ -257,4 +258,3 @@ class StockService
             ->sum('remaining_quantity');
     }
 }
-
