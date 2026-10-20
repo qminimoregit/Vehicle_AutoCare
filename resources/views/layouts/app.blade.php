@@ -25,7 +25,7 @@
             <x-sidebar />
 
             <!-- Main Content Area -->
-            <main class="flex-1 md:pl-64 min-w-0 transition-all duration-200">
+            <main class="flex-1 md:pl-[270px] min-w-0 transition-all duration-200">
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                     <!-- Global Notification / Flash Alerts -->
                     <x-alert />
