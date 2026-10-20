@@ -101,6 +101,9 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
+        // 5. Seed default expense categories (Stage 5)
+        \App\Models\ExpenseCategory::seedDefaults();
+
         ActivityLog::create([
             'user_id' => $staffUser->id,
             'action' => 'seeded',
