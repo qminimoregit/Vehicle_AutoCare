@@ -9,6 +9,7 @@ use App\Models\ActivityLog;
 use App\Models\VehicleType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 class VehicleTypeController extends Controller
@@ -54,7 +55,13 @@ class VehicleTypeController extends Controller
      */
     public function store(StoreVehicleTypeRequest $request): RedirectResponse
     {
-        $vehicleType = VehicleType::create($request->validated());
+        $data = $request->validated();
+
+        if ($request->hasFile('image')) {
+            $data['image'] = $request->file('image')->store('vehicle-types', 'public');
+        }
+
+        $vehicleType = VehicleType::create($data);
 
         ActivityLog::log(
             action: 'created',
@@ -83,7 +90,21 @@ class VehicleTypeController extends Controller
      */
     public function update(UpdateVehicleTypeRequest $request, VehicleType $vehicleType): RedirectResponse
     {
-        $vehicleType->update($request->validated());
+        $data = $request->validated();
+
+        if ($request->hasFile('image')) {
+            // Delete old image if it exists
+            if ($vehicleType->image && Storage::disk('public')->exists($vehicleType->image)) {
+                Storage::disk('public')->delete($vehicleType->image);
+            }
+
+            $data['image'] = $request->file('image')->store('vehicle-types', 'public');
+        } else {
+            // Keep existing image if not provided
+            unset($data['image']);
+        }
+
+        $vehicleType->update($data);
 
         ActivityLog::log(
             action: 'updated',
