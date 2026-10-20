@@ -11,22 +11,29 @@ class Invoice extends Model
 
     protected $fillable = [
         'invoice_number',
+        'branch_id',
         'invoice_date',
         'due_date',
         'customer_id',
+        'quotation_id',
         'job_card_id',
         'invoice_type',
         'subject',
         'reference',
         'subtotal',
+        'discount_type',
+        'discount_value',
         'discount_amount',
+        'tax_percentage',
         'tax_amount',
+        'additional_charges',
         'grand_total',
         'amount_paid',
         'balance_amount',
         'status',
         'payment_method',
         'notes',
+        'terms_conditions',
         'customer_snapshot',
         'created_by',
     ];
@@ -35,8 +42,11 @@ class Invoice extends Model
         'invoice_date' => 'date',
         'due_date' => 'date',
         'subtotal' => 'decimal:2',
+        'discount_value' => 'decimal:2',
         'discount_amount' => 'decimal:2',
+        'tax_percentage' => 'decimal:2',
         'tax_amount' => 'decimal:2',
+        'additional_charges' => 'decimal:2',
         'grand_total' => 'decimal:2',
         'amount_paid' => 'decimal:2',
         'balance_amount' => 'decimal:2',
@@ -65,6 +75,11 @@ class Invoice extends Model
         return $this->belongsTo(Customer::class);
     }
 
+    public function quotation()
+    {
+        return $this->belongsTo(Quotation::class);
+    }
+
     public function jobCard()
     {
         return $this->belongsTo(JobCard::class);
@@ -84,4 +99,10 @@ class Invoice extends Model
     {
         return $this->belongsTo(User::class, 'created_by');
     }
+
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class, 'branch_id');
+    }
 }
+
