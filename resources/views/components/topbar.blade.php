@@ -40,7 +40,7 @@
 
     <!-- Center Section: Quick Shortcut Buttons (Desktop & Tablet) -->
     @auth
-        <nav class="hidden md:flex items-center space-x-1.5 lg:space-x-2.5 mx-2" aria-label="Operations Quick Shortcuts">
+        <nav id="topbar-shortcuts" class="hidden md:flex items-center space-x-1.5 lg:space-x-2.5 mx-2" aria-label="Operations Quick Shortcuts">
             <!-- 1. Vehicle Registration Shortcut -->
             <a 
                 href="{{ route('operations.vehicles.index') }}" 

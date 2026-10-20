@@ -8,7 +8,7 @@
         'billing.invoice-date-change.*',
         'billing.multiple-invoice-payment.*'
     );
-    $isBilling = request()->routeIs('billing.quotations.*', 'billing.invoices.*', 'operations.invoices.*');
+    $isBilling = request()->routeIs('billing.quotations.*', 'billing.invoices.*', 'operations.invoices.*', 'billing.payments.*');
     $isPayroll = request()->routeIs('payroll.*');
     $isExpenses = request()->routeIs('expenses.*');
     $defaultSection = $isAdjustments ? 'adjustments' : ($isBilling ? 'billing' : ($isExpenses ? 'expenses' : ($isPayroll ? 'payroll' : ($isOperations ? 'operations' : ($isMasterData ? 'master-data' : ($isInventory ? 'inventory' : ''))))));
@@ -30,6 +30,8 @@
 
 <!-- Sidebar Container -->
 <aside 
+    id="app-sidebar"
+    data-active-section="{{ $defaultSection }}"
     :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
     class="fixed top-16 bottom-0 left-0 z-20 w-[270px] bg-white border-r border-gray-200 transition-transform duration-200 ease-in-out flex flex-col justify-between"
     x-data="{
@@ -38,6 +40,7 @@
             this.activeSection = (this.activeSection === section) ? '' : section;
         }
     }"
+    @navigated.window="if ($event.detail.activeSection) { activeSection = $event.detail.activeSection; }"
 >
     <!-- Mobile Header with Close Button -->
     <div class="md:hidden flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
@@ -55,7 +58,7 @@
     </div>
 
     <!-- Scrollable Navigation Menu -->
-    <div class="flex-1 overflow-y-auto overflow-x-hidden py-4 px-3 space-y-5 thin-scrollbar">
+    <div id="sidebar-nav-container" class="flex-1 overflow-y-auto overflow-x-hidden py-4 px-3 space-y-5 thin-scrollbar">
         <!-- 1. OVERVIEW -->
         <div>
             <div class="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
@@ -87,6 +90,8 @@
                     <button 
                         type="button" 
                         @click="toggleSection('master-data')"
+                        :aria-expanded="activeSection === 'master-data' ? 'true' : 'false'"
+                        aria-controls="section-master-data"
                         class="w-full flex items-center justify-between px-3 py-2 text-[13px] rounded-lg transition group cursor-pointer focus:outline-none {{ $isMasterData ? 'text-[#0B1849] font-semibold bg-[#EEF1FA]/40' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
                         :class="activeSection === 'master-data' && !{{ $isMasterData ? 'true' : 'false' }} ? 'bg-slate-50 text-gray-900 font-semibold' : ''"
                     >
@@ -110,6 +115,7 @@
 
                     <!-- Master Data Sub-menu -->
                     <div 
+                        id="section-master-data"
                         x-show="activeSection === 'master-data'" 
                         x-transition:enter="transition ease-out duration-150"
                         x-transition:enter-start="opacity-0 -translate-y-1"
@@ -182,6 +188,8 @@
                     <button 
                         type="button" 
                         @click="toggleSection('inventory')"
+                        :aria-expanded="activeSection === 'inventory' ? 'true' : 'false'"
+                        aria-controls="section-inventory"
                         class="w-full flex items-center justify-between px-3 py-2 text-[13px] rounded-lg transition group cursor-pointer focus:outline-none {{ $isInventory ? 'text-[#0B1849] font-semibold bg-[#EEF1FA]/40' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
                         :class="activeSection === 'inventory' && !{{ $isInventory ? 'true' : 'false' }} ? 'bg-slate-50 text-gray-900 font-semibold' : ''"
                     >
@@ -204,6 +212,7 @@
 
                     <!-- Suppliers & Inventory Sub-menu -->
                     <div 
+                        id="section-inventory"
                         x-show="activeSection === 'inventory'" 
                         x-transition:enter="transition ease-out duration-150"
                         x-transition:enter-start="opacity-0 -translate-y-1"
@@ -265,6 +274,8 @@
                     <button 
                         type="button" 
                         @click="toggleSection('operations')"
+                        :aria-expanded="activeSection === 'operations' ? 'true' : 'false'"
+                        aria-controls="section-operations"
                         class="w-full flex items-center justify-between px-3 py-2 text-[13px] rounded-lg transition group cursor-pointer focus:outline-none {{ $isOperations ? 'text-[#0B1849] font-semibold bg-[#EEF1FA]/40' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
                         :class="activeSection === 'operations' && !{{ $isOperations ? 'true' : 'false' }} ? 'bg-slate-50 text-gray-900 font-semibold' : ''"
                     >
@@ -287,6 +298,7 @@
 
                     <!-- Operations Sub-menu -->
                     <div 
+                        id="section-operations"
                         x-show="activeSection === 'operations'" 
                         x-transition:enter="transition ease-out duration-150"
                         x-transition:enter-start="opacity-0 -translate-y-1"
@@ -337,6 +349,8 @@
                     <button 
                         type="button" 
                         @click="toggleSection('billing')"
+                        :aria-expanded="activeSection === 'billing' ? 'true' : 'false'"
+                        aria-controls="section-billing"
                         class="w-full flex items-center justify-between px-3 py-2 text-[13px] rounded-lg transition group cursor-pointer focus:outline-none {{ $isBilling ? 'text-[#0B1849] font-semibold bg-[#EEF1FA]/40' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
                         :class="activeSection === 'billing' && !{{ $isBilling ? 'true' : 'false' }} ? 'bg-slate-50 text-gray-900 font-semibold' : ''"
                     >
@@ -359,6 +373,7 @@
 
                     <!-- Sales & Billing Sub-menu -->
                     <div 
+                        id="section-billing"
                         x-show="activeSection === 'billing'" 
                         x-transition:enter="transition ease-out duration-150"
                         x-transition:enter-start="opacity-0 -translate-y-1"
@@ -390,6 +405,17 @@
                             <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isInvoices ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
                             <span class="truncate">Invoices</span>
                         </a>
+
+                        <!-- Payments -->
+                        @php $isPayments = request()->routeIs('billing.payments.*'); @endphp
+                        <a 
+                            href="{{ route('billing.payments.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isPayments ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isPayments ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Payments</span>
+                        </a>
                     </div>
                 </div>
 
@@ -399,6 +425,8 @@
                     <button 
                         type="button" 
                         @click="toggleSection('adjustments')"
+                        :aria-expanded="activeSection === 'adjustments' ? 'true' : 'false'"
+                        aria-controls="section-adjustments"
                         class="w-full flex items-center justify-between px-3 py-2 text-[13px] rounded-lg transition group cursor-pointer focus:outline-none {{ $isAdjustments ? 'text-[#0B1849] font-semibold bg-[#EEF1FA]/40' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
                         :class="activeSection === 'adjustments' && !{{ $isAdjustments ? 'true' : 'false' }} ? 'bg-slate-50 text-gray-900 font-semibold' : ''"
                     >
@@ -421,6 +449,7 @@
 
                     <!-- Invoice Adjustments Sub-menu -->
                     <div 
+                        id="section-adjustments"
                         x-show="activeSection === 'adjustments'" 
                         x-transition:enter="transition ease-out duration-150"
                         x-transition:enter-start="opacity-0 -translate-y-1"
@@ -491,6 +520,8 @@
                     <button 
                         type="button" 
                         @click="toggleSection('payroll')"
+                        :aria-expanded="activeSection === 'payroll' ? 'true' : 'false'"
+                        aria-controls="section-payroll"
                         class="w-full flex items-center justify-between px-3 py-2 text-[13px] rounded-lg transition group cursor-pointer focus:outline-none {{ $isPayroll ? 'text-[#0B1849] font-semibold bg-[#EEF1FA]/40' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
                         :class="activeSection === 'payroll' && !{{ $isPayroll ? 'true' : 'false' }} ? 'bg-slate-50 text-gray-900 font-semibold' : ''"
                     >
@@ -513,6 +544,7 @@
 
                     <!-- Employees & Payroll Sub-menu -->
                     <div 
+                        id="section-payroll"
                         x-show="activeSection === 'payroll'" 
                         x-transition:enter="transition ease-out duration-150"
                         x-transition:enter-start="opacity-0 -translate-y-1"
@@ -565,6 +597,8 @@
                     <button 
                         type="button" 
                         @click="toggleSection('expenses')"
+                        :aria-expanded="activeSection === 'expenses' ? 'true' : 'false'"
+                        aria-controls="section-expenses"
                         class="w-full flex items-center justify-between px-3 py-2 text-[13px] rounded-lg transition group cursor-pointer focus:outline-none {{ $isExpenses ? 'text-[#0B1849] font-semibold bg-[#EEF1FA]/40' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
                         :class="activeSection === 'expenses' && !{{ $isExpenses ? 'true' : 'false' }} ? 'bg-slate-50 text-gray-900 font-semibold' : ''"
                     >
@@ -587,6 +621,7 @@
 
                     <!-- Expenses Sub-menu -->
                     <div 
+                        id="section-expenses"
                         x-show="activeSection === 'expenses'" 
                         x-transition:enter="transition ease-out duration-150"
                         x-transition:enter-start="opacity-0 -translate-y-1"

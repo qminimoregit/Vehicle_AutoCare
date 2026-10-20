@@ -7,6 +7,7 @@ use App\Http\Controllers\Billing\AvoidDirectSaleController;
 use App\Http\Controllers\Billing\AvoidServiceSaleController;
 use App\Http\Controllers\Billing\InvoiceDateChangeController;
 use App\Http\Controllers\Billing\MultipleInvoicePaymentController;
+use App\Http\Controllers\Billing\PaymentController;
 use App\Http\Controllers\Billing\QuotationController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Expenses\ExpenseCategoryController;
@@ -129,6 +130,8 @@ Route::middleware(['auth', 'active'])->group(function () {
 
         // Supplier Payments on GRN
         Route::post('/grn/{grn}/payments', [SupplierPaymentController::class, 'store'])->name('grn.payments.store');
+        Route::post('/supplier-payments/{payment}/reverse', [SupplierPaymentController::class, 'reverse'])->name('supplier-payments.reverse');
+        Route::get('/supplier-payments/{payment}/receipt', [SupplierPaymentController::class, 'receipt'])->name('supplier-payments.receipt');
         Route::delete('/supplier-payments/{payment}', [SupplierPaymentController::class, 'destroy'])->name('supplier-payments.destroy');
 
         // Stock Report
@@ -203,6 +206,13 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/invoices/{invoice}/pdf', [InvoiceController::class, 'downloadPdf'])->name('invoices.pdf');
         Route::get('/invoices/{invoice}/print', [InvoiceController::class, 'print'])->name('invoices.print');
         Route::post('/invoices/{invoice}/payment', [InvoiceController::class, 'addPayment'])->name('invoices.payment');
+
+        // Invoice Payments Management
+        Route::get('/payments', [PaymentController::class, 'index'])->name('payments.index');
+        Route::post('/invoices/{invoice}/payments', [PaymentController::class, 'store'])->name('payments.store');
+        Route::get('/payments/{payment}/receipt', [PaymentController::class, 'receipt'])->name('payments.receipt');
+        Route::get('/payments/{payment}/print', [PaymentController::class, 'receipt'])->name('payments.print');
+        Route::post('/payments/{payment}/reverse', [PaymentController::class, 'reverse'])->name('payments.reverse');
 
         // Stage 6: Avoid Direct Sale (Admin Only)
         Route::get('/avoid-direct-sale', [AvoidDirectSaleController::class, 'index'])->name('avoid-direct-sale.index');
