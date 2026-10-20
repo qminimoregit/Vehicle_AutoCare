@@ -13,6 +13,7 @@ class StockBatch extends Model
 
     protected $fillable = [
         'batch_number',
+        'branch_id',
         'grn_id',
         'grn_item_id',
         'product_id',
@@ -75,4 +76,10 @@ class StockBatch extends Model
     {
         return (float) $this->remaining_quantity > 0 && $this->status === 'active';
     }
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class, 'branch_id');
+    }
 }
+

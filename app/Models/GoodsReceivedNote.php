@@ -13,6 +13,7 @@ class GoodsReceivedNote extends Model
 
     protected $fillable = [
         'grn_number',
+        'branch_id',
         'supplier_id',
         'supplier_invoice_number',
         'received_date',
@@ -114,4 +115,10 @@ class GoodsReceivedNote extends Model
                 });
         });
     }
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class, 'branch_id');
+    }
 }
+

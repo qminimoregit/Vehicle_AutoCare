@@ -18,6 +18,7 @@ class Expense extends Model
 
     protected $fillable = [
         'expense_number',
+        'branch_id',
         'category_id',
         'expense_type',
         'employee_id',
@@ -121,4 +122,10 @@ class Expense extends Model
 
         return sprintf('EXP-%04d', $latest->id + 1);
     }
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class, 'branch_id');
+    }
 }
+
