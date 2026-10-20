@@ -66,6 +66,7 @@ class StockService
                 // Create the Stock Batch
                 $batch = StockBatch::create([
                     'batch_number' => $batchNumber,
+                    'branch_id' => $freshGrn->branch_id,
                     'grn_id' => $freshGrn->id,
                     'grn_item_id' => $item->id,
                     'product_id' => $item->product_id,
@@ -83,6 +84,7 @@ class StockService
                 // Create Stock Movement ledger entry
                 StockMovement::create([
                     'product_id' => $item->product_id,
+                    'branch_id' => $freshGrn->branch_id,
                     'stock_batch_id' => $batch->id,
                     'movement_type' => 'grn_receipt',
                     'quantity' => $physicalQuantity,
@@ -166,6 +168,7 @@ class StockService
                 // Record Stock Movement ledger entry
                 StockMovement::create([
                     'product_id' => $productId,
+                    'branch_id' => $batch->branch_id,
                     'stock_batch_id' => $batch->id,
                     'movement_type' => $movementType,
                     'quantity' => -1 * $deductFromThisBatch,

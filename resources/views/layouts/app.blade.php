@@ -8,6 +8,10 @@
     <title>@yield('title', 'Dashboard') | {{ config('app.name', 'AutoCare System') }}</title>
     <meta name="description" content="Professional Auto Care Center Management System - Streamlined operations, service records, and fleet management.">
 
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="{{ asset('images/branding/autocare-favicon.ico') }}">
+    <link rel="shortcut icon" href="{{ asset('images/branding/autocare-favicon.ico') }}">
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600,700" rel="stylesheet" />

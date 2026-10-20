@@ -25,15 +25,17 @@
         </button>
 
         <!-- Brand Logo & Name -->
-        <a href="{{ route('dashboard') }}" class="flex items-center space-x-3 group">
-            <div class="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-inner font-bold text-lg tracking-wider group-hover:bg-blue-500 transition">
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
+        <a href="{{ route('dashboard') }}" class="flex items-center space-x-3 group" title="AutoCare System Dashboard">
+            <div class="w-10 h-10 rounded-xl bg-white p-1 flex items-center justify-center shadow-xs shrink-0 ring-1 ring-white/20 group-hover:scale-105 transition-transform duration-150">
+                <img 
+                    src="{{ asset('images/branding/autocare-icon.png') }}" 
+                    alt="AutoCare System Icon" 
+                    class="w-8 h-8 object-contain"
+                >
             </div>
             <div>
                 <span class="text-base sm:text-lg font-bold tracking-tight text-white block leading-none">AutoCare System</span>
-                <span class="text-[9px] sm:text-[10px] tracking-widest text-slate-400 font-medium uppercase mt-0.5 block">Center Management</span>
+                <span class="text-[9px] sm:text-[10px] tracking-widest text-slate-300 font-medium uppercase mt-0.5 block">Center Management</span>
             </div>
         </a>
     </div>
