@@ -34,7 +34,7 @@ class DirectSaleController extends Controller
         // Get all active products with aggregated available stock across all active batches
         $products = Product::active()
             ->with(['uom'])
-            ->orderBy('product_name')
+            ->orderBy('name')
             ->get()
             ->map(function ($product) {
                 $product->available_stock = (float) StockBatch::where('product_id', $product->id)
@@ -59,7 +59,7 @@ class DirectSaleController extends Controller
 
         if ($term !== '') {
             $query->where(function ($q) use ($term) {
-                $q->where('product_name', 'like', "%{$term}%")
+                $q->where('name', 'like', "%{$term}%")
                     ->orWhere('sku', 'like', "%{$term}%")
                     ->orWhere('barcode', 'like', "%{$term}%");
             });
@@ -72,7 +72,8 @@ class DirectSaleController extends Controller
 
             return [
                 'id' => $product->id,
-                'name' => $product->product_name,
+                'name' => $product->name,
+                'product_name' => $product->name,
                 'sku' => $product->sku,
                 'barcode' => $product->barcode,
                 'unit' => $product->uom?->abbreviation ?? 'Unit',

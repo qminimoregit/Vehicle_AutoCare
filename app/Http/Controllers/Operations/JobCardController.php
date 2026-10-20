@@ -97,7 +97,7 @@ class JobCardController extends Controller
         $availableServices = Service::active()->orderBy('name')->get();
         
         // Products with stock availability
-        $availableProducts = Product::active()->orderBy('product_name')->get()->map(function ($product) {
+        $availableProducts = Product::active()->orderBy('name')->get()->map(function ($product) {
             $product->available_stock = $this->stockService->getAvailableStock($product);
             return $product;
         });
@@ -174,7 +174,7 @@ class JobCardController extends Controller
 
         $jobCard->services()->create([
             'service_id' => $service->id,
-            'service_code' => $service->service_code,
+            'service_code' => $service->code,
             'service_name' => $service->name,
             'unit_price' => $unitPrice,
             'quantity' => $qty,

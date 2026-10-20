@@ -63,6 +63,11 @@ class Product extends Model
         return $this->hasMany(StockBatch::class)->where('remaining_quantity', '>', 0);
     }
 
+    public function getProductNameAttribute(): string
+    {
+        return $this->name ?? '';
+    }
+
     public function getAvailableStockAttribute(): float
     {
         return (float) $this->activeStockBatches()->sum('remaining_quantity');
