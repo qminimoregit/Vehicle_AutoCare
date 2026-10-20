@@ -3,6 +3,11 @@
         $isVehicleActive = request()->routeIs('operations.vehicles.*');
         $isDirectSaleActive = request()->routeIs('operations.direct-sales.*');
         $isJobCardActive = request()->routeIs('operations.job-cards.*');
+
+        $accessibleBranches = Auth::user() ? \App\Services\BranchContext::getAccessibleBranches() : collect();
+        $activeBranchId = \App\Services\BranchContext::getActiveBranchId();
+        $currentBranch = $accessibleBranches->firstWhere('id', $activeBranchId) ?? $accessibleBranches->first();
+        $showBranchSelector = $accessibleBranches->count() > 1;
     @endphp
 
     <!-- Left Section: Brand & Mobile Menu Toggle -->
@@ -78,6 +83,72 @@
     <!-- Right Section: User & Role & Dropdown -->
     <div class="flex items-center space-x-2 sm:space-x-3 shrink-0">
         @auth
+            <!-- Branch Selector Dropdown (Shown only when user has access to > 1 branch) -->
+            @if($showBranchSelector)
+                <div class="relative" x-data="{ branchDropdownOpen: false }" @click.outside="branchDropdownOpen = false">
+                    <button 
+                        type="button" 
+                        @click="branchDropdownOpen = !branchDropdownOpen"
+                        class="inline-flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#15286e]/80 hover:bg-[#1f3796] text-white border border-white/10 text-xs font-semibold transition focus:outline-none focus:ring-1 focus:ring-white/40 cursor-pointer"
+                        aria-label="Select Active Branch"
+                        aria-expanded="false"
+                        title="Active Branch"
+                    >
+                        <svg class="w-3.5 h-3.5 text-blue-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span class="truncate max-w-[110px] sm:max-w-[150px]">{{ $currentBranch ? $currentBranch->branch_name : 'Select Branch' }}</span>
+                        <svg class="w-3 h-3 text-slate-300 transform transition-transform duration-150 shrink-0" :class="branchDropdownOpen ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+
+                    <!-- Branch Dropdown Menu -->
+                    <div 
+                        x-show="branchDropdownOpen"
+                        x-transition:enter="transition ease-out duration-100"
+                        x-transition:enter-start="transform opacity-0 scale-95"
+                        x-transition:enter-end="transform opacity-100 scale-100"
+                        x-transition:leave="transition ease-in duration-75"
+                        x-transition:leave-start="transform opacity-100 scale-100"
+                        x-transition:leave-end="transform opacity-0 scale-95"
+                        class="absolute right-0 mt-2 w-64 rounded-xl bg-white py-1.5 shadow-xl ring-1 ring-black/10 text-gray-800 z-50 divide-y divide-gray-100"
+                        style="display: none;"
+                    >
+                        <div class="px-3.5 py-2">
+                            <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Switch Active Branch</div>
+                            <div class="text-xs text-gray-500 mt-0.5">Records and operations will filter by selected branch.</div>
+                        </div>
+
+                        <div class="py-1 max-h-60 overflow-y-auto">
+                            @foreach($accessibleBranches as $branchOption)
+                                @php $isSelected = ($currentBranch && $currentBranch->id === $branchOption->id); @endphp
+                                <form method="POST" action="{{ route('branches.switch') }}">
+                                    @csrf
+                                    <input type="hidden" name="branch_id" value="{{ $branchOption->id }}">
+                                    <button 
+                                        type="submit" 
+                                        class="w-full text-left flex items-center justify-between px-3.5 py-2 text-xs transition {{ $isSelected ? 'bg-blue-50 text-[#0B1849] font-bold' : 'text-gray-700 hover:bg-slate-50' }} cursor-pointer"
+                                    >
+                                        <div class="flex items-center space-x-2 min-w-0">
+                                            <span class="w-2 h-2 rounded-full shrink-0 {{ $isSelected ? 'bg-blue-600' : 'bg-gray-300' }}"></span>
+                                            <div class="truncate">
+                                                <div class="truncate leading-tight">{{ $branchOption->branch_name }}</div>
+                                                <div class="text-[10px] text-gray-400 font-mono leading-tight mt-0.5">{{ $branchOption->branch_code }}</div>
+                                            </div>
+                                        </div>
+                                        @if($branchOption->is_main_branch)
+                                            <span class="ml-2 text-[9px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-bold shrink-0">Main</span>
+                                        @endif
+                                    </button>
+                                </form>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+            @endif
+
             <!-- Mobile Quick Actions Dropdown (< md) -->
             <div class="md:hidden relative" x-data="{ quickMenuOpen: false }" @click.outside="quickMenuOpen = false">
                 <button 
