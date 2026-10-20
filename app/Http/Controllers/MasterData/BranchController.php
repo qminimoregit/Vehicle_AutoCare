@@ -32,7 +32,7 @@ class BranchController extends Controller
             $isActive = true;
         }
 
-        DB::transaction(function () use ($company, $validated, $isMain, $isActive, &$branch, $request) {
+        DB::transaction(function () use ($company, $validated, $isMain, $isActive, &$branch) {
             if ($isMain) {
                 Branch::where('company_id', $company->id)->update(['is_main_branch' => false]);
                 $isActive = true;

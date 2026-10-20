@@ -12,22 +12,22 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('invoice_items', function (Blueprint $table) {
-            if (!Schema::hasColumn('invoice_items', 'source_quotation_item_id')) {
+            if (! Schema::hasColumn('invoice_items', 'source_quotation_item_id')) {
                 $table->foreignId('source_quotation_item_id')->nullable()->after('invoice_id')->constrained('quotation_items')->nullOnDelete();
             }
-            if (!Schema::hasColumn('invoice_items', 'sort_order')) {
+            if (! Schema::hasColumn('invoice_items', 'sort_order')) {
                 $table->integer('sort_order')->default(0)->after('source_quotation_item_id');
             }
-            if (!Schema::hasColumn('invoice_items', 'description')) {
+            if (! Schema::hasColumn('invoice_items', 'description')) {
                 $table->text('description')->nullable()->after('item_name');
             }
-            if (!Schema::hasColumn('invoice_items', 'unit')) {
+            if (! Schema::hasColumn('invoice_items', 'unit')) {
                 $table->string('unit', 50)->nullable()->after('quantity');
             }
-            if (!Schema::hasColumn('invoice_items', 'discount_type')) {
+            if (! Schema::hasColumn('invoice_items', 'discount_type')) {
                 $table->enum('discount_type', ['none', 'percentage', 'fixed'])->default('none')->after('discount_amount');
             }
-            if (!Schema::hasColumn('invoice_items', 'discount_value')) {
+            if (! Schema::hasColumn('invoice_items', 'discount_value')) {
                 $table->decimal('discount_value', 15, 2)->default(0)->after('discount_type');
             }
         });

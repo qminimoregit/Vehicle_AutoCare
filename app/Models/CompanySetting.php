@@ -67,7 +67,7 @@ class CompanySetting extends Model
             return $this->logo_path;
         }
 
-        $path = storage_path('app/public/' . ltrim(str_replace(['storage/', 'public/'], '', $this->logo_path), '/'));
+        $path = storage_path('app/public/'.ltrim(str_replace(['storage/', 'public/'], '', $this->logo_path), '/'));
         if (file_exists($path) && is_file($path)) {
             $contents = @file_get_contents($path);
             if ($contents) {
@@ -79,7 +79,8 @@ class CompanySetting extends Model
                     'webp' => 'image/webp',
                     default => 'image/png',
                 };
-                return 'data:' . $mime . ';base64,' . base64_encode($contents);
+
+                return 'data:'.$mime.';base64,'.base64_encode($contents);
             }
         }
 

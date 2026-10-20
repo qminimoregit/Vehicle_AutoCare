@@ -54,8 +54,8 @@ class JobCard extends Model
 
     public static function generateJobNumber(): string
     {
-        $prefix = 'JOB-' . date('Ym') . '-';
-        $lastJob = self::where('job_number', 'LIKE', $prefix . '%')
+        $prefix = 'JOB-'.date('Ym').'-';
+        $lastJob = self::where('job_number', 'LIKE', $prefix.'%')
             ->orderBy('id', 'desc')
             ->first();
 
@@ -66,7 +66,7 @@ class JobCard extends Model
             $newSeq = '0001';
         }
 
-        return $prefix . $newSeq;
+        return $prefix.$newSeq;
     }
 
     public function customer()
@@ -130,4 +130,3 @@ class JobCard extends Model
         return $this->belongsTo(Branch::class, 'branch_id');
     }
 }
-

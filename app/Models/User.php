@@ -86,6 +86,11 @@ class User extends Authenticatable
             'mark_attendance',
             'view_expenses',
             'create_expenses',
+            'view_stock_reports',
+            'view_sales_reports',
+            'view_vehicle_service_reports',
+            'view_money_book',
+            'view_credit_management',
         ];
 
         return in_array($permission, $staffAllowed);
@@ -155,4 +160,3 @@ class User extends Authenticatable
         return $this->isAdmin();
     }
 }
-

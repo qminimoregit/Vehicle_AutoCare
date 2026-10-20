@@ -54,11 +54,11 @@ class JobCardController extends Controller
                 $q->where('job_number', 'like', "%{$search}%")
                     ->orWhereHas('vehicle', function ($vq) use ($search) {
                         $vq->where('vehicle_number', 'like', "%{$search}%")
-                           ->orWhere('vehicle_number_normalized', 'like', "%" . strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $search)) . "%");
+                            ->orWhere('vehicle_number_normalized', 'like', '%'.strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $search)).'%');
                     })
                     ->orWhereHas('customer', function ($cq) use ($search) {
                         $cq->where('customer_name', 'like', "%{$search}%")
-                           ->orWhere('phone', 'like', "%{$search}%");
+                            ->orWhere('phone', 'like', "%{$search}%");
                     });
             });
         }
@@ -95,10 +95,11 @@ class JobCardController extends Controller
         ]);
 
         $availableServices = Service::active()->orderBy('name')->get();
-        
+
         // Products with stock availability
         $availableProducts = Product::active()->orderBy('name')->get()->map(function ($product) {
             $product->available_stock = $this->stockService->getAvailableStock($product);
+
             return $product;
         });
 
@@ -117,7 +118,7 @@ class JobCardController extends Controller
             ->where('vehicle_type_id', $jobCard->vehicle_type_id)
             ->first();
 
-        if (!$pricing || $pricing->service_price === null) {
+        if (! $pricing || $pricing->service_price === null) {
             return response()->json([
                 'configured' => false,
                 'message' => "Price not configured for {$jobCard->vehicleType->name}.",
@@ -160,7 +161,7 @@ class JobCardController extends Controller
         $isPriceCustom = false;
         $unitPrice = 0.0;
 
-        if (!empty($validated['custom_price']) && ($user->isAdmin() || $user->hasPermission('override_prices'))) {
+        if (! empty($validated['custom_price']) && ($user->isAdmin() || $user->hasPermission('override_prices'))) {
             $unitPrice = (float) $validated['custom_price'];
             $isPriceCustom = true;
         } elseif ($pricing && $pricing->service_price !== null) {
@@ -169,7 +170,7 @@ class JobCardController extends Controller
             return back()->with('error', "Price not configured for '{$service->name}' on {$jobCard->vehicleType->name}. Please configure it under Master Data → Manage Service Payment, or request an Admin override.");
         }
 
-        $qty = !empty($validated['quantity']) ? (float) $validated['quantity'] : 1.0;
+        $qty = ! empty($validated['quantity']) ? (float) $validated['quantity'] : 1.0;
         $lineTotal = round($unitPrice * $qty, 2);
 
         $jobCard->services()->create([
@@ -229,7 +230,7 @@ class JobCardController extends Controller
         $quantity = (float) $validated['quantity'];
 
         // Selling price defaults to product selling price
-        $unitPrice = !empty($validated['unit_price']) ? (float) $validated['unit_price'] : (float) $product->selling_price;
+        $unitPrice = ! empty($validated['unit_price']) ? (float) $validated['unit_price'] : (float) $product->selling_price;
         $lineTotal = round($unitPrice * $quantity, 2);
 
         try {
@@ -283,7 +284,7 @@ class JobCardController extends Controller
         try {
             DB::transaction(function () use ($jobCard, $productItem) {
                 // Reverse stock if deducted
-                if ($productItem->is_stock_deducted && !empty($productItem->batch_allocations)) {
+                if ($productItem->is_stock_deducted && ! empty($productItem->batch_allocations)) {
                     $this->stockService->reverseStockFifo(
                         $productItem->batch_allocations,
                         $jobCard,
@@ -296,7 +297,7 @@ class JobCardController extends Controller
                 $jobCard->recalculateTotals();
             });
 
-            return back()->with('success', "Product removed and stock returned to inventory.");
+            return back()->with('success', 'Product removed and stock returned to inventory.');
         } catch (Exception $e) {
             return back()->with('error', "Failed to remove product: {$e->getMessage()}");
         }
@@ -330,7 +331,7 @@ class JobCardController extends Controller
         ]);
 
         // Keep vehicle mileage up-to-date
-        if (!empty($validated['current_mileage']) && $validated['current_mileage'] > $jobCard->vehicle->current_mileage) {
+        if (! empty($validated['current_mileage']) && $validated['current_mileage'] > $jobCard->vehicle->current_mileage) {
             $jobCard->vehicle->update([
                 'current_mileage' => $validated['current_mileage'],
                 'next_service_mileage' => $validated['next_service_mileage'] ?? $jobCard->vehicle->next_service_mileage,
@@ -361,6 +362,7 @@ class JobCardController extends Controller
                 'status' => 'in_progress',
                 'started_at' => now(),
             ]);
+
             return back()->with('success', "Service started for Job #{$jobCard->job_number}.");
         }
 
@@ -375,17 +377,19 @@ class JobCardController extends Controller
                 'status' => 'completed',
                 'completed_at' => now(),
             ]);
+
             return back()->with('success', "Job #{$jobCard->job_number} marked as Completed. Ready for billing.");
         }
 
         if ($action === 'mark_delivered') {
-            if (!in_array($jobCard->status, ['completed', 'delivered'])) {
+            if (! in_array($jobCard->status, ['completed', 'delivered'])) {
                 return back()->with('error', 'Only completed jobs can be delivered.');
             }
             $jobCard->update([
                 'status' => 'delivered',
                 'delivered_at' => now(),
             ]);
+
             return back()->with('success', "Vehicle handed over to customer. Job #{$jobCard->job_number} delivered.");
         }
 
@@ -398,7 +402,7 @@ class JobCardController extends Controller
     public function cancel(Request $request, JobCard $jobCard): RedirectResponse
     {
         $user = Auth::user();
-        if (!$user->isAdmin() && !$user->hasPermission('cancel_jobs')) {
+        if (! $user->isAdmin() && ! $user->hasPermission('cancel_jobs')) {
             abort(403, 'Unauthorized to cancel job cards.');
         }
 
@@ -414,7 +418,7 @@ class JobCardController extends Controller
             DB::transaction(function () use ($jobCard, $validated, $user) {
                 // Reverse all issued products stock
                 foreach ($jobCard->products as $productItem) {
-                    if ($productItem->is_stock_deducted && !empty($productItem->batch_allocations)) {
+                    if ($productItem->is_stock_deducted && ! empty($productItem->batch_allocations)) {
                         $this->stockService->reverseStockFifo(
                             $productItem->batch_allocations,
                             $jobCard,
@@ -429,7 +433,7 @@ class JobCardController extends Controller
                 if ($jobCard->invoice) {
                     $jobCard->invoice->update([
                         'status' => 'cancelled',
-                        'notes' => ($jobCard->invoice->notes ? $jobCard->invoice->notes . "\n" : '') . "Cancelled due to Job cancellation: {$validated['cancellation_reason']}",
+                        'notes' => ($jobCard->invoice->notes ? $jobCard->invoice->notes."\n" : '')."Cancelled due to Job cancellation: {$validated['cancellation_reason']}",
                     ]);
                 }
 
@@ -460,6 +464,15 @@ class JobCardController extends Controller
         // If invoice already exists, redirect to it
         if ($jobCard->invoice_id && $jobCard->invoice) {
             return redirect()->route('operations.invoices.show', $jobCard->invoice);
+        }
+
+        // Credit Limit Validation (Stage 7)
+        $customer = $jobCard->customer;
+        $creditAccount = $customer?->creditAccount()->where('status', 'active')->first();
+        if ($creditAccount && $creditAccount->wouldExceedLimit((float) $jobCard->grand_total)) {
+            if (! Auth::user()->isAdmin() && ! request()->boolean('credit_override')) {
+                return back()->with('error', 'Credit limit exceeded. Available credit: LKR '.number_format($creditAccount->available_credit, 2).', Job total: LKR '.number_format($jobCard->grand_total, 2).'. Admin override required.');
+            }
         }
 
         return DB::transaction(function () use ($jobCard) {

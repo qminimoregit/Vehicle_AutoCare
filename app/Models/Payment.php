@@ -67,4 +67,14 @@ class Payment extends Model
     {
         return $this->belongsTo(User::class, 'created_by');
     }
+
+    public function isReversed(): bool
+    {
+        return $this->status === 'reversed';
+    }
+
+    public function getBranchAttribute()
+    {
+        return $this->invoice?->branch;
+    }
 }

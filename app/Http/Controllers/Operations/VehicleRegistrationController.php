@@ -46,7 +46,7 @@ class VehicleRegistrationController extends Controller
             ->where('vehicle_number_normalized', $normalized)
             ->first();
 
-        if (!$vehicle) {
+        if (! $vehicle) {
             return response()->json([
                 'exists' => false,
                 'normalized' => $normalized,
@@ -86,7 +86,7 @@ class VehicleRegistrationController extends Controller
                     'job_number' => $job->job_number,
                     'date' => $job->date ? $job->date->format('Y-m-d') : '',
                     'services' => $job->services->pluck('service_name')->join(', ') ?: 'General Service',
-                    'mileage' => $job->current_mileage > 0 ? number_format($job->current_mileage) . ' km' : 'N/A',
+                    'mileage' => $job->current_mileage > 0 ? number_format($job->current_mileage).' km' : 'N/A',
                     'status' => ucfirst(str_replace('_', ' ', $job->status)),
                     'invoice_number' => $job->invoice?->invoice_number ?? 'N/A',
                     'view_url' => route('operations.job-cards.show', $job),
@@ -142,7 +142,7 @@ class VehicleRegistrationController extends Controller
 
         $normalized = Vehicle::normalizeNumber($validated['vehicle_number']);
 
-        return DB::transaction(function () use ($validated, $normalized, $request) {
+        return DB::transaction(function () use ($validated, $normalized) {
             // Find existing vehicle or create new
             $vehicle = Vehicle::where('vehicle_number_normalized', $normalized)->first();
 
@@ -179,8 +179,8 @@ class VehicleRegistrationController extends Controller
             }
 
             // Save or update Vehicle
-            $currentMileage = !empty($validated['current_mileage']) ? (int) $validated['current_mileage'] : ($vehicle?->current_mileage ?? 0);
-            $nextMileage = !empty($validated['next_service_mileage']) ? (int) $validated['next_service_mileage'] : ($vehicle?->next_service_mileage ?? null);
+            $currentMileage = ! empty($validated['current_mileage']) ? (int) $validated['current_mileage'] : ($vehicle?->current_mileage ?? 0);
+            $nextMileage = ! empty($validated['next_service_mileage']) ? (int) $validated['next_service_mileage'] : ($vehicle?->next_service_mileage ?? null);
 
             if ($vehicle) {
                 $vehicle->update([

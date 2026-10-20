@@ -12,22 +12,22 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('invoices', function (Blueprint $table) {
-            if (!Schema::hasColumn('invoices', 'quotation_id')) {
+            if (! Schema::hasColumn('invoices', 'quotation_id')) {
                 $table->foreignId('quotation_id')->nullable()->after('customer_id')->constrained('quotations')->nullOnDelete();
             }
-            if (!Schema::hasColumn('invoices', 'discount_type')) {
+            if (! Schema::hasColumn('invoices', 'discount_type')) {
                 $table->enum('discount_type', ['none', 'percentage', 'fixed'])->default('none')->after('discount_amount');
             }
-            if (!Schema::hasColumn('invoices', 'discount_value')) {
+            if (! Schema::hasColumn('invoices', 'discount_value')) {
                 $table->decimal('discount_value', 15, 2)->default(0)->after('discount_type');
             }
-            if (!Schema::hasColumn('invoices', 'tax_percentage')) {
+            if (! Schema::hasColumn('invoices', 'tax_percentage')) {
                 $table->decimal('tax_percentage', 5, 2)->default(0)->after('tax_amount');
             }
-            if (!Schema::hasColumn('invoices', 'additional_charges')) {
+            if (! Schema::hasColumn('invoices', 'additional_charges')) {
                 $table->decimal('additional_charges', 15, 2)->default(0)->after('tax_percentage');
             }
-            if (!Schema::hasColumn('invoices', 'terms_conditions')) {
+            if (! Schema::hasColumn('invoices', 'terms_conditions')) {
                 $table->text('terms_conditions')->nullable()->after('notes');
             }
             // Modify invoice_type to allow 'quotation' and 'manual'

@@ -103,9 +103,10 @@ class QuotationController extends Controller
         $customers = Customer::where('status', 'active')->orderBy('customer_name')->get();
         $vehicles = Vehicle::with(['customer', 'vehicleType'])->orderBy('vehicle_number')->get();
         $services = Service::active()->orderBy('name')->get();
-        
+
         $products = Product::active()->orderBy('name')->get()->map(function ($product) {
             $product->available_stock = $this->stockService->getAvailableStock($product);
+
             return $product;
         });
 
@@ -160,7 +161,7 @@ class QuotationController extends Controller
 
         $activeBranchId = BranchContext::getActiveBranchId();
         $customer = Customer::findOrFail($validated['customer_id']);
-        $vehicle = !empty($validated['vehicle_id']) ? Vehicle::find($validated['vehicle_id']) : null;
+        $vehicle = ! empty($validated['vehicle_id']) ? Vehicle::find($validated['vehicle_id']) : null;
         $company = CompanySetting::getSettings();
 
         DB::beginTransaction();
@@ -292,6 +293,7 @@ class QuotationController extends Controller
                 ->with('success', "Quotation #{$quotation->quotation_number} created successfully.");
         } catch (Exception $e) {
             DB::rollBack();
+
             return back()->withInput()->with('error', "Failed to create quotation: {$e->getMessage()}");
         }
     }
@@ -322,7 +324,7 @@ class QuotationController extends Controller
      */
     public function edit(Quotation $quotation): View|RedirectResponse
     {
-        if (!$quotation->canEdit()) {
+        if (! $quotation->canEdit()) {
             return redirect()->route('billing.quotations.show', $quotation)
                 ->with('error', 'Only draft or sent quotations can be modified.');
         }
@@ -331,9 +333,10 @@ class QuotationController extends Controller
         $customers = Customer::where('status', 'active')->orderBy('customer_name')->get();
         $vehicles = Vehicle::with(['customer', 'vehicleType'])->orderBy('vehicle_number')->get();
         $services = Service::active()->orderBy('name')->get();
-        
+
         $products = Product::active()->orderBy('name')->get()->map(function ($product) {
             $product->available_stock = $this->stockService->getAvailableStock($product);
+
             return $product;
         });
 
@@ -345,7 +348,7 @@ class QuotationController extends Controller
      */
     public function update(Request $request, Quotation $quotation): RedirectResponse
     {
-        if (!$quotation->canEdit()) {
+        if (! $quotation->canEdit()) {
             return redirect()->route('billing.quotations.show', $quotation)
                 ->with('error', 'Only draft or sent quotations can be modified.');
         }
@@ -376,7 +379,7 @@ class QuotationController extends Controller
         ]);
 
         $customer = Customer::findOrFail($validated['customer_id']);
-        $vehicle = !empty($validated['vehicle_id']) ? Vehicle::find($validated['vehicle_id']) : null;
+        $vehicle = ! empty($validated['vehicle_id']) ? Vehicle::find($validated['vehicle_id']) : null;
 
         DB::beginTransaction();
         try {
@@ -467,6 +470,7 @@ class QuotationController extends Controller
                 ->with('success', "Quotation #{$quotation->quotation_number} updated successfully.");
         } catch (Exception $e) {
             DB::rollBack();
+
             return back()->withInput()->with('error', "Failed to update quotation: {$e->getMessage()}");
         }
     }
@@ -508,6 +512,7 @@ class QuotationController extends Controller
         }
 
         $quotation->update(['status' => 'sent']);
+
         return back()->with('success', "Quotation #{$quotation->quotation_number} marked as Sent.");
     }
 
@@ -521,6 +526,7 @@ class QuotationController extends Controller
         }
 
         $quotation->update(['status' => 'accepted']);
+
         return back()->with('success', "Quotation #{$quotation->quotation_number} marked as Accepted.");
     }
 
@@ -534,6 +540,7 @@ class QuotationController extends Controller
         }
 
         $quotation->update(['status' => 'rejected']);
+
         return back()->with('success', "Quotation #{$quotation->quotation_number} marked as Rejected.");
     }
 
@@ -542,7 +549,7 @@ class QuotationController extends Controller
      */
     public function convertToInvoice(Quotation $quotation): RedirectResponse
     {
-        if (!$quotation->canConvert()) {
+        if (! $quotation->canConvert()) {
             return back()->with('error', 'This quotation cannot be converted to an invoice.');
         }
 
@@ -620,11 +627,11 @@ class QuotationController extends Controller
      */
     public function createJobCard(Quotation $quotation): RedirectResponse
     {
-        if (!$quotation->vehicle_id) {
+        if (! $quotation->vehicle_id) {
             return back()->with('error', 'Cannot create a Job Card for a quotation without an assigned vehicle.');
         }
 
-        if (!$quotation->canCreateJobCard()) {
+        if (! $quotation->canCreateJobCard()) {
             return back()->with('error', 'This quotation has already been converted to a Job Card.');
         }
 
@@ -641,7 +648,7 @@ class QuotationController extends Controller
                 'vehicle_type_id' => $vehicle->vehicle_type_id,
                 'current_mileage' => $vehicle->current_mileage,
                 'status' => 'pending',
-                'service_notes' => "Initiated from Quotation #{$quotation->quotation_number}\n" . ($quotation->subject ? "Subject: {$quotation->subject}\n" : ''),
+                'service_notes' => "Initiated from Quotation #{$quotation->quotation_number}\n".($quotation->subject ? "Subject: {$quotation->subject}\n" : ''),
                 'customer_notes' => $quotation->notes,
                 'service_total' => 0,
                 'product_total' => 0,

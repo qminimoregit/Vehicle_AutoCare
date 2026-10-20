@@ -56,8 +56,8 @@ class Quotation extends Model
 
     public static function generateQuotationNumber(?int $branchId = null): string
     {
-        $prefix = 'QT-' . date('Ym') . '-';
-        $lastQuotation = self::where('quotation_number', 'LIKE', $prefix . '%')
+        $prefix = 'QT-'.date('Ym').'-';
+        $lastQuotation = self::where('quotation_number', 'LIKE', $prefix.'%')
             ->orderBy('id', 'desc')
             ->first();
 
@@ -68,7 +68,7 @@ class Quotation extends Model
             $newSeq = '0001';
         }
 
-        return $prefix . $newSeq;
+        return $prefix.$newSeq;
     }
 
     public function branch(): BelongsTo
@@ -123,12 +123,12 @@ class Quotation extends Model
 
     public function canConvert(): bool
     {
-        return in_array($this->status, ['draft', 'sent', 'accepted']) && !$this->converted_invoice_id;
+        return in_array($this->status, ['draft', 'sent', 'accepted']) && ! $this->converted_invoice_id;
     }
 
     public function canCreateJobCard(): bool
     {
-        return in_array($this->status, ['draft', 'sent', 'accepted']) && !$this->converted_job_card_id;
+        return in_array($this->status, ['draft', 'sent', 'accepted']) && ! $this->converted_job_card_id;
     }
 
     public function recalculateTotals(): void

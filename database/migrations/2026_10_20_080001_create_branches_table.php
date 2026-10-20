@@ -34,7 +34,7 @@ return new class extends Migration
             DB::table('branches')->insert([
                 'company_id' => $company->id,
                 'branch_code' => 'BR-001',
-                'branch_name' => $company->company_name . ' - Main Branch',
+                'branch_name' => $company->company_name.' - Main Branch',
                 'address' => $company->address ?? 'Main Workshop',
                 'phone' => $company->phone,
                 'email' => $company->email,

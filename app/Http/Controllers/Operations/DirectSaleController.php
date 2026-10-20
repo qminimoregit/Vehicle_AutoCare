@@ -170,6 +170,17 @@ class DirectSaleController extends Controller
                     throw new Exception('Amount paid (LKR '.number_format($amountPaid, 2).') is less than the Grand Total (LKR '.number_format($grandTotal, 2).').');
                 }
 
+                // Credit Limit Validation (Stage 7)
+                $unpaidAmount = max(0, $grandTotal - $amountPaid);
+                if (($paymentMethod === 'credit' || $unpaidAmount > 0) && $customer) {
+                    $creditAccount = $customer->creditAccount()->where('status', 'active')->first();
+                    if ($creditAccount && $creditAccount->wouldExceedLimit($unpaidAmount)) {
+                        if (! Auth::user()->isAdmin() && ! $request->boolean('credit_override')) {
+                            throw new Exception('Credit limit exceeded. Available credit: LKR '.number_format($creditAccount->available_credit, 2).', requested credit: LKR '.number_format($unpaidAmount, 2).'. Admin override required.');
+                        }
+                    }
+                }
+
                 $changeAmount = $paymentMethod === 'credit' ? 0.0 : max(0, $amountPaid - $grandTotal);
                 $actualReceived = min($amountPaid, $grandTotal);
 

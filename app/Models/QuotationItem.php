@@ -49,6 +49,7 @@ class QuotationItem extends Model
         if ($this->item_type === 'service') {
             return $this->belongsTo(Service::class, 'item_id');
         }
+
         return null;
     }
 
@@ -57,6 +58,7 @@ class QuotationItem extends Model
         if ($this->item_type === 'product') {
             return $this->belongsTo(Product::class, 'item_id');
         }
+
         return null;
     }
 }

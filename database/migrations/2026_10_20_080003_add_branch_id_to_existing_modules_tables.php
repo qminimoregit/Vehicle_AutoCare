@@ -31,7 +31,7 @@ return new class extends Migration
     {
         // 1. Add nullable branch_id column to each module table
         foreach ($this->tables as $tableName) {
-            if (Schema::hasTable($tableName) && !Schema::hasColumn($tableName, 'branch_id')) {
+            if (Schema::hasTable($tableName) && ! Schema::hasColumn($tableName, 'branch_id')) {
                 Schema::table($tableName, function (Blueprint $table) {
                     $table->foreignId('branch_id')->nullable()->after('id')->constrained('branches')->nullOnDelete();
                 });
@@ -56,7 +56,7 @@ return new class extends Migration
     {
         foreach ($this->tables as $tableName) {
             if (Schema::hasTable($tableName) && Schema::hasColumn($tableName, 'branch_id')) {
-                Schema::table($tableName, function (Blueprint $table) use ($tableName) {
+                Schema::table($tableName, function (Blueprint $table) {
                     $table->dropConstrainedForeignId('branch_id');
                 });
             }
