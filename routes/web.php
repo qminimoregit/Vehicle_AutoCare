@@ -23,9 +23,11 @@ use App\Http\Controllers\MasterData\CompanyDetailController;
 use App\Http\Controllers\MasterData\ServiceController;
 use App\Http\Controllers\MasterData\ServicePaymentController;
 use App\Http\Controllers\MasterData\VehicleTypeController;
+use App\Http\Controllers\Operations\AppointmentController;
 use App\Http\Controllers\Operations\DirectSaleController;
 use App\Http\Controllers\Operations\InvoiceController;
 use App\Http\Controllers\Operations\JobCardController;
+use App\Http\Controllers\Operations\JobIssueController;
 use App\Http\Controllers\Operations\VehicleRegistrationController;
 use App\Http\Controllers\Payroll\AttendanceController;
 use App\Http\Controllers\Payroll\EmployeeController;
@@ -60,6 +62,15 @@ Route::middleware(['auth', 'active'])->group(function () {
     // Dashboard
     Route::get('/', [DashboardController::class, 'index'])->name('home');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    // Appointments Module
+    Route::get('/appointments', [AppointmentController::class, 'index'])->name('appointments.index');
+    Route::get('/appointments/events', [AppointmentController::class, 'events'])->name('appointments.events');
+    Route::post('/appointments', [AppointmentController::class, 'store'])->name('appointments.store');
+    Route::put('/appointments/{appointment}', [AppointmentController::class, 'update'])->name('appointments.update');
+    Route::patch('/appointments/{appointment}/arrive', [AppointmentController::class, 'markArrived'])->name('appointments.arrive');
+    Route::post('/appointments/{appointment}/create-job-card', [AppointmentController::class, 'createJobCard'])->name('appointments.create-job-card');
+    Route::patch('/appointments/{appointment}/cancel', [AppointmentController::class, 'cancel'])->name('appointments.cancel');
 
     // Master Data Module
     Route::prefix('master-data')->name('master-data.')->group(function () {
@@ -162,6 +173,16 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::patch('/job-cards/{jobCard}/status', [JobCardController::class, 'updateStatus'])->name('job-cards.status');
         Route::post('/job-cards/{jobCard}/cancel', [JobCardController::class, 'cancel'])->name('job-cards.cancel');
         Route::post('/job-cards/{jobCard}/generate-invoice', [JobCardController::class, 'generateInvoice'])->name('job-cards.generate-invoice');
+
+        // Vehicle Issues & Customer Approvals
+        Route::post('/job-cards/{jobCard}/issues', [JobIssueController::class, 'store'])->name('job-cards.issues.store');
+        Route::patch('/job-issues/{issue}/approval', [JobIssueController::class, 'recordApproval'])->name('job-issues.approval');
+
+        // Additional Work & Supplementary Invoices
+        Route::post('/job-cards/{jobCard}/additional-work/start', [JobCardController::class, 'startAdditionalWork'])->name('job-cards.additional-work.start');
+        Route::post('/job-cards/{jobCard}/additional-work/complete', [JobCardController::class, 'completeAdditionalWork'])->name('job-cards.additional-work.complete');
+        Route::post('/job-cards/{jobCard}/supplementary-invoice', [JobCardController::class, 'generateSupplementaryInvoice'])->name('job-cards.supplementary-invoice');
+        Route::post('/job-cards/{jobCard}/follow-up', [JobCardController::class, 'createFollowUp'])->name('job-cards.follow-up');
 
         // Job Card Services
         Route::get('/job-cards/{jobCard}/services/{service}/price', [JobCardController::class, 'getServicePrice'])->name('job-cards.service-price');
