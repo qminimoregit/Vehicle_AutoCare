@@ -245,30 +245,54 @@
                                     Due: LKR {{ number_format($invoice->balance_amount, 2) }}
                                 </div>
                             </td>
-                            <td class="px-5 py-4 whitespace-nowrap text-center">
-                                @if($invoice->status === 'paid')
-                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-                                        Paid in Full
+                            <td class="px-5 py-4 whitespace-nowrap text-center space-y-1">
+                                <div>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold {{ $invoice->status === 'cancelled' ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-slate-100 text-slate-700 border border-slate-200' }}">
+                                        Doc: {{ $invoice->document_status }}
                                     </span>
-                                @elseif($invoice->status === 'partially_paid')
-                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
-                                        Partially Paid
-                                    </span>
-                                @elseif($invoice->status === 'issued')
-                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
-                                        Issued
-                                    </span>
-                                @elseif($invoice->status === 'cancelled')
-                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800">
-                                        Cancelled
-                                    </span>
-                                @else
-                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-700">
-                                        {{ ucfirst($invoice->status) }}
-                                    </span>
-                                @endif
+                                </div>
+                                <div>
+                                    @php $payStatus = $invoice->payment_status; @endphp
+                                    @if($payStatus === 'Paid in Full')
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                            Paid in Full
+                                        </span>
+                                    @elseif($payStatus === 'Partially Paid')
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                            Partially Paid
+                                        </span>
+                                    @elseif($payStatus === 'Cancelled')
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                                            Cancelled
+                                        </span>
+                                    @else
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                            Unpaid
+                                        </span>
+                                    @endif
+                                </div>
                             </td>
                             <td class="px-5 py-4 whitespace-nowrap text-right text-xs font-medium space-x-1">
+                                @if($invoice->status !== 'cancelled')
+                                    @if($invoice->balance_amount > 0)
+                                        <a 
+                                            href="{{ route('operations.invoices.show', $invoice) }}?action=pay" 
+                                            class="inline-flex items-center px-2.5 py-1.5 bg-[#0B1849] hover:bg-[#15286e] text-white rounded-md font-semibold transition shadow-xs"
+                                            title="Record Payment"
+                                        >
+                                            Record Payment
+                                        </a>
+                                    @else
+                                        <a 
+                                            href="{{ route('operations.invoices.show', $invoice) }}#payment-history" 
+                                            class="inline-flex items-center px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-md font-semibold transition"
+                                            title="View Payments"
+                                        >
+                                            View Payments
+                                        </a>
+                                    @endif
+                                @endif
+
                                 <a 
                                     href="{{ route('operations.invoices.show', $invoice) }}" 
                                     class="inline-flex items-center px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md font-semibold transition"

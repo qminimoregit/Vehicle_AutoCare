@@ -15,7 +15,6 @@ use App\Services\BranchContext;
 use App\Services\Inventory\StockService;
 use Exception;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -41,6 +40,7 @@ class DirectSaleController extends Controller
                 $product->available_stock = (float) StockBatch::where('product_id', $product->id)
                     ->where('status', 'active')
                     ->sum('remaining_quantity');
+
                 return $product;
             });
 
@@ -80,6 +80,7 @@ class DirectSaleController extends Controller
                 'unit' => $product->uom?->abbreviation ?? 'Unit',
                 'selling_price' => (float) $product->selling_price,
                 'available_stock' => $stock,
+                'image_url' => $product->image_url,
             ];
         });
 
@@ -107,12 +108,12 @@ class DirectSaleController extends Controller
         ]);
 
         try {
-            $result = DB::transaction(function () use ($validated, $request) {
+            $result = DB::transaction(function () use ($validated) {
                 // 1. Resolve or create customer (optional for direct walk-in)
                 $customer = null;
-                if (!empty($validated['customer_id'])) {
+                if (! empty($validated['customer_id'])) {
                     $customer = Customer::find($validated['customer_id']);
-                } elseif (!empty($validated['customer_name'])) {
+                } elseif (! empty($validated['customer_name'])) {
                     $customer = Customer::create([
                         'customer_name' => $validated['customer_name'],
                         'phone' => $validated['phone'] ?? null,
@@ -166,7 +167,7 @@ class DirectSaleController extends Controller
                 $paymentMethod = $validated['payment_method'];
 
                 if ($paymentMethod !== 'credit' && $amountPaid < $grandTotal) {
-                    throw new Exception("Amount paid (LKR " . number_format($amountPaid, 2) . ") is less than the Grand Total (LKR " . number_format($grandTotal, 2) . ").");
+                    throw new Exception('Amount paid (LKR '.number_format($amountPaid, 2).') is less than the Grand Total (LKR '.number_format($grandTotal, 2).').');
                 }
 
                 $changeAmount = $paymentMethod === 'credit' ? 0.0 : max(0, $amountPaid - $grandTotal);

@@ -134,4 +134,43 @@ class Invoice extends Model
     {
         return $this->belongsTo(Branch::class, 'branch_id');
     }
+
+    public function linkedJobCard()
+    {
+        return $this->hasOne(JobCard::class, 'invoice_id');
+    }
+
+    public function getDocumentStatusAttribute(): string
+    {
+        if ($this->status === 'cancelled') {
+            return 'Cancelled';
+        }
+
+        if ($this->status === 'draft') {
+            return 'Draft';
+        }
+
+        return 'Issued';
+    }
+
+    public function getPaymentStatusAttribute(): string
+    {
+        if ($this->status === 'cancelled') {
+            return 'Cancelled';
+        }
+
+        $paid = (float) $this->amount_paid;
+        $total = (float) $this->grand_total;
+        $balance = (float) $this->balance_amount;
+
+        if ($total > 0 && ($balance <= 0.0001 || $paid >= $total)) {
+            return 'Paid in Full';
+        }
+
+        if ($paid > 0.0001) {
+            return 'Partially Paid';
+        }
+
+        return 'Unpaid';
+    }
 }

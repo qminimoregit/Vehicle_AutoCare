@@ -24,17 +24,22 @@
         isSubmitting: false,
         mobileCartOpen: false,
 
+        init() {
+            window.__posCartHasItems = () => this.cart && this.cart.length > 0;
+        },
+
         // Filtered products list
         get filteredProducts() {
             if (!this.searchTerm.trim()) {
                 return this.products;
             }
             let term = this.searchTerm.toLowerCase();
-            return this.products.filter(p => 
-                (p.product_name && p.product_name.toLowerCase().includes(term)) ||
-                (p.sku && p.sku.toLowerCase().includes(term)) ||
-                (p.barcode && p.barcode.toLowerCase().includes(term))
-            );
+            return this.products.filter(p => {
+                let name = (p.name || p.product_name || '').toLowerCase();
+                let sku = (p.sku || '').toLowerCase();
+                let barcode = (p.barcode || '').toLowerCase();
+                return name.includes(term) || sku.includes(term) || barcode.includes(term);
+            });
         },
 
         // Add item to cart
@@ -55,8 +60,9 @@
             } else {
                 this.cart.push({
                     product_id: product.id,
-                    name: product.product_name,
+                    name: product.name || product.product_name || 'Product',
                     sku: product.sku,
+                    image_url: product.image_url,
                     unit_price: parseFloat(product.selling_price) || 0,
                     available_stock: parseFloat(product.available_stock) || 0,
                     quantity: 1,
@@ -240,23 +246,58 @@
                     <span class="text-xs text-gray-400">Total available stock across all active batches</span>
                 </div>
 
-                <div class="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[620px] overflow-y-auto thin-scrollbar">
+                <div class="p-3.5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 max-h-[640px] overflow-y-auto thin-scrollbar">
                     <template x-for="product in filteredProducts" :key="product.id">
-                        <div class="border rounded-xl p-3.5 flex flex-col justify-between transition hover:shadow-xs" :class="product.available_stock > 0 ? 'border-gray-200 bg-white hover:border-[#0B1849]/30' : 'border-gray-100 bg-gray-50 opacity-60'">
+                        <div 
+                            class="border rounded-xl p-3 flex flex-col justify-between transition hover:shadow-sm" 
+                            :class="product.available_stock > 0 ? 'border-gray-200 bg-white hover:border-[#0B1849]/40' : 'border-gray-100 bg-gray-50/70 opacity-60'"
+                        >
+                            <!-- Top: Image + Info -->
                             <div>
-                                <div class="flex items-start justify-between gap-1">
-                                    <h4 class="text-sm font-bold text-gray-900 leading-snug" x-text="product.product_name"></h4>
+                                <!-- 1. Product Image (Contain, Lazy Loaded, Placeholder) -->
+                                <div class="w-full h-28 sm:h-32 bg-slate-50 rounded-lg border border-gray-100 flex items-center justify-center p-2 overflow-hidden relative">
+                                    <template x-if="product.image_url">
+                                        <img 
+                                            :src="product.image_url" 
+                                            :alt="product.name || product.product_name" 
+                                            loading="lazy" 
+                                            class="w-full h-full object-contain"
+                                        />
+                                    </template>
+                                    <template x-if="!product.image_url">
+                                        <div class="flex flex-col items-center justify-center text-gray-300">
+                                            <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                            </svg>
+                                            <span class="text-[10px] text-gray-400 mt-0.5 font-medium">No Image</span>
+                                        </div>
+                                    </template>
+                                </div>
+
+                                <!-- 2. Product Name (Always clearly visible) -->
+                                <h4 
+                                    class="text-sm font-bold text-gray-900 leading-snug line-clamp-2 mt-2.5 min-h-[2.5rem]" 
+                                    x-text="product.name || product.product_name"
+                                    :title="product.name || product.product_name"
+                                ></h4>
+
+                                <!-- 3 & 4. Product SKU & Available Stock -->
+                                <div class="mt-1 flex items-center justify-between gap-1 text-[11px]">
+                                    <span class="text-gray-500 font-mono truncate" x-text="'SKU: ' + (product.sku || 'N/A')"></span>
                                     <span 
-                                        class="px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap"
-                                        :class="product.available_stock > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'"
-                                        x-text="product.available_stock > 0 ? product.available_stock + ' in stock' : 'Out of stock'"
+                                        class="px-2 py-0.5 rounded-full font-bold whitespace-nowrap text-[10px]"
+                                        :class="product.available_stock > 0 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'"
+                                        x-text="product.available_stock > 0 ? product.available_stock + ' in Stock' : 'Out of stock'"
                                     ></span>
                                 </div>
-                                <p class="text-[11px] text-gray-500 font-mono mt-0.5" x-text="'SKU: ' + (product.sku || 'N/A')"></p>
                             </div>
 
-                            <div class="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between">
-                                <span class="text-sm font-black text-[#0B1849]" x-text="'LKR ' + parseFloat(product.selling_price).toFixed(2)"></span>
+                            <!-- Bottom: 5. Selling Price & 6. Add Button -->
+                            <div class="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between gap-2">
+                                <div>
+                                    <span class="text-[10px] text-gray-400 block font-medium uppercase">Price</span>
+                                    <span class="text-sm font-black text-[#0B1849]" x-text="'LKR ' + parseFloat(product.selling_price).toFixed(2)"></span>
+                                </div>
 
                                 <button 
                                     type="button" 
@@ -267,14 +308,14 @@
                                     <svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                                     </svg>
-                                    Add
+                                    + Add
                                 </button>
                             </div>
                         </div>
                     </template>
 
                     <template x-if="filteredProducts.length === 0">
-                        <div class="col-span-2 py-12 text-center text-gray-400">
+                        <div class="col-span-full py-12 text-center text-gray-400">
                             <p class="text-sm font-semibold">No matching products found.</p>
                             <p class="text-xs mt-1">Try another keyword or add products under Suppliers & Inventory.</p>
                         </div>

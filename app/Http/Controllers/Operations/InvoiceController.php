@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Operations;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\CompanySetting;
 use App\Models\Customer;
@@ -108,16 +109,17 @@ class InvoiceController extends Controller
     public function create(Request $request): View|RedirectResponse
     {
         // Enforce requirement: manual invoice creation restricted to Admin
-        if (!Auth::user()->isAdmin()) {
+        if (! Auth::user()->isAdmin()) {
             abort(403, 'Manual invoice creation is restricted to administrators.');
         }
 
         $customers = Customer::where('status', 'active')->orderBy('customer_name')->get();
         $vehicles = Vehicle::with(['customer', 'vehicleType'])->orderBy('vehicle_number')->get();
         $services = Service::active()->orderBy('name')->get();
-        
+
         $products = Product::active()->orderBy('name')->get()->map(function ($product) {
             $product->available_stock = $this->stockService->getAvailableStock($product);
+
             return $product;
         });
 
@@ -132,7 +134,7 @@ class InvoiceController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        if (!Auth::user()->isAdmin()) {
+        if (! Auth::user()->isAdmin()) {
             abort(403, 'Manual invoice creation is restricted to administrators.');
         }
 
@@ -273,6 +275,7 @@ class InvoiceController extends Controller
                 ->with('success', "Invoice #{$invoice->invoice_number} created successfully.");
         } catch (Exception $e) {
             DB::rollBack();
+
             return back()->withInput()->with('error', "Failed to create invoice: {$e->getMessage()}");
         }
     }
@@ -350,47 +353,89 @@ class InvoiceController extends Controller
      */
     public function addPayment(Request $request, Invoice $invoice): RedirectResponse
     {
-        if ($invoice->status === 'paid') {
-            return back()->with('error', 'Invoice is already fully paid.');
+        $user = $request->user();
+
+        if (! $user->isAdmin() && ! $user->hasPermission('record_payments')) {
+            abort(403, 'Unauthorized to record payments.');
         }
 
-        if ($invoice->status === 'cancelled') {
-            return back()->with('error', 'Cannot record payment for a cancelled invoice.');
+        if ($invoice->branch_id && ! $user->canAccessBranch($invoice->branch_id)) {
+            abort(403, 'Unauthorized access to this branch.');
         }
 
         $validated = $request->validate([
-            'amount' => ['required', 'numeric', 'min:0.01', "max:{$invoice->balance_amount}"],
+            'amount' => ['required', 'numeric', 'min:0.01'],
             'payment_method' => ['required', 'in:cash,card,bank_transfer,cheque'],
+            'payment_date' => ['nullable', 'date', 'before_or_equal:today'],
             'reference_number' => ['nullable', 'string', 'max:100'],
-            'notes' => ['nullable', 'string', 'max:255'],
+            'notes' => ['nullable', 'string', 'max:500'],
         ]);
 
-        DB::transaction(function () use ($invoice, $validated) {
-            $paymentAmount = (float) $validated['amount'];
+        try {
+            $payment = DB::transaction(function () use ($invoice, $validated, $user) {
+                $freshInvoice = Invoice::where('id', $invoice->id)->lockForUpdate()->firstOrFail();
 
-            Payment::create([
-                'invoice_id' => $invoice->id,
-                'customer_id' => $invoice->customer_id,
-                'payment_number' => Payment::generatePaymentNumber(),
-                'payment_date' => now()->toDateString(),
-                'amount' => $paymentAmount,
-                'payment_method' => $validated['payment_method'],
-                'reference_number' => $validated['reference_number'] ?? null,
-                'notes' => $validated['notes'] ?? null,
-                'created_by' => Auth::id(),
-            ]);
+                if ($freshInvoice->status === 'cancelled') {
+                    throw new Exception("Invoice #{$freshInvoice->invoice_number} is cancelled and cannot accept payments.");
+                }
 
-            $newPaid = (float) $invoice->amount_paid + $paymentAmount;
-            $newBalance = max(0, (float) $invoice->grand_total - $newPaid);
-            $newStatus = $newBalance <= 0 ? 'paid' : 'partially_paid';
+                $currentBalance = round((float) $freshInvoice->balance_amount, 2);
+                $payAmount = round((float) $validated['amount'], 2);
 
-            $invoice->update([
-                'amount_paid' => $newPaid,
-                'balance_amount' => $newBalance,
-                'status' => $newStatus,
-            ]);
-        });
+                if ($currentBalance <= 0.0001) {
+                    throw new Exception("Invoice #{$freshInvoice->invoice_number} is already paid in full.");
+                }
 
-        return back()->with('success', 'Payment recorded successfully.');
+                if ($payAmount > $currentBalance) {
+                    throw new Exception('Payment amount (LKR '.number_format($payAmount, 2).') cannot exceed the outstanding balance of LKR '.number_format($currentBalance, 2).'.');
+                }
+
+                $paymentNumber = Payment::generatePaymentNumber();
+
+                $payment = Payment::create([
+                    'invoice_id' => $freshInvoice->id,
+                    'customer_id' => $freshInvoice->customer_id,
+                    'payment_number' => $paymentNumber,
+                    'payment_date' => $validated['payment_date'] ?? now()->toDateString(),
+                    'amount' => $payAmount,
+                    'payment_method' => $validated['payment_method'],
+                    'reference_number' => $validated['reference_number'] ?? null,
+                    'notes' => $validated['notes'] ?? null,
+                    'status' => 'completed',
+                    'created_by' => $user->id,
+                ]);
+
+                $totalPaid = (float) Payment::where('invoice_id', $freshInvoice->id)
+                    ->where('status', 'completed')
+                    ->sum('amount');
+
+                $totalPaid = round($totalPaid, 2);
+                $grandTotal = round((float) $freshInvoice->grand_total, 2);
+                $newBalance = max(0, round($grandTotal - $totalPaid, 2));
+
+                $newStatus = ($newBalance <= 0.0001 || $totalPaid >= $grandTotal)
+                    ? 'paid'
+                    : ($totalPaid > 0 ? 'partially_paid' : 'issued');
+
+                $freshInvoice->update([
+                    'amount_paid' => $totalPaid,
+                    'balance_amount' => $newBalance,
+                    'status' => $newStatus,
+                ]);
+
+                ActivityLog::log(
+                    action: 'payment_recorded',
+                    description: "Recorded payment {$paymentNumber} of LKR ".number_format($payAmount, 2)." for Invoice #{$freshInvoice->invoice_number}. New balance: LKR ".number_format($newBalance, 2).'.',
+                    module: 'Sales & Billing',
+                    userId: $user->id
+                );
+
+                return $payment;
+            });
+
+            return back()->with('success', "Payment {$payment->payment_number} of LKR ".number_format($payment->amount, 2).' recorded successfully.');
+        } catch (Exception $e) {
+            return back()->withInput()->with('error', "Payment failed: {$e->getMessage()}");
+        }
     }
 }

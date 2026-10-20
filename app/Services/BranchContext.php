@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\Branch;
-use App\Models\CompanySetting;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -31,6 +30,7 @@ class BranchContext
         $firstAccessible = $user->getAccessibleBranches()->first();
         if ($firstAccessible) {
             session(['active_branch_id' => $firstAccessible->id]);
+
             return (int) $firstAccessible->id;
         }
 
@@ -38,6 +38,7 @@ class BranchContext
         $mainId = static::getDefaultMainBranchId();
         if ($mainId) {
             session(['active_branch_id' => $mainId]);
+
             return $mainId;
         }
 
@@ -72,6 +73,7 @@ class BranchContext
         }
 
         session(['active_branch_id' => $branchId]);
+
         return true;
     }
 
@@ -101,6 +103,16 @@ class BranchContext
         }
 
         return static::getAccessibleBranches($user)->count() > 1;
+    }
+
+    /**
+     * Check if user can access a specific branch.
+     */
+    public static function canAccessBranch(int|string|null $branchId, ?User $user = null): bool
+    {
+        $user = $user ?? Auth::user();
+
+        return $user ? $user->canAccessBranch($branchId) : false;
     }
 
     /**

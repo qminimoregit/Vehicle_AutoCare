@@ -75,36 +75,47 @@
                         @endif
                     </h2>
                 </div>
-                <div>
-                    @if($invoice->status === 'cancelled')
-                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">
-                            Cancelled / Avoided
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold {{ $invoice->status === 'cancelled' ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-slate-100 text-slate-700 border border-slate-200' }}">
+                        Document: {{ $invoice->document_status }}
+                    </span>
+                    @php $payStatus = $invoice->payment_status; @endphp
+                    @if($payStatus === 'Paid in Full')
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            Payment: Paid in Full
                         </span>
-                    @elseif($invoice->status === 'paid')
-                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-                            Paid in Full
+                    @elseif($payStatus === 'Partially Paid')
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                            Payment: Partially Paid
                         </span>
-                    @elseif($invoice->status === 'partially_paid')
-                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
-                            Partially Paid
+                    @elseif($payStatus === 'Cancelled')
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-200">
+                            Payment: Cancelled
                         </span>
                     @else
-                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
-                            Issued
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                            Payment: Unpaid
                         </span>
                     @endif
                 </div>
             </div>
 
-            <!-- Cancellation Info Banner (if cancelled) -->
+            <!-- Cancellation Ineligibility / Cancellation Info Banner -->
             @if($invoice->status === 'cancelled')
                 <div class="bg-red-50 p-4 border-l-4 border-red-500 text-sm text-red-900">
-                    <p class="font-bold">This Service Sale was avoided on {{ $invoice->cancelled_at ? $invoice->cancelled_at->format('d M Y, h:i A') : 'N/A' }}.</p>
+                    <p class="font-bold">Invoice found, but this transaction cannot currently be cancelled. This Service Sale was already avoided on {{ $invoice->cancelled_at ? $invoice->cancelled_at->format('d M Y, h:i A') : 'N/A' }}.</p>
                     <p class="mt-1"><span class="font-semibold">Reason:</span> {{ $invoice->cancellation_reason ?? 'Not specified' }}</p>
                     @if($invoice->cancelledBy)
                         <p class="text-xs text-red-700 mt-0.5">Authorised by: {{ $invoice->cancelledBy->name }}</p>
                     @endif
                     <p class="text-xs text-gray-600 mt-1">Vehicle and Job Card service records remain intact.</p>
+                </div>
+            @elseif(isset($canCancel) && ! $canCancel)
+                <div class="bg-amber-50 p-4 border-l-4 border-amber-500 text-sm text-amber-900">
+                    <p class="font-bold">Invoice found, but this transaction cannot currently be cancelled.</p>
+                    @if(isset($cancellationIneligibleReason) && $cancellationIneligibleReason)
+                        <p class="text-xs text-amber-800 mt-0.5">{{ $cancellationIneligibleReason }}</p>
+                    @endif
                 </div>
             @endif
 
@@ -223,7 +234,7 @@
                     Cancel
                 </a>
 
-                @if($invoice->status !== 'cancelled')
+                @if(isset($canCancel) && $canCancel)
                     <button 
                         type="button" 
                         @click="showConfirmModal = true"
@@ -239,7 +250,7 @@
         </div>
 
         <!-- Avoid Service Sale Confirmation Modal -->
-        @if($invoice->status !== 'cancelled')
+        @if(isset($canCancel) && $canCancel)
             <div 
                 x-show="showConfirmModal" 
                 x-cloak 

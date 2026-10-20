@@ -5,11 +5,31 @@
 @section('content')
 <div 
     x-data="{ 
-        showPaymentModal: false,
-        paymentAmount: '{{ $invoice->balance_amount }}',
+        showPaymentModal: {{ (request()->query('action') === 'pay' && $invoice->balance_amount > 0 && $invoice->status !== 'cancelled') ? 'true' : 'false' }},
+        paymentAmount: '{{ (float)$invoice->balance_amount }}',
         paymentMethod: 'cash',
+        paymentDate: '{{ date('Y-m-d') }}',
         refNumber: '',
-        notes: ''
+        notes: '',
+        submitting: false,
+        showReverseModal: false,
+        reversingPaymentId: null,
+        reversingPaymentNumber: '',
+        reversalReason: '',
+
+        get remainingBalance() {
+            let amt = parseFloat(this.paymentAmount) || 0;
+            let bal = {{ (float)$invoice->balance_amount }};
+            let rem = bal - amt;
+            return rem > 0 ? rem.toFixed(2) : '0.00';
+        },
+
+        openReverse(payId, payNum) {
+            this.reversingPaymentId = payId;
+            this.reversingPaymentNumber = payNum;
+            this.reversalReason = '';
+            this.showReverseModal = true;
+        }
     }"
     class="max-w-4xl mx-auto space-y-6"
 >
@@ -26,15 +46,29 @@
                     Invoice #{{ $invoice->invoice_number }}
                 </h1>
                 
-                @if($invoice->status === 'paid')
-                    <span class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">Paid in Full</span>
-                @elseif($invoice->status === 'partially_paid')
-                    <span class="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800">Partially Paid</span>
-                @elseif($invoice->status === 'issued')
-                    <span class="px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">Issued</span>
-                @elseif($invoice->status === 'cancelled')
-                    <span class="px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">Cancelled</span>
-                @endif
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold {{ $invoice->status === 'cancelled' ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-slate-100 text-slate-700 border border-slate-200' }}">
+                        Document: {{ $invoice->document_status }}
+                    </span>
+                    @php $payStatus = $invoice->payment_status; @endphp
+                    @if($payStatus === 'Paid in Full')
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            Payment: Paid in Full
+                        </span>
+                    @elseif($payStatus === 'Partially Paid')
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                            Payment: Partially Paid
+                        </span>
+                    @elseif($payStatus === 'Cancelled')
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-200">
+                            Payment: Cancelled
+                        </span>
+                    @else
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                            Payment: Unpaid
+                        </span>
+                    @endif
+                </div>
             </div>
             <p class="text-xs sm:text-sm text-gray-500 mt-1 ml-8">
                 Issued on {{ $invoice->invoice_date ? $invoice->invoice_date->format('M d, Y') : '' }}
@@ -75,6 +109,16 @@
                 PDF
             </a>
 
+            <a 
+                href="#payment-history" 
+                class="inline-flex items-center justify-center px-3.5 py-2.5 bg-white border border-gray-300 text-gray-700 font-bold text-xs rounded-lg hover:bg-gray-50 shadow-xs transition min-h-[44px]"
+            >
+                <svg class="w-4 h-4 mr-1.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Payment History
+            </a>
+
             @if($invoice->balance_amount > 0 && $invoice->status !== 'cancelled')
                 <button 
                     type="button" 
@@ -86,16 +130,17 @@
                     </svg>
                     Record Payment
                 </button>
+            @elseif($invoice->status !== 'cancelled' && $invoice->grand_total > 0)
+                <span class="inline-flex items-center justify-center px-4 py-2.5 bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold text-xs rounded-lg shadow-xs min-h-[44px]">
+                    <svg class="w-4 h-4 mr-1.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Paid in Full
+                </span>
             @endif
         </div>
     </div>
 
-    @if(session('success'))
-        <x-alert type="success" :message="session('success')" />
-    @endif
-    @if(session('error'))
-        <x-alert type="error" :message="session('error')" />
-    @endif
 
     <!-- Official Invoice Document Sheet -->
     <div class="bg-white border border-gray-200 rounded-2xl shadow-xs overflow-hidden p-6 sm:p-10 space-y-8">
@@ -267,36 +312,123 @@
             </div>
         </div>
 
-        <!-- Payments Log (if any payments recorded) -->
-        @if($invoice->payments->count() > 0)
-            <div class="pt-6 border-t border-gray-100">
-                <h4 class="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">Recorded Payments</h4>
-                <div class="overflow-x-auto">
+        <!-- Payment History Section -->
+        <div id="payment-history" class="pt-6 border-t border-gray-100 space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-gray-500">Payment History</h4>
+                    <p class="text-xs text-gray-400">All customer payment installments and transaction receipts linked to this invoice.</p>
+                </div>
+
+                @if($invoice->balance_amount > 0 && $invoice->status !== 'cancelled')
+                    <button 
+                        type="button" 
+                        @click="showPaymentModal = true"
+                        class="inline-flex items-center px-3 py-1.5 bg-[#0B1849] hover:bg-[#15286e] text-white text-xs font-bold rounded-lg shadow-xs transition cursor-pointer"
+                    >
+                        <svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        Record Payment
+                    </button>
+                @endif
+            </div>
+
+            @if($invoice->payments->count() > 0)
+                <div class="overflow-x-auto border border-gray-200/80 rounded-xl">
                     <table class="min-w-full divide-y divide-gray-100 text-xs">
                         <thead class="bg-slate-50 text-gray-500 font-semibold uppercase text-[10px]">
                             <tr>
-                                <th class="py-2 px-3 text-left">Payment #</th>
-                                <th class="py-2 px-3 text-left">Date</th>
-                                <th class="py-2 px-3 text-left">Method</th>
-                                <th class="py-2 px-3 text-left">Reference</th>
-                                <th class="py-2 px-3 text-right">Amount</th>
+                                <th class="py-2.5 px-3 text-left">Date</th>
+                                <th class="py-2.5 px-3 text-left">Receipt No</th>
+                                <th class="py-2.5 px-3 text-left">Method</th>
+                                <th class="py-2.5 px-3 text-left">Reference</th>
+                                <th class="py-2.5 px-3 text-right">Amount (LKR)</th>
+                                <th class="py-2.5 px-3 text-left">Recorded By</th>
+                                <th class="py-2.5 px-3 text-center">Status</th>
+                                <th class="py-2.5 px-3 text-right">Actions</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-gray-50 text-gray-700">
+                        <tbody class="divide-y divide-gray-50 text-gray-700 bg-white">
                             @foreach($invoice->payments as $pay)
-                                <tr>
-                                    <td class="py-2 px-3 font-bold text-gray-900">{{ $pay->payment_number }}</td>
-                                    <td class="py-2 px-3 text-gray-500">{{ $pay->payment_date ? $pay->payment_date->format('Y-m-d') : '' }}</td>
-                                    <td class="py-2 px-3 uppercase font-semibold text-[11px]">{{ str_replace('_', ' ', $pay->payment_method) }}</td>
-                                    <td class="py-2 px-3 text-gray-500">{{ $pay->reference_number ?? '—' }}</td>
-                                    <td class="py-2 px-3 text-right font-bold text-emerald-700">LKR {{ number_format($pay->amount, 2) }}</td>
+                                <tr class="hover:bg-slate-50/50 transition">
+                                    <td class="py-2.5 px-3 text-gray-600 whitespace-nowrap">
+                                        {{ $pay->payment_date ? $pay->payment_date->format('d M Y') : '—' }}
+                                    </td>
+                                    <td class="py-2.5 px-3 font-mono font-bold text-gray-900 whitespace-nowrap">
+                                        {{ $pay->payment_number }}
+                                    </td>
+                                    <td class="py-2.5 px-3 uppercase font-semibold text-[11px] text-gray-600 whitespace-nowrap">
+                                        {{ str_replace('_', ' ', $pay->payment_method) }}
+                                    </td>
+                                    <td class="py-2.5 px-3 text-gray-500 font-mono text-[11px]">
+                                        {{ $pay->reference_number ?: '—' }}
+                                    </td>
+                                    <td class="py-2.5 px-3 text-right font-bold {{ $pay->status === 'reversed' ? 'text-gray-400 line-through' : 'text-emerald-700' }} whitespace-nowrap">
+                                        {{ number_format($pay->amount, 2) }}
+                                    </td>
+                                    <td class="py-2.5 px-3 text-gray-500 whitespace-nowrap">
+                                        {{ $pay->creator->name ?? 'Staff' }}
+                                    </td>
+                                    <td class="py-2.5 px-3 text-center whitespace-nowrap">
+                                        @if($pay->status === 'reversed')
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                                Reversed
+                                            </span>
+                                        @else
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                Completed
+                                            </span>
+                                        @endif
+                                    </td>
+                                    <td class="py-2.5 px-3 text-right whitespace-nowrap space-x-1">
+                                        <a 
+                                            href="{{ route('billing.payments.receipt', $pay) }}" 
+                                            target="_blank"
+                                            class="inline-flex items-center px-2 py-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded text-[11px] font-semibold transition"
+                                            title="Print Payment Receipt"
+                                        >
+                                            <svg class="w-3 h-3 mr-1 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                            </svg>
+                                            Receipt
+                                        </a>
+
+                                        @if(Auth::user() && Auth::user()->isAdmin() && $pay->status !== 'reversed')
+                                            <button 
+                                                type="button" 
+                                                @click="openReverse({{ $pay->id }}, '{{ $pay->payment_number }}')"
+                                                class="inline-flex items-center px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded text-[11px] font-semibold transition cursor-pointer"
+                                                title="Reverse Payment (Admin Only)"
+                                            >
+                                                Reverse
+                                            </button>
+                                        @endif
+                                    </td>
                                 </tr>
                             @endforeach
                         </tbody>
+                        <tfoot class="bg-slate-50 border-t border-gray-200 text-xs">
+                            <tr>
+                                <td colspan="4" class="py-2.5 px-3 font-bold text-gray-700 text-right uppercase text-[10px] tracking-wider">
+                                    Total Paid:
+                                </td>
+                                <td class="py-2.5 px-3 text-right font-extrabold text-emerald-700 whitespace-nowrap">
+                                    LKR {{ number_format($invoice->amount_paid, 2) }}
+                                </td>
+                                <td colspan="3" class="py-2.5 px-3 text-right font-extrabold {{ $invoice->balance_amount > 0 ? 'text-red-600' : 'text-gray-400' }} whitespace-nowrap">
+                                    Balance Due: LKR {{ number_format($invoice->balance_amount, 2) }}
+                                </td>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
-            </div>
-        @endif
+            @else
+                <div class="bg-gray-50/60 rounded-xl p-4 text-center border border-gray-200/60 text-xs text-gray-500">
+                    No payments recorded yet for this invoice.
+                </div>
+            @endif
+        </div>
     </div>
 
     <!-- MODAL: RECORD PAYMENT -->
@@ -310,7 +442,10 @@
 
             <div class="relative bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-gray-200 space-y-4">
                 <div class="flex items-center justify-between border-b border-gray-100 pb-3">
-                    <h3 class="text-base font-bold text-gray-900">Record Payment</h3>
+                    <div>
+                        <h3 class="text-base font-bold text-gray-900">Record Payment</h3>
+                        <p class="text-xs text-gray-500">Invoice #{{ $invoice->invoice_number }} &bull; {{ $invoice->customer->customer_name }}</p>
+                    </div>
                     <button type="button" @click="showPaymentModal = false" class="text-gray-400 hover:text-gray-600">
                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -318,11 +453,43 @@
                     </button>
                 </div>
 
-                <form action="{{ route('operations.invoices.payment', $invoice) }}" method="POST" class="space-y-4">
+                <!-- Invoice Meta Overview -->
+                <div class="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-2 text-xs">
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-500 font-medium">Invoice Number:</span>
+                        <span class="font-mono font-bold text-[#0B1849]">{{ $invoice->invoice_number }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-500 font-medium">Customer:</span>
+                        <span class="font-bold text-gray-900 truncate max-w-[200px]">{{ $invoice->customer->customer_name }}</span>
+                    </div>
+                    <div class="border-t border-slate-200/60 pt-2 grid grid-cols-3 gap-2 text-center">
+                        <div>
+                            <span class="text-[10px] text-gray-400 font-bold uppercase block">Total</span>
+                            <span class="font-extrabold text-gray-800">LKR {{ number_format($invoice->grand_total, 2) }}</span>
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-gray-400 font-bold uppercase block">Already Paid</span>
+                            <span class="font-bold text-emerald-700">LKR {{ number_format($invoice->amount_paid, 2) }}</span>
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-gray-400 font-bold uppercase block">Outstanding</span>
+                            <span class="font-extrabold text-red-600">LKR {{ number_format($invoice->balance_amount, 2) }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payment Form -->
+                <form 
+                    action="{{ route('billing.payments.store', $invoice) }}" 
+                    method="POST" 
+                    class="space-y-4"
+                    @submit="submitting = true"
+                >
                     @csrf
                     <div>
                         <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-                            Amount to Pay (LKR) <span class="text-red-500">*</span>
+                            Payment Amount (LKR) <span class="text-red-500">*</span>
                         </label>
                         <input 
                             type="number" 
@@ -331,10 +498,18 @@
                             x-model="paymentAmount"
                             max="{{ $invoice->balance_amount }}"
                             min="0.01"
-                            class="block w-full py-2.5 px-3 text-base font-bold text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white min-h-[44px]"
+                            class="block w-full py-2.5 px-3 text-base font-bold text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white min-h-[44px]"
                             required
                         >
-                        <p class="mt-1 text-[11px] text-gray-500">Remaining Balance: LKR {{ number_format($invoice->balance_amount, 2) }}</p>
+                        <!-- Live Calculation Preview -->
+                        <div class="mt-1.5 flex items-center justify-between text-xs">
+                            <span class="text-gray-500">Remaining After Payment:</span>
+                            <span 
+                                class="font-extrabold"
+                                :class="remainingBalance == '0.00' ? 'text-emerald-700' : 'text-amber-700'"
+                                x-text="'LKR ' + Number(remainingBalance).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})"
+                            ></span>
+                        </div>
                     </div>
 
                     <div>
@@ -344,7 +519,7 @@
                         <select 
                             name="payment_method" 
                             x-model="paymentMethod"
-                            class="block w-full py-2.5 px-3 text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white min-h-[44px]"
+                            class="block w-full py-2.5 px-3 text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white min-h-[44px]"
                             required
                         >
                             <option value="cash">Cash</option>
@@ -356,35 +531,132 @@
 
                     <div>
                         <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-                            Reference / Cheque #
+                            Payment Date <span class="text-red-500">*</span>
+                        </label>
+                        <input 
+                            type="date" 
+                            name="payment_date" 
+                            x-model="paymentDate"
+                            max="{{ date('Y-m-d') }}"
+                            class="block w-full py-2.5 px-3 text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white min-h-[44px]"
+                            required
+                        >
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                            Payment Reference (Optional)
                         </label>
                         <input 
                             type="text" 
                             name="reference_number" 
                             x-model="refNumber"
-                            placeholder="Optional ref or receipt number"
-                            class="block w-full py-2.5 px-3 text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white min-h-[44px]"
+                            placeholder="Card slip #, Cheque #, or Transfer ref"
+                            class="block w-full py-2.5 px-3 text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white min-h-[44px]"
                         >
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                            Notes (Optional)
+                        </label>
+                        <textarea 
+                            name="notes" 
+                            x-model="notes"
+                            rows="2"
+                            placeholder="Additional payment notes..."
+                            class="block w-full py-2 px-3 text-xs text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white"
+                        ></textarea>
                     </div>
 
                     <div class="flex items-center justify-end space-x-3 pt-3 border-t border-gray-100">
                         <button 
                             type="button" 
                             @click="showPaymentModal = false"
-                            class="px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 rounded-lg transition min-h-[40px]"
+                            class="px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 rounded-lg transition min-h-[40px] cursor-pointer"
                         >
                             Cancel
                         </button>
                         <button 
                             type="submit" 
-                            class="px-5 py-2.5 bg-[#0B1849] hover:bg-[#15286e] text-white text-xs font-bold rounded-lg shadow-xs transition min-h-[44px]"
+                            :disabled="submitting || paymentAmount <= 0 || paymentAmount > {{ (float)$invoice->balance_amount }}"
+                            class="px-5 py-2.5 bg-[#0B1849] hover:bg-[#15286e] disabled:opacity-50 text-white text-xs font-bold rounded-lg shadow-xs transition min-h-[44px] cursor-pointer flex items-center"
                         >
-                            Confirm Payment
+                            <svg x-show="submitting" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                            </svg>
+                            Save Payment
                         </button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
+
+    <!-- MODAL: REVERSE PAYMENT (ADMIN ONLY) -->
+    @if(Auth::user() && Auth::user()->isAdmin())
+        <div 
+            x-show="showReverseModal" 
+            class="fixed inset-0 z-50 overflow-y-auto"
+            style="display: none;"
+        >
+            <div class="flex items-center justify-center min-h-screen px-4 py-6">
+                <div class="fixed inset-0 bg-gray-900/50 backdrop-blur-xs transition-opacity" @click="showReverseModal = false"></div>
+
+                <div class="relative bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-gray-200 space-y-4">
+                    <div class="flex items-center justify-between border-b border-gray-100 pb-3">
+                        <h3 class="text-base font-bold text-gray-900">Reverse Payment</h3>
+                        <button type="button" @click="showReverseModal = false" class="text-gray-400 hover:text-gray-600">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <form 
+                        :action="'/billing/payments/' + reversingPaymentId + '/reverse'" 
+                        method="POST" 
+                        class="space-y-4"
+                    >
+                        @csrf
+                        <div class="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700">
+                            You are reversing payment <strong class="font-mono" x-text="reversingPaymentNumber"></strong>. This will deduct this payment from the invoice's Total Paid and increase the Outstanding Balance.
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                                Reversal Reason <span class="text-red-500">*</span>
+                            </label>
+                            <textarea 
+                                name="reversal_reason" 
+                                x-model="reversalReason"
+                                rows="3"
+                                placeholder="Explain why this payment is being reversed..."
+                                class="block w-full py-2 px-3 text-xs text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white"
+                                required
+                            ></textarea>
+                        </div>
+
+                        <div class="flex items-center justify-end space-x-3 pt-3 border-t border-gray-100">
+                            <button 
+                                type="button" 
+                                @click="showReverseModal = false"
+                                class="px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 rounded-lg transition min-h-[40px] cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                type="submit" 
+                                class="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg shadow-xs transition min-h-[44px] cursor-pointer"
+                            >
+                                Confirm Reversal
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    @endif
 </div>
 @endsection

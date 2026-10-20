@@ -59,6 +59,9 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50/80">
                         <tr>
+                            <th scope="col" class="px-4 py-3.5 text-center text-xs font-bold text-gray-700 uppercase tracking-wider w-16">
+                                Image
+                            </th>
                             <th scope="col" class="px-6 py-3.5 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                                 Product
                             </th>
@@ -82,6 +85,24 @@
                     <tbody class="divide-y divide-gray-200 bg-white">
                         @forelse($products as $product)
                             <tr class="hover:bg-gray-50/70 transition">
+                                <!-- Product Image Thumbnail (approx 48x48) -->
+                                <td class="px-4 py-3 whitespace-nowrap text-center">
+                                    <div class="w-12 h-12 mx-auto rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
+                                        @if($product->image_url)
+                                            <img 
+                                                src="{{ $product->image_url }}" 
+                                                alt="{{ $product->name }}" 
+                                                loading="lazy" 
+                                                class="w-full h-full object-contain p-0.5" 
+                                            />
+                                        @else
+                                            <svg class="w-6 h-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                            </svg>
+                                        @endif
+                                    </div>
+                                </td>
+
                                 <!-- Product Name & SKU -->
                                 <td class="px-6 py-4">
                                     <div class="text-sm font-bold text-gray-900">{{ $product->name }}</div>
@@ -157,7 +178,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="px-6 py-12 text-center">
+                                <td colspan="7" class="px-6 py-12 text-center">
                                     <x-empty-state 
                                         title="No products found." 
                                         description="Start by adding items, oil filters, fluids, or consumable parts to your inventory."

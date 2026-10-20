@@ -26,12 +26,18 @@ class AvoidServiceSaleController extends Controller
      */
     public function index(Request $request): View
     {
-        $search = trim((string) $request->query('search', ''));
+        $rawSearch = (string) $request->query('search', '');
+        $search = trim($rawSearch);
         $invoice = null;
         $error = null;
+        $canCancel = true;
+        $cancellationIneligibleReason = null;
 
         if ($search !== '') {
-            $activeBranchId = BranchContext::getActiveBranchId();
+            $user = Auth::user();
+            $normalized = ltrim($search, '#');
+            $normalized = trim($normalized);
+            $alphanumeric = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $normalized));
 
             $query = Invoice::with([
                 'customer',
@@ -41,37 +47,99 @@ class AvoidServiceSaleController extends Controller
                 'jobCard.assignedTechnician',
                 'jobCard.services.service',
                 'jobCard.products.product',
+                'linkedJobCard.vehicle.vehicleType',
+                'linkedJobCard.assignedTechnician',
+                'linkedJobCard.services.service',
+                'linkedJobCard.products.product',
                 'items',
                 'payments.creator',
-            ])->where('invoice_type', 'job_card');
-
-            // Branch scoping
-            if ($activeBranchId) {
-                $query->where(function ($q) use ($activeBranchId) {
-                    $q->where('branch_id', $activeBranchId)
-                        ->orWhereNull('branch_id');
+            ])
+                ->where(function ($typeQ) {
+                    $typeQ->whereIn('invoice_type', ['job_card', 'service'])
+                        ->orWhereNotNull('job_card_id')
+                        ->orWhereHas('linkedJobCard');
+                })
+                ->where(function ($notDirectQ) {
+                    $notDirectQ->where('invoice_type', '!=', 'direct_sale')
+                        ->orWhereNull('invoice_type');
                 });
-            }
 
             // Search by Invoice Number, Job Number, or Vehicle Number
-            $invoice = $query->where(function ($q) use ($search) {
-                $q->where('invoice_number', $search)
+            $searchFilter = function ($q) use ($search, $normalized, $alphanumeric) {
+                $q->where('invoice_number', $normalized)
+                    ->orWhere('invoice_number', $search)
+                    ->orWhere('invoice_number', 'like', "%{$normalized}%")
+                    ->orWhere('reference', $normalized)
                     ->orWhere('reference', $search)
-                    ->orWhereHas('jobCard', function ($jq) use ($search) {
-                        $jq->where('job_number', $search)
-                            ->orWhereHas('vehicle', function ($vq) use ($search) {
-                                $vq->where('vehicle_number', 'like', "%{$search}%")
-                                    ->orWhere('vehicle_number_normalized', 'like', '%'.strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $search)).'%');
+                    ->orWhereHas('jobCard', function ($jq) use ($search, $normalized, $alphanumeric) {
+                        $jq->where('job_number', $normalized)
+                            ->orWhere('job_number', $search)
+                            ->orWhereHas('vehicle', function ($vq) use ($normalized, $alphanumeric) {
+                                $vq->where('vehicle_number', 'like', "%{$normalized}%")
+                                    ->when($alphanumeric !== '', function ($aq) use ($alphanumeric) {
+                                        $aq->orWhere('vehicle_number_normalized', 'like', "%{$alphanumeric}%");
+                                    });
                             });
-                    });
-            })->first();
+                    })
+                    ->orWhereHas('linkedJobCard', function ($jq) use ($search, $normalized, $alphanumeric) {
+                        $jq->where('job_number', $normalized)
+                            ->orWhere('job_number', $search)
+                            ->orWhereHas('vehicle', function ($vq) use ($normalized, $alphanumeric) {
+                                $vq->where('vehicle_number', 'like', "%{$normalized}%")
+                                    ->when($alphanumeric !== '', function ($aq) use ($alphanumeric) {
+                                        $aq->orWhere('vehicle_number_normalized', 'like', "%{$alphanumeric}%");
+                                    });
+                            });
+                    })
+                    ->orWhere('customer_snapshot->vehicle_number', 'like', "%{$normalized}%");
+            };
 
-            if (! $invoice) {
-                $error = "No Service Invoice found matching '{$search}'. Please check the Invoice, Job, or Vehicle number.";
+            $candidate = $query->where($searchFilter)->first();
+
+            if (! $candidate) {
+                // Check if it's a Direct Sale invoice to provide actionable feedback
+                $directSaleInvoice = Invoice::where('invoice_type', 'direct_sale')
+                    ->where(function ($dq) use ($search, $normalized) {
+                        $dq->where('invoice_number', $normalized)
+                            ->orWhere('invoice_number', $search);
+                    })->first();
+
+                if ($directSaleInvoice) {
+                    $error = "Invoice #{$directSaleInvoice->invoice_number} is a Direct Sale invoice. Please use Avoid Direct Sale to manage point-of-sale transactions.";
+                } else {
+                    $error = 'No matching service invoice found.';
+                }
+            } else {
+                // Branch authorization check
+                if ($user && $candidate->branch_id && ! $user->canAccessBranch($candidate->branch_id)) {
+                    abort(403, 'Unauthorized access to this branch.');
+                }
+
+                // Check active branch context for non-admin users
+                $activeBranchId = BranchContext::getActiveBranchId();
+                if ($user && ! $user->isAdmin() && $activeBranchId && $candidate->branch_id && $candidate->branch_id != $activeBranchId) {
+                    abort(403, 'Unauthorized. This invoice belongs to a different branch than your current active branch.');
+                }
+
+                $invoice = $candidate;
+
+                // Ensure jobCard relation is set if linked via invoice_id
+                if (! $invoice->jobCard && $invoice->linkedJobCard) {
+                    $invoice->setRelation('jobCard', $invoice->linkedJobCard);
+                }
+
+                // Determine cancellation eligibility separately from lookup
+                if ($invoice->status === 'cancelled') {
+                    $canCancel = false;
+                    $cancellationIneligibleReason = 'This transaction has already been cancelled.';
+                } elseif (! $user || ! $user->isAdmin()) {
+                    $canCancel = false;
+                    $cancellationIneligibleReason = 'Only system administrators are authorized to avoid service sales.';
+                }
             }
         }
 
-        return view('billing.avoid-service-sale.index', compact('invoice', 'search', 'error'));
+        return view('billing.avoid-service-sale.index', compact('invoice', 'search', 'error', 'canCancel', 'cancellationIneligibleReason'));
     }
 
     /**
@@ -84,6 +152,11 @@ class AvoidServiceSaleController extends Controller
         // 1. Validate Admin permission
         if (! $user || ! $user->isAdmin()) {
             abort(403, 'Unauthorized. Only system administrators can avoid service sales.');
+        }
+
+        // Branch authorization check
+        if ($invoice->branch_id && ! $user->canAccessBranch($invoice->branch_id)) {
+            abort(403, 'Unauthorized access to this branch.');
         }
 
         $validated = $request->validate([
@@ -105,7 +178,9 @@ class AvoidServiceSaleController extends Controller
                     throw new Exception("Service Invoice #{$freshInvoice->invoice_number} is already cancelled.");
                 }
 
-                $jobCard = $freshInvoice->job_card_id ? JobCard::find($freshInvoice->job_card_id) : null;
+                $jobCard = $freshInvoice->job_card_id
+                    ? JobCard::find($freshInvoice->job_card_id)
+                    : JobCard::where('invoice_id', $freshInvoice->id)->first();
                 $stockRestored = false;
 
                 // If parts stock return is specifically authorized by Admin
