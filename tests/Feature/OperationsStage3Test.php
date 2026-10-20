@@ -16,7 +16,6 @@ use App\Models\UnitOfMeasurement;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\VehicleType;
-use App\Services\Inventory\StockService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -25,12 +24,19 @@ class OperationsStage3Test extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $staff;
+
     protected VehicleType $carType;
+
     protected VehicleType $suvType;
+
     protected Service $oilService;
+
     protected Service $washService;
+
     protected Product $oilFilterProduct;
+
     protected UnitOfMeasurement $uom;
 
     protected function setUp(): void
@@ -109,7 +115,7 @@ class OperationsStage3Test extends TestCase
         );
 
         $grn = GoodsReceivedNote::create([
-            'grn_number' => 'GRN-' . uniqid(),
+            'grn_number' => 'GRN-'.uniqid(),
             'supplier_id' => $supplier->id,
             'received_date' => $purchaseDate ?? now()->toDateString(),
             'subtotal' => $quantity * $cost,
@@ -128,7 +134,7 @@ class OperationsStage3Test extends TestCase
         ]);
 
         return StockBatch::create([
-            'batch_number' => $batchNo ?? ('BATCH-' . uniqid()),
+            'batch_number' => $batchNo ?? ('BATCH-'.uniqid()),
             'grn_id' => $grn->id,
             'grn_item_id' => $grnItem->id,
             'product_id' => $product->id,

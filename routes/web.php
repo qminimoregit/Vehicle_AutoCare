@@ -30,6 +30,13 @@ use App\Http\Controllers\Operations\VehicleRegistrationController;
 use App\Http\Controllers\Payroll\AttendanceController;
 use App\Http\Controllers\Payroll\EmployeeController;
 use App\Http\Controllers\Payroll\SalaryController;
+use App\Http\Controllers\Reports\CreditManagementController;
+use App\Http\Controllers\Reports\MoneyBookController;
+use App\Http\Controllers\Reports\ProfitLossController;
+use App\Http\Controllers\Reports\SalesReportController;
+use App\Http\Controllers\Reports\StockReportController as Stage7StockReportController;
+use App\Http\Controllers\Reports\StockValueReportController;
+use App\Http\Controllers\Reports\VehicleServiceReportController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -281,6 +288,56 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::put('/records/{expense}', [ExpenseController::class, 'update'])->name('records.update');
         Route::post('/records/{expense}/void', [ExpenseController::class, 'void'])->name('records.void');
         Route::get('/records/{expense}/receipt', [ExpenseController::class, 'downloadReceipt'])->name('records.receipt');
+    });
+
+    // Reports & Credit Management Module (Stage 7)
+    Route::prefix('reports')->name('reports.')->group(function () {
+        // 1. Stock Report
+        Route::get('/stock', [Stage7StockReportController::class, 'index'])->name('stock.index');
+        Route::get('/stock/print', [Stage7StockReportController::class, 'print'])->name('stock.print');
+        Route::get('/stock/export', [Stage7StockReportController::class, 'export'])->name('stock.export');
+        Route::get('/stock/{product}/batches', [Stage7StockReportController::class, 'batches'])->name('stock.batches');
+
+        // 2. Stock Value Report (Admin Only)
+        Route::middleware('admin')->group(function () {
+            Route::get('/stock-value', [StockValueReportController::class, 'index'])->name('stock-value.index');
+            Route::get('/stock-value/print', [StockValueReportController::class, 'print'])->name('stock-value.print');
+            Route::get('/stock-value/export', [StockValueReportController::class, 'export'])->name('stock-value.export');
+        });
+
+        // 3. Sales Report
+        Route::get('/sales', [SalesReportController::class, 'index'])->name('sales.index');
+        Route::get('/sales/print', [SalesReportController::class, 'print'])->name('sales.print');
+        Route::get('/sales/export', [SalesReportController::class, 'export'])->name('sales.export');
+
+        // 4. Profit & Loss (Admin Only)
+        Route::middleware('admin')->group(function () {
+            Route::get('/profit-loss', [ProfitLossController::class, 'index'])->name('profit-loss.index');
+            Route::get('/profit-loss/print', [ProfitLossController::class, 'print'])->name('profit-loss.print');
+            Route::get('/profit-loss/export', [ProfitLossController::class, 'export'])->name('profit-loss.export');
+        });
+
+        // 5. Vehicle Service Report
+        Route::get('/vehicle-service', [VehicleServiceReportController::class, 'index'])->name('vehicle-service.index');
+        Route::get('/vehicle-service/search', [VehicleServiceReportController::class, 'search'])->name('vehicle-service.search');
+        Route::get('/vehicle-service/{vehicle}/print', [VehicleServiceReportController::class, 'print'])->name('vehicle-service.print');
+        Route::get('/vehicle-service/{vehicle}/export', [VehicleServiceReportController::class, 'export'])->name('vehicle-service.export');
+
+        // 6. Money Book
+        Route::get('/money-book', [MoneyBookController::class, 'index'])->name('money-book.index');
+        Route::get('/money-book/print', [MoneyBookController::class, 'print'])->name('money-book.print');
+        Route::get('/money-book/export', [MoneyBookController::class, 'export'])->name('money-book.export');
+
+        // 7. Credit Management
+        Route::get('/credit-management', [CreditManagementController::class, 'index'])->name('credit-management.index');
+        Route::get('/credit-management/create', [CreditManagementController::class, 'create'])->name('credit-management.create');
+        Route::post('/credit-management', [CreditManagementController::class, 'store'])->name('credit-management.store');
+        Route::get('/credit-management/check-limit', [CreditManagementController::class, 'checkCreditLimit'])->name('credit-management.check-limit');
+        Route::get('/credit-management/{creditAccount}', [CreditManagementController::class, 'show'])->name('credit-management.show');
+        Route::put('/credit-management/{creditAccount}', [CreditManagementController::class, 'update'])->name('credit-management.update');
+        Route::get('/credit-management/{creditAccount}/statement', [CreditManagementController::class, 'statement'])->name('credit-management.statement');
+        Route::get('/credit-management/{creditAccount}/statement/print', [CreditManagementController::class, 'statementPrint'])->name('credit-management.statement.print');
+        Route::get('/credit-management/{creditAccount}/statement/export', [CreditManagementController::class, 'statementExport'])->name('credit-management.statement.export');
     });
 
     // Admin-Only Routes

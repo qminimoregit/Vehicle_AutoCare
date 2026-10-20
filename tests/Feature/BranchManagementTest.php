@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Models\Branch;
 use App\Models\CompanySetting;
 use App\Models\User;
-use App\Services\BranchContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -14,8 +13,11 @@ class BranchManagementTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $staff;
+
     protected CompanySetting $company;
+
     protected Branch $mainBranch;
 
     protected function setUp(): void

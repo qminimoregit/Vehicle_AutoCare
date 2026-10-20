@@ -11,7 +11,8 @@
     $isBilling = request()->routeIs('billing.quotations.*', 'billing.invoices.*', 'operations.invoices.*', 'billing.payments.*');
     $isPayroll = request()->routeIs('payroll.*');
     $isExpenses = request()->routeIs('expenses.*');
-    $defaultSection = $isAdjustments ? 'adjustments' : ($isBilling ? 'billing' : ($isExpenses ? 'expenses' : ($isPayroll ? 'payroll' : ($isOperations ? 'operations' : ($isMasterData ? 'master-data' : ($isInventory ? 'inventory' : ''))))));
+    $isReports = request()->routeIs('reports.*');
+    $defaultSection = $isReports ? 'reports' : ($isAdjustments ? 'adjustments' : ($isBilling ? 'billing' : ($isExpenses ? 'expenses' : ($isPayroll ? 'payroll' : ($isOperations ? 'operations' : ($isMasterData ? 'master-data' : ($isInventory ? 'inventory' : '')))))));
 @endphp
 
 <!-- Mobile Backdrop -->
@@ -652,6 +653,129 @@
                         >
                             <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isRecords ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
                             <span class="truncate">Expense Records</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Reports & Credit Expandable Section -->
+                <div>
+                    <button 
+                        type="button" 
+                        @click="toggleSection('reports')"
+                        :aria-expanded="activeSection === 'reports' ? 'true' : 'false'"
+                        aria-controls="section-reports"
+                        class="w-full flex items-center justify-between px-3 py-2 text-[13px] rounded-lg transition group cursor-pointer focus:outline-none {{ $isReports ? 'text-[#0B1849] font-semibold bg-[#EEF1FA]/40' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        :class="activeSection === 'reports' && !{{ $isReports ? 'true' : 'false' }} ? 'bg-slate-50 text-gray-900 font-semibold' : ''"
+                    >
+                        <span class="flex items-center min-w-0">
+                            <svg class="mr-2.5 h-4 w-4 shrink-0 {{ $isReports ? 'text-[#0B1849]' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            </svg>
+                            <span class="truncate">Reports & Credit</span>
+                        </span>
+                        <svg 
+                            :class="activeSection === 'reports' ? 'rotate-180 text-gray-600' : 'text-gray-400'" 
+                            class="w-3.5 h-3.5 ml-2 shrink-0 transform transition-transform duration-200" 
+                            fill="none" 
+                            viewBox="0 0 24 24" 
+                            stroke="currentColor"
+                        >
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+
+                    <!-- Reports & Credit Sub-menu -->
+                    <div 
+                        id="section-reports"
+                        x-show="activeSection === 'reports'" 
+                        x-transition:enter="transition ease-out duration-150"
+                        x-transition:enter-start="opacity-0 -translate-y-1"
+                        x-transition:enter-end="opacity-100 translate-y-0"
+                        x-transition:leave="transition ease-in duration-100"
+                        x-transition:leave-start="opacity-100 translate-y-0"
+                        x-transition:leave-end="opacity-0 -translate-y-1"
+                        class="mt-1 space-y-0.5 pl-3 border-l-2 border-gray-100 ml-4"
+                        style="display: none;"
+                    >
+                        <!-- 1. Stock Report -->
+                        @php $isStockReport = request()->routeIs('reports.stock.*'); @endphp
+                        <a 
+                            href="{{ route('reports.stock.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isStockReport ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isStockReport ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Stock Report</span>
+                        </a>
+
+                        <!-- 2. Stock Value Report (Admin Only) -->
+                        @if(Auth::user()->isAdmin())
+                        @php $isStockValue = request()->routeIs('reports.stock-value.*'); @endphp
+                        <a 
+                            href="{{ route('reports.stock-value.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isStockValue ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isStockValue ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Stock Value Report</span>
+                        </a>
+                        @endif
+
+                        <!-- 3. Sales Report -->
+                        @php $isSalesReport = request()->routeIs('reports.sales.*'); @endphp
+                        <a 
+                            href="{{ route('reports.sales.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isSalesReport ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isSalesReport ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Sales Report</span>
+                        </a>
+
+                        <!-- 4. Profit & Loss (Admin Only) -->
+                        @if(Auth::user()->isAdmin())
+                        @php $isProfitLoss = request()->routeIs('reports.profit-loss.*'); @endphp
+                        <a 
+                            href="{{ route('reports.profit-loss.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isProfitLoss ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isProfitLoss ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Profit & Loss</span>
+                        </a>
+                        @endif
+
+                        <!-- 5. Vehicle Service Report -->
+                        @php $isVehicleService = request()->routeIs('reports.vehicle-service.*'); @endphp
+                        <a 
+                            href="{{ route('reports.vehicle-service.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isVehicleService ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isVehicleService ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Vehicle Service Report</span>
+                        </a>
+
+                        <!-- 6. Money Book -->
+                        @php $isMoneyBook = request()->routeIs('reports.money-book.*'); @endphp
+                        <a 
+                            href="{{ route('reports.money-book.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isMoneyBook ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isMoneyBook ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Money Book</span>
+                        </a>
+
+                        <!-- 7. Credit Management -->
+                        @php $isCreditManagement = request()->routeIs('reports.credit-management.*'); @endphp
+                        <a 
+                            href="{{ route('reports.credit-management.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isCreditManagement ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isCreditManagement ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Credit Management</span>
                         </a>
                     </div>
                 </div>

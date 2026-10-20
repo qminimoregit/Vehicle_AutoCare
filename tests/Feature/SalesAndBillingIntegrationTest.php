@@ -5,9 +5,8 @@ namespace Tests\Feature;
 use App\Models\Branch;
 use App\Models\CompanySetting;
 use App\Models\Customer;
-use App\Models\DirectSale;
+use App\Models\GoodsReceivedNote;
 use App\Models\Invoice;
-use App\Models\InvoiceItem;
 use App\Models\JobCard;
 use App\Models\Payment;
 use App\Models\Product;
@@ -29,16 +28,27 @@ class SalesAndBillingIntegrationTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $staff;
+
     protected Branch $branch;
+
     protected CompanySetting $company;
+
     protected Customer $corporateCustomer;
+
     protected Vehicle $vehicle1;
+
     protected Vehicle $vehicle2;
+
     protected Service $serviceOilChange;
+
     protected Service $serviceBrakeCheck;
+
     protected Product $engineOil;
+
     protected Product $oilFilter;
+
     protected StockService $stockService;
 
     protected function setUp(): void
@@ -170,8 +180,8 @@ class SalesAndBillingIntegrationTest extends TestCase
             ['mobile' => '0770001122', 'is_active' => true]
         );
 
-        $grn = \App\Models\GoodsReceivedNote::create([
-            'grn_number' => 'GRN-' . uniqid(),
+        $grn = GoodsReceivedNote::create([
+            'grn_number' => 'GRN-'.uniqid(),
             'branch_id' => $this->branch->id,
             'supplier_id' => $supplier->id,
             'received_date' => now()->toDateString(),
@@ -248,7 +258,7 @@ class SalesAndBillingIntegrationTest extends TestCase
         $response = $this->actingAs($this->staff)->post(route('billing.quotations.store'), $payload);
 
         $response->assertRedirect();
-        
+
         $quotation = Quotation::where('customer_id', $this->corporateCustomer->id)->first();
         $this->assertNotNull($quotation);
         $this->assertEquals('draft', $quotation->status);
