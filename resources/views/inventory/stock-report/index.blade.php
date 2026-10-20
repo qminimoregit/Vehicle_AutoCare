@@ -174,7 +174,7 @@
                                 <!-- Available Stock -->
                                 <td class="px-6 py-4 whitespace-nowrap text-right">
                                     <div class="font-mono font-bold text-sm {{ $stock <= 0 ? 'text-gray-400' : ($isLow ? 'text-amber-700' : 'text-emerald-700') }}">
-                                        {{ number_format($stock, 2) }}
+                                        @quantity($stock)
                                     </div>
                                     @if($isLow)
                                         <span class="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold bg-amber-100 text-amber-800">

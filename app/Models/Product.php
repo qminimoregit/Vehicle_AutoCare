@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\QuantityFormatter;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -97,6 +98,21 @@ class Product extends Model
     public function getAvailableStockAttribute(): float
     {
         return (float) $this->activeStockBatches()->sum('remaining_quantity');
+    }
+
+    public function getFormattedAvailableStockAttribute(): string
+    {
+        return QuantityFormatter::format($this->available_stock);
+    }
+
+    public function allowsFractionalQuantity(): bool
+    {
+        return $this->uom ? $this->uom->allowsFractional() : true;
+    }
+
+    public function getQuantityStepAttribute(): string
+    {
+        return $this->allowsFractionalQuantity() ? '0.01' : '1';
     }
 
     public function getInventoryValueAttribute(): float

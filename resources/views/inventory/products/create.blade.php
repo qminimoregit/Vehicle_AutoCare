@@ -210,7 +210,7 @@
                         <div class="mt-1.5">
                             <input 
                                 type="number" 
-                                step="1" 
+                                step="any" 
                                 min="0" 
                                 name="min_stock" 
                                 id="min_stock" 
@@ -230,7 +230,7 @@
                         <div class="mt-1.5">
                             <input 
                                 type="number" 
-                                step="1" 
+                                step="any" 
                                 min="0" 
                                 name="max_stock" 
                                 id="max_stock" 

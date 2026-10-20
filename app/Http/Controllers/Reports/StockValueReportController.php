@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\StockBatch;
 use App\Models\Supplier;
 use App\Services\BranchContext;
+use App\Services\QuantityFormatter;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -79,6 +80,18 @@ class StockValueReportController extends Controller
         $grandTotalUnits = (float) $productWise->sum('total_quantity');
         $grandTotalBatches = $batches->count();
 
+        // Analyze Units of Measurement (UOM) for inventory valuation summary
+        $uomGroups = $batches->groupBy(fn ($b) => $b->product?->uom?->name ?? 'Units');
+        $hasMultipleUoms = $uomGroups->count() > 1;
+        $singleUomName = $uomGroups->count() === 1 ? $uomGroups->keys()->first() : null;
+
+        $uomSummaryList = [];
+        foreach ($uomGroups as $uomName => $grpBatches) {
+            $sumQty = $grpBatches->sum('remaining_quantity');
+            $uomSummaryList[] = QuantityFormatter::format($sumQty).' '.$uomName;
+        }
+        $uomSummaryText = implode(' • ', $uomSummaryList);
+
         $suppliers = Supplier::orderBy('name', 'asc')->get();
         $selectedBranch = ($branchId && $branchId !== 'all') ? Branch::find($branchId) : null;
 
@@ -95,7 +108,10 @@ class StockValueReportController extends Controller
             'asOfDate',
             'viewType',
             'accessibleBranches',
-            'selectedBranch'
+            'selectedBranch',
+            'hasMultipleUoms',
+            'singleUomName',
+            'uomSummaryText'
         ));
     }
 
@@ -146,6 +162,18 @@ class StockValueReportController extends Controller
 
         $grandTotalStockValue = (float) $productWise->sum('total_valuation');
         $grandTotalUnits = (float) $productWise->sum('total_quantity');
+
+        $uomGroups = $batches->groupBy(fn ($b) => $b->product?->uom?->name ?? 'Units');
+        $hasMultipleUoms = $uomGroups->count() > 1;
+        $singleUomName = $uomGroups->count() === 1 ? $uomGroups->keys()->first() : null;
+
+        $uomSummaryList = [];
+        foreach ($uomGroups as $uomName => $grpBatches) {
+            $sumQty = $grpBatches->sum('remaining_quantity');
+            $uomSummaryList[] = QuantityFormatter::format($sumQty).' '.$uomName;
+        }
+        $uomSummaryText = implode(' • ', $uomSummaryList);
+
         $selectedBranch = ($branchId && $branchId !== 'all') ? Branch::find($branchId) : null;
 
         return view('reports.stock-value.print', compact(
@@ -155,7 +183,10 @@ class StockValueReportController extends Controller
             'grandTotalUnits',
             'asOfDate',
             'viewType',
-            'selectedBranch'
+            'selectedBranch',
+            'hasMultipleUoms',
+            'singleUomName',
+            'uomSummaryText'
         ));
     }
 
@@ -218,7 +249,7 @@ class StockValueReportController extends Controller
                         $b->grn?->grn_number ?? '-',
                         $b->supplier?->name ?? 'N/A',
                         $b->purchase_date?->format('Y-m-d') ?? '-',
-                        number_format($b->remaining_quantity, 2, '.', ''),
+                        QuantityFormatter::format($b->remaining_quantity, null, false),
                         number_format($b->inventory_unit_cost, 2, '.', ''),
                         number_format($batchVal, 2, '.', ''),
                         number_format($b->selling_price_at_receipt ?: ($b->product?->selling_price ?? 0), 2, '.', ''),
@@ -251,7 +282,7 @@ class StockValueReportController extends Controller
                         $prod?->sku ?? '-',
                         $prodBatches->count(),
                         $prod?->preferredSupplier?->name ?? 'N/A',
-                        number_format($qty, 2, '.', ''),
+                        QuantityFormatter::format($qty, null, false),
                         number_format($avgCost, 2, '.', ''),
                         number_format($prod->selling_price, 2, '.', ''),
                         number_format($val, 2, '.', ''),

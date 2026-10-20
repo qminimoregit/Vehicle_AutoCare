@@ -137,9 +137,9 @@
                         @endif
                     </td>
                     <td class="text-center">{{ $item->product->uom ? $item->product->uom->name : '-' }}</td>
-                    <td class="text-right">{{ number_format($item->purchase_quantity, 2) }}</td>
-                    <td class="text-right">{{ $item->free_quantity > 0 ? number_format($item->free_quantity, 2) : '-' }}</td>
-                    <td class="text-right"><strong>{{ number_format($item->total_physical_quantity, 2) }}</strong></td>
+                    <td class="text-right">@quantity($item->purchase_quantity)</td>
+                    <td class="text-right">{{ $item->free_quantity > 0 ? \App\Services\QuantityFormatter::format($item->free_quantity) : '-' }}</td>
+                    <td class="text-right"><strong>@quantity($item->total_physical_quantity)</strong></td>
                     <td class="text-right">{{ number_format($item->purchase_unit_price, 2) }}</td>
                     <td class="text-right"><strong>{{ number_format($item->line_total, 2) }}</strong></td>
                 </tr>

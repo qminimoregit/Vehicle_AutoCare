@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\StockBatch;
 use App\Models\Supplier;
+use App\Services\QuantityFormatter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -83,8 +84,8 @@ class StockReportController extends Controller
                     'purchase_date' => $b->purchase_date->format('Y-m-d'),
                     'original_purchase_unit_price' => number_format($b->original_purchase_unit_price, 2),
                     'inventory_unit_cost' => number_format($b->inventory_unit_cost, 4),
-                    'received_quantity' => number_format($b->received_quantity, 2),
-                    'remaining_quantity' => number_format($b->remaining_quantity, 2),
+                    'received_quantity' => QuantityFormatter::format($b->received_quantity),
+                    'remaining_quantity' => QuantityFormatter::format($b->remaining_quantity),
                     'batch_value' => number_format($b->batch_value, 2),
                     'status' => $b->status,
                     'grn_url' => route('inventory.grn.show', $b->grn_id),
@@ -114,7 +115,7 @@ class StockReportController extends Controller
                     'supplier_name' => $b->supplier ? $b->supplier->name : 'N/A',
                     'purchase_price' => number_format($b->original_purchase_unit_price, 2),
                     'effective_unit_cost' => number_format($b->inventory_unit_cost, 4),
-                    'received_quantity' => number_format($b->received_quantity, 2),
+                    'received_quantity' => QuantityFormatter::format($b->received_quantity),
                     'selling_price_at_receipt' => $b->selling_price_at_receipt ? number_format($b->selling_price_at_receipt, 2) : '-',
                 ];
             });

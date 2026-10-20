@@ -53,7 +53,7 @@
                         <td class="p-2 border-r border-gray-200 font-semibold">{{ $p->name }}</td>
                         <td class="p-2 border-r border-gray-200 font-mono">{{ $p->sku ?? '-' }}</td>
                         <td class="p-2 border-r border-gray-200">{{ $p->preferredSupplier?->name ?? 'N/A' }}</td>
-                        <td class="p-2 border-r border-gray-200 text-center font-bold">{{ number_format($p->computed_available_stock, 2) }}</td>
+                        <td class="p-2 border-r border-gray-200 text-center font-bold">@quantity($p->computed_available_stock)</td>
                         <td class="p-2 border-r border-gray-200">{{ $p->uom?->name ?? '-' }}</td>
                         <td class="p-2 border-r border-gray-200 text-right">LKR {{ number_format($p->selling_price, 2) }}</td>
                         <td class="p-2 text-center">
@@ -66,7 +66,14 @@
 
         <!-- Footer -->
         <div class="pt-6 border-t border-gray-300 flex justify-between text-[11px] text-gray-500">
-            <span>Total Products: {{ count($products) }} | Total Units: {{ number_format($products->sum('computed_available_stock'), 2) }}</span>
+            <span>
+                Total Products: {{ count($products) }}
+                @if(!empty($hasMultipleUoms))
+                    | Stock Summary: Mixed Units ({{ $uomSummaryText }})
+                @else
+                    | Total Units: @quantity($products->sum('computed_available_stock')) {{ $singleUomName ?? '' }}
+                @endif
+            </span>
             <span>AutoCare System - Inventory & Valuation Management</span>
         </div>
     </div>

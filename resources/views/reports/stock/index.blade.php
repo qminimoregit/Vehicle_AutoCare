@@ -40,8 +40,20 @@
             <div class="text-xl font-bold text-[#0B1849] mt-1">{{ number_format($totalProducts) }}</div>
         </div>
         <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-xs">
-            <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Stock Units</span>
-            <div class="text-xl font-bold text-blue-600 mt-1">{{ number_format($totalStockUnits, 2) }}</div>
+            <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Stock Summary</span>
+            @if(!empty($hasMultipleUoms))
+                <div class="text-base font-bold text-blue-600 mt-1 flex items-baseline gap-1" title="{{ $uomSummaryText }}">
+                    <span>Mixed Units</span>
+                    <span class="text-xs font-medium text-gray-400">({{ count(explode('•', $uomSummaryText)) }} UOMs)</span>
+                </div>
+                <div class="text-[11px] text-gray-500 mt-0.5 truncate" title="{{ $uomSummaryText }}">
+                    {{ $uomSummaryText }}
+                </div>
+            @else
+                <div class="text-xl font-bold text-blue-600 mt-1">
+                    @quantity($totalStockUnits) {{ $singleUomName ?? '' }}
+                </div>
+            @endif
         </div>
         <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-xs">
             <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">Low Stock Alert</span>
@@ -149,7 +161,7 @@
                                 {{ $product->preferredSupplier?->name ?? 'N/A' }}
                             </td>
                             <td class="py-3 px-4 text-center font-bold {{ $product->computed_available_stock <= 0 ? 'text-rose-600' : ($product->min_stock > 0 && $product->computed_available_stock <= (float)$product->min_stock ? 'text-amber-600' : 'text-emerald-700') }}">
-                                {{ number_format($product->computed_available_stock, 2) }}
+                                @quantity($product->computed_available_stock)
                             </td>
                             <td class="py-3 px-4 text-gray-500">
                                 {{ $product->uom?->name ?? '-' }}

@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\StockBatch;
 use App\Models\Supplier;
 use App\Services\BranchContext;
+use App\Services\QuantityFormatter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -73,6 +74,20 @@ class StockReportController extends Controller
         $lowStockCount = $products->filter(fn ($p) => $p->min_stock > 0 && $p->computed_available_stock <= (float) $p->min_stock && $p->computed_available_stock > 0)->count();
         $outOfStockCount = $products->filter(fn ($p) => $p->computed_available_stock <= 0)->count();
 
+        // Analyze Units of Measurement (UOM) to avoid presenting a single-unit total for mixed units
+        $uomGroups = $products->filter(fn ($p) => $p->computed_available_stock > 0)
+            ->groupBy(fn ($p) => $p->uom?->name ?? 'Units');
+
+        $hasMultipleUoms = $uomGroups->count() > 1;
+        $singleUomName = $uomGroups->count() === 1 ? $uomGroups->keys()->first() : null;
+
+        $uomSummaryList = [];
+        foreach ($uomGroups as $uomName => $prods) {
+            $sumQty = $prods->sum('computed_available_stock');
+            $uomSummaryList[] = QuantityFormatter::format($sumQty).' '.$uomName;
+        }
+        $uomSummaryText = implode(' • ', $uomSummaryList);
+
         // Paginate manually or pass collection for responsive table
         $suppliers = Supplier::orderBy('name', 'asc')->get();
         $selectedBranch = ($branchId && $branchId !== 'all') ? Branch::find($branchId) : null;
@@ -89,7 +104,10 @@ class StockReportController extends Controller
             'totalProducts',
             'totalStockUnits',
             'lowStockCount',
-            'outOfStockCount'
+            'outOfStockCount',
+            'hasMultipleUoms',
+            'singleUomName',
+            'uomSummaryText'
         ));
     }
 
@@ -123,8 +141,8 @@ class StockReportController extends Controller
                     'grn_number' => $b->grn ? $b->grn->grn_number : '-',
                     'purchase_date' => $b->purchase_date ? $b->purchase_date->format('Y-m-d') : '-',
                     'supplier_name' => $b->supplier ? $b->supplier->name : 'N/A',
-                    'original_quantity' => number_format($b->received_quantity, 2),
-                    'remaining_quantity' => number_format($b->remaining_quantity, 2),
+                    'original_quantity' => QuantityFormatter::format($b->received_quantity),
+                    'remaining_quantity' => QuantityFormatter::format($b->remaining_quantity),
                     'purchase_cost' => $user->isAdmin() ? number_format($b->inventory_unit_cost, 2) : '***',
                     'selling_price' => $b->selling_price_at_receipt ? number_format($b->selling_price_at_receipt, 2) : '-',
                     'branch_name' => $b->branch ? $b->branch->branch_name : 'Main Branch',
@@ -184,9 +202,28 @@ class StockReportController extends Controller
             $products = $products->filter(fn ($p) => $p->computed_available_stock > 0);
         }
 
+        $uomGroups = $products->filter(fn ($p) => $p->computed_available_stock > 0)
+            ->groupBy(fn ($p) => $p->uom?->name ?? 'Units');
+        $hasMultipleUoms = $uomGroups->count() > 1;
+        $singleUomName = $uomGroups->count() === 1 ? $uomGroups->keys()->first() : null;
+
+        $uomSummaryList = [];
+        foreach ($uomGroups as $uomName => $prods) {
+            $sumQty = $prods->sum('computed_available_stock');
+            $uomSummaryList[] = QuantityFormatter::format($sumQty).' '.$uomName;
+        }
+        $uomSummaryText = implode(' • ', $uomSummaryList);
+
         $selectedBranch = ($branchId && $branchId !== 'all') ? Branch::find($branchId) : null;
 
-        return view('reports.stock.print', compact('products', 'selectedBranch', 'stockStatus'));
+        return view('reports.stock.print', compact(
+            'products',
+            'selectedBranch',
+            'stockStatus',
+            'hasMultipleUoms',
+            'singleUomName',
+            'uomSummaryText'
+        ));
     }
 
     /**
@@ -261,8 +298,8 @@ class StockReportController extends Controller
                     $p->sku ?? '-',
                     $p->preferredSupplier ? $p->preferredSupplier->name : 'N/A',
                     $p->uom ? $p->uom->name : '-',
-                    number_format($p->computed_available_stock, 2, '.', ''),
-                    number_format($p->min_stock, 2, '.', ''),
+                    QuantityFormatter::format($p->computed_available_stock, null, false),
+                    QuantityFormatter::format($p->min_stock, null, false),
                     number_format($p->selling_price, 2, '.', ''),
                     $status,
                 ]);

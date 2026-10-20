@@ -207,13 +207,13 @@
                                     {{ $item->product->uom ? $item->product->uom->name : '-' }}
                                 </td>
                                 <td class="px-4 py-3 text-right font-mono text-sm text-gray-900">
-                                    {{ number_format($item->purchase_quantity, 2) }}
+                                    @quantity($item->purchase_quantity)
                                 </td>
                                 <td class="px-4 py-3 text-right font-mono text-sm text-emerald-700 font-semibold">
-                                    {{ $item->free_quantity > 0 ? '+ ' . number_format($item->free_quantity, 2) : '-' }}
+                                    {{ $item->free_quantity > 0 ? '+ ' . \App\Services\QuantityFormatter::format($item->free_quantity) : '-' }}
                                 </td>
                                 <td class="px-4 py-3 text-right font-mono text-sm text-gray-900 font-bold bg-gray-50/60">
-                                    {{ number_format($item->total_physical_quantity, 2) }}
+                                    @quantity($item->total_physical_quantity)
                                 </td>
                                 <td class="px-4 py-3 text-right font-mono text-sm text-gray-700">
                                     {{ number_format($item->purchase_unit_price, 2) }}
@@ -276,10 +276,10 @@
                                         {{ number_format($batch->inventory_unit_cost, 4) }}
                                     </td>
                                     <td class="px-4 py-3 text-right font-mono text-sm text-gray-600">
-                                        {{ number_format($batch->received_quantity, 2) }}
+                                        @quantity($batch->received_quantity)
                                     </td>
                                     <td class="px-4 py-3 text-right font-mono text-sm font-bold {{ $batch->remaining_quantity > 0 ? 'text-emerald-700' : 'text-gray-400' }}">
-                                        {{ number_format($batch->remaining_quantity, 2) }}
+                                        @quantity($batch->remaining_quantity)
                                     </td>
                                     <td class="px-6 py-3 text-right font-mono font-bold text-sm text-gray-900">
                                         LKR {{ number_format($batch->batch_value, 2) }}

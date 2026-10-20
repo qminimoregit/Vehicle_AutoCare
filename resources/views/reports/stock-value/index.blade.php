@@ -46,9 +46,19 @@
             <div class="text-[11px] text-gray-400 mt-0.5">Based on actual batch unit costs</div>
         </div>
         <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-xs">
-            <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Available Units</span>
-            <div class="text-xl font-bold text-[#0B1849] mt-1">{{ number_format($grandTotalUnits, 2) }}</div>
-            <div class="text-[11px] text-gray-400 mt-0.5">Across {{ $productWise->count() }} distinct products</div>
+            <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Stock Summary</span>
+            @if(!empty($hasMultipleUoms))
+                <div class="text-base font-bold text-[#0B1849] mt-1 flex items-baseline gap-1" title="{{ $uomSummaryText }}">
+                    <span>Mixed Units</span>
+                    <span class="text-xs font-medium text-gray-400">({{ count(explode('•', $uomSummaryText)) }} UOMs)</span>
+                </div>
+                <div class="text-[11px] text-gray-500 mt-0.5 truncate" title="{{ $uomSummaryText }}">
+                    {{ $uomSummaryText }}
+                </div>
+            @else
+                <div class="text-xl font-bold text-[#0B1849] mt-1">@quantity($grandTotalUnits) {{ $singleUomName ?? '' }}</div>
+                <div class="text-[11px] text-gray-400 mt-0.5">Across {{ $productWise->count() }} distinct products</div>
+            @endif
         </div>
         <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-xs">
             <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">Active Batches</span>
@@ -164,7 +174,7 @@
                                     </span>
                                 </td>
                                 <td class="py-3 px-4 text-center font-bold text-gray-800">
-                                    {{ number_format($item['total_quantity'], 2) }} {{ $item['product']->uom?->name ?? '' }}
+                                    @quantity($item['total_quantity']) {{ $item['product']->uom?->name ?? '' }}
                                 </td>
                                 <td class="py-3 px-4 text-right font-mono text-gray-600">
                                     LKR {{ number_format($item['weighted_avg_cost'], 2) }}
@@ -190,7 +200,13 @@
                     <tfoot class="bg-gray-50 font-bold border-t border-gray-200 text-gray-900">
                         <tr>
                             <td colspan="4" class="py-3 px-4 text-right uppercase tracking-wider text-xs">Grand Total Valuation:</td>
-                            <td class="py-3 px-4 text-center text-xs text-[#0B1849]">{{ number_format($grandTotalUnits, 2) }}</td>
+                            <td class="py-3 px-4 text-center text-xs text-[#0B1849]">
+                                @if(!empty($hasMultipleUoms))
+                                    <span class="text-gray-500 font-normal">Mixed Units</span>
+                                @else
+                                    @quantity($grandTotalUnits) {{ $singleUomName ?? '' }}
+                                @endif
+                            </td>
                             <td colspan="2"></td>
                             <td class="py-3 px-4 text-right text-xs text-emerald-700">LKR {{ number_format($grandTotalStockValue, 2) }}</td>
                             <td class="py-3 px-4 text-right text-xs text-purple-700">LKR {{ number_format(max(0, $grandTotalPotentialRevenue - $grandTotalStockValue), 2) }}</td>
@@ -243,7 +259,7 @@
                                     {{ $b->supplier?->name ?? 'N/A' }}
                                 </td>
                                 <td class="py-3 px-4 text-right font-bold text-gray-900">
-                                    {{ number_format($b->remaining_quantity, 2) }}
+                                    @quantity($b->remaining_quantity)
                                 </td>
                                 <td class="py-3 px-4 text-right font-mono text-gray-700">
                                     LKR {{ number_format($b->inventory_unit_cost, 2) }}
@@ -266,7 +282,13 @@
                     <tfoot class="bg-gray-50 font-bold border-t border-gray-200 text-gray-900">
                         <tr>
                             <td colspan="5" class="py-3 px-4 text-right uppercase tracking-wider text-xs">Grand Total Valuation:</td>
-                            <td class="py-3 px-4 text-right text-xs text-[#0B1849]">{{ number_format($grandTotalUnits, 2) }}</td>
+                            <td class="py-3 px-4 text-right text-xs text-[#0B1849]">
+                                @if(!empty($hasMultipleUoms))
+                                    <span class="text-gray-500 font-normal">Mixed Units</span>
+                                @else
+                                    @quantity($grandTotalUnits) {{ $singleUomName ?? '' }}
+                                @endif
+                            </td>
                             <td></td>
                             <td class="py-3 px-4 text-right text-xs text-emerald-700">LKR {{ number_format($grandTotalStockValue, 2) }}</td>
                             <td></td>

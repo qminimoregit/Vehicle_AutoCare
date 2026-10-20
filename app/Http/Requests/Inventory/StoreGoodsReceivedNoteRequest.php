@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Inventory;
 
+use App\Models\Product;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -53,5 +54,34 @@ class StoreGoodsReceivedNoteRequest extends FormRequest
             'items.*.purchase_quantity.min' => 'Purchased quantity must be greater than zero.',
             'items.*.purchase_unit_price.min' => 'Purchase price cannot be negative.',
         ];
+    }
+
+    /**
+     * Validate whole-number quantity rules according to UOM.
+     */
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator) {
+            $items = $this->input('items', []);
+            foreach ($items as $index => $item) {
+                if (! empty($item['product_id'])) {
+                    $product = Product::with('uom')->find($item['product_id']);
+                    if ($product && ! $product->allowsFractionalQuantity()) {
+                        if (isset($item['purchase_quantity']) && floor((float) $item['purchase_quantity']) != (float) $item['purchase_quantity']) {
+                            $validator->errors()->add(
+                                "items.{$index}.purchase_quantity",
+                                "Product '{$product->name}' is measured in {$product->uom?->name} and requires a whole-number purchased quantity."
+                            );
+                        }
+                        if (! empty($item['free_quantity']) && floor((float) $item['free_quantity']) != (float) $item['free_quantity']) {
+                            $validator->errors()->add(
+                                "items.{$index}.free_quantity",
+                                "Product '{$product->name}' is measured in {$product->uom?->name} and requires a whole-number free quantity."
+                            );
+                        }
+                    }
+                }
+            }
+        });
     }
 }

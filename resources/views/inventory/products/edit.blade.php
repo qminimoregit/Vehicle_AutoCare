@@ -238,11 +238,11 @@
                         <div class="mt-1.5">
                             <input 
                                 type="number" 
-                                step="1" 
+                                step="{{ $product->quantity_step }}" 
                                 min="0" 
                                 name="min_stock" 
                                 id="min_stock" 
-                                value="{{ old('min_stock', $product->min_stock) }}" 
+                                value="{{ old('min_stock', \App\Services\QuantityFormatter::format($product->min_stock, null, false)) }}" 
                                 class="block w-full px-3.5 py-2.5 text-sm text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] font-mono"
                             />
                         </div>
@@ -258,11 +258,11 @@
                         <div class="mt-1.5">
                             <input 
                                 type="number" 
-                                step="1" 
+                                step="{{ $product->quantity_step }}" 
                                 min="0" 
                                 name="max_stock" 
                                 id="max_stock" 
-                                value="{{ old('max_stock', $product->max_stock) }}" 
+                                value="{{ old('max_stock', $product->max_stock ? \App\Services\QuantityFormatter::format($product->max_stock, null, false) : '') }}" 
                                 class="block w-full px-3.5 py-2.5 text-sm text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] font-mono"
                             />
                         </div>
