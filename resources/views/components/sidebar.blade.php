@@ -1,0 +1,514 @@
+@php
+    $isMasterData = request()->routeIs('master-data.*');
+    $isInventory = request()->routeIs('inventory.*');
+    $isOperations = request()->routeIs('operations.*');
+    $isPayroll = request()->routeIs('payroll.*');
+    $isExpenses = request()->routeIs('expenses.*');
+    $defaultSection = $isExpenses ? 'expenses' : ($isPayroll ? 'payroll' : ($isOperations ? 'operations' : ($isMasterData ? 'master-data' : ($isInventory ? 'inventory' : ''))));
+@endphp
+
+<!-- Mobile Backdrop -->
+<div 
+    x-show="sidebarOpen" 
+    @click="sidebarOpen = false" 
+    x-transition:enter="transition-opacity ease-linear duration-200"
+    x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100"
+    x-transition:leave="transition-opacity ease-linear duration-200"
+    x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0"
+    class="fixed inset-0 z-20 bg-gray-900/50 backdrop-blur-xs md:hidden"
+    style="display: none;"
+></div>
+
+<!-- Sidebar Container -->
+<aside 
+    :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
+    class="fixed top-16 bottom-0 left-0 z-20 w-[270px] bg-white border-r border-gray-200 transition-transform duration-200 ease-in-out flex flex-col justify-between"
+    x-data="{
+        activeSection: '{{ $defaultSection }}',
+        toggleSection(section) {
+            this.activeSection = (this.activeSection === section) ? '' : section;
+        }
+    }"
+>
+    <!-- Mobile Header with Close Button -->
+    <div class="md:hidden flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
+        <span class="text-xs font-bold uppercase tracking-wider text-gray-400">Navigation</span>
+        <button 
+            type="button" 
+            @click="sidebarOpen = false" 
+            class="p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition"
+            aria-label="Close sidebar"
+        >
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Scrollable Navigation Menu -->
+    <div class="flex-1 overflow-y-auto overflow-x-hidden py-4 px-3 space-y-5 thin-scrollbar">
+        <!-- 1. OVERVIEW -->
+        <div>
+            <div class="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                Overview
+            </div>
+            <nav class="space-y-0.5">
+                @php $isDashboard = request()->routeIs('dashboard', 'home'); @endphp
+                <a 
+                    href="{{ route('dashboard') }}" 
+                    @click="if (window.innerWidth < 768) sidebarOpen = false"
+                    class="group flex items-center px-3 py-2 text-[13px] rounded-lg transition {{ $isDashboard ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                >
+                    <svg class="mr-2.5 h-4 w-4 shrink-0 {{ $isDashboard ? 'text-[#0B1849]' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                    </svg>
+                    <span>Dashboard</span>
+                </a>
+            </nav>
+        </div>
+
+        <!-- 2. MANAGEMENT -->
+        <div>
+            <div class="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                Management
+            </div>
+            <nav class="space-y-1">
+                <!-- Master Data Expandable Section -->
+                <div>
+                    <button 
+                        type="button" 
+                        @click="toggleSection('master-data')"
+                        class="w-full flex items-center justify-between px-3 py-2 text-[13px] rounded-lg transition group cursor-pointer focus:outline-none {{ $isMasterData ? 'text-[#0B1849] font-semibold bg-[#EEF1FA]/40' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        :class="activeSection === 'master-data' && !{{ $isMasterData ? 'true' : 'false' }} ? 'bg-slate-50 text-gray-900 font-semibold' : ''"
+                    >
+                        <span class="flex items-center min-w-0">
+                            <svg class="mr-2.5 h-4 w-4 shrink-0 {{ $isMasterData ? 'text-[#0B1849]' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7c-2 0-3 1-3 3z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m-6-8h6" />
+                            </svg>
+                            <span class="truncate">Master Data</span>
+                        </span>
+                        <svg 
+                            :class="activeSection === 'master-data' ? 'rotate-180 text-gray-600' : 'text-gray-400'" 
+                            class="w-3.5 h-3.5 ml-2 shrink-0 transform transition-transform duration-200" 
+                            fill="none" 
+                            viewBox="0 0 24 24" 
+                            stroke="currentColor"
+                        >
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+
+                    <!-- Master Data Sub-menu -->
+                    <div 
+                        x-show="activeSection === 'master-data'" 
+                        x-transition:enter="transition ease-out duration-150"
+                        x-transition:enter-start="opacity-0 -translate-y-1"
+                        x-transition:enter-end="opacity-100 translate-y-0"
+                        x-transition:leave="transition ease-in duration-100"
+                        x-transition:leave-start="opacity-100 translate-y-0"
+                        x-transition:leave-end="opacity-0 -translate-y-1"
+                        class="mt-1 space-y-0.5 pl-3 border-l-2 border-gray-100 ml-4"
+                        style="display: none;"
+                    >
+                        <!-- Service Lists -->
+                        @php $isServices = request()->routeIs('master-data.services.*'); @endphp
+                        <a 
+                            href="{{ route('master-data.services.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isServices ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isServices ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Service Lists</span>
+                        </a>
+
+                        <!-- Vehicle Types -->
+                        @php $isVehicleTypes = request()->routeIs('master-data.vehicle-types.*'); @endphp
+                        <a 
+                            href="{{ route('master-data.vehicle-types.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isVehicleTypes ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isVehicleTypes ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Vehicle Types</span>
+                        </a>
+
+                        <!-- Manage Service Payment -->
+                        @php $isServicePayments = request()->routeIs('master-data.service-payments.*'); @endphp
+                        <a 
+                            href="{{ route('master-data.service-payments.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isServicePayments ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isServicePayments ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Manage Service Payment</span>
+                        </a>
+
+                        <!-- Company Details -->
+                        @php $isCompany = request()->routeIs('master-data.company-details.*'); @endphp
+                        <a 
+                            href="{{ route('master-data.company-details.edit') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isCompany ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isCompany ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Company Details</span>
+                        </a>
+
+                        <!-- Search Client SMS -->
+                        @php $isSms = request()->routeIs('master-data.client-sms.*'); @endphp
+                        <a 
+                            href="{{ route('master-data.client-sms.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isSms ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isSms ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Search Client SMS</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Suppliers & Inventory Expandable Section -->
+                <div>
+                    <button 
+                        type="button" 
+                        @click="toggleSection('inventory')"
+                        class="w-full flex items-center justify-between px-3 py-2 text-[13px] rounded-lg transition group cursor-pointer focus:outline-none {{ $isInventory ? 'text-[#0B1849] font-semibold bg-[#EEF1FA]/40' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        :class="activeSection === 'inventory' && !{{ $isInventory ? 'true' : 'false' }} ? 'bg-slate-50 text-gray-900 font-semibold' : ''"
+                    >
+                        <span class="flex items-center min-w-0">
+                            <svg class="mr-2.5 h-4 w-4 shrink-0 {{ $isInventory ? 'text-[#0B1849]' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                            </svg>
+                            <span class="truncate">Suppliers & Inventory</span>
+                        </span>
+                        <svg 
+                            :class="activeSection === 'inventory' ? 'rotate-180 text-gray-600' : 'text-gray-400'" 
+                            class="w-3.5 h-3.5 ml-2 shrink-0 transform transition-transform duration-200" 
+                            fill="none" 
+                            viewBox="0 0 24 24" 
+                            stroke="currentColor"
+                        >
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+
+                    <!-- Suppliers & Inventory Sub-menu -->
+                    <div 
+                        x-show="activeSection === 'inventory'" 
+                        x-transition:enter="transition ease-out duration-150"
+                        x-transition:enter-start="opacity-0 -translate-y-1"
+                        x-transition:enter-end="opacity-100 translate-y-0"
+                        x-transition:leave="transition ease-in duration-100"
+                        x-transition:leave-start="opacity-100 translate-y-0"
+                        x-transition:leave-end="opacity-0 -translate-y-1"
+                        class="mt-1 space-y-0.5 pl-3 border-l-2 border-gray-100 ml-4"
+                        style="display: none;"
+                    >
+                        <!-- Suppliers -->
+                        @php $isSuppliers = request()->routeIs('inventory.suppliers.*'); @endphp
+                        <a 
+                            href="{{ route('inventory.suppliers.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isSuppliers ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isSuppliers ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Suppliers</span>
+                        </a>
+
+                        <!-- Products -->
+                        @php $isProducts = request()->routeIs('inventory.products.*'); @endphp
+                        <a 
+                            href="{{ route('inventory.products.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isProducts ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isProducts ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Products</span>
+                        </a>
+
+                        <!-- Purchasing (GRN) -->
+                        @php $isGrn = request()->routeIs('inventory.grn.*'); @endphp
+                        <a 
+                            href="{{ route('inventory.grn.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isGrn ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isGrn ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Purchasing (GRN)</span>
+                        </a>
+
+                        <!-- Stock Report -->
+                        @php $isStockReport = request()->routeIs('inventory.stock-report.*'); @endphp
+                        <a 
+                            href="{{ route('inventory.stock-report.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isStockReport ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isStockReport ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Stock Report</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Operations Expandable Section -->
+                <div>
+                    <button 
+                        type="button" 
+                        @click="toggleSection('operations')"
+                        class="w-full flex items-center justify-between px-3 py-2 text-[13px] rounded-lg transition group cursor-pointer focus:outline-none {{ $isOperations ? 'text-[#0B1849] font-semibold bg-[#EEF1FA]/40' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        :class="activeSection === 'operations' && !{{ $isOperations ? 'true' : 'false' }} ? 'bg-slate-50 text-gray-900 font-semibold' : ''"
+                    >
+                        <span class="flex items-center min-w-0">
+                            <svg class="mr-2.5 h-4 w-4 shrink-0 {{ $isOperations ? 'text-[#0B1849]' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                            </svg>
+                            <span class="truncate">Operations</span>
+                        </span>
+                        <svg 
+                            :class="activeSection === 'operations' ? 'rotate-180 text-gray-600' : 'text-gray-400'" 
+                            class="w-3.5 h-3.5 ml-2 shrink-0 transform transition-transform duration-200" 
+                            fill="none" 
+                            viewBox="0 0 24 24" 
+                            stroke="currentColor"
+                        >
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+
+                    <!-- Operations Sub-menu -->
+                    <div 
+                        x-show="activeSection === 'operations'" 
+                        x-transition:enter="transition ease-out duration-150"
+                        x-transition:enter-start="opacity-0 -translate-y-1"
+                        x-transition:enter-end="opacity-100 translate-y-0"
+                        x-transition:leave="transition ease-in duration-100"
+                        x-transition:leave-start="opacity-100 translate-y-0"
+                        x-transition:leave-end="opacity-0 -translate-y-1"
+                        class="mt-1 space-y-0.5 pl-3 border-l-2 border-gray-100 ml-4"
+                        style="display: none;"
+                    >
+                        <!-- Vehicle Registration -->
+                        @php $isVehicles = request()->routeIs('operations.vehicles.*'); @endphp
+                        <a 
+                            href="{{ route('operations.vehicles.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isVehicles ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isVehicles ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Vehicle Registration</span>
+                        </a>
+
+                        <!-- Direct Sale -->
+                        @php $isDirectSale = request()->routeIs('operations.direct-sales.*'); @endphp
+                        <a 
+                            href="{{ route('operations.direct-sales.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isDirectSale ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isDirectSale ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Direct Sale</span>
+                        </a>
+
+                        <!-- Job Cards -->
+                        @php $isJobCards = request()->routeIs('operations.job-cards.*'); @endphp
+                        <a 
+                            href="{{ route('operations.job-cards.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isJobCards ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isJobCards ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Job Cards</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Employees & Payroll Expandable Section -->
+                <div>
+                    <button 
+                        type="button" 
+                        @click="toggleSection('payroll')"
+                        class="w-full flex items-center justify-between px-3 py-2 text-[13px] rounded-lg transition group cursor-pointer focus:outline-none {{ $isPayroll ? 'text-[#0B1849] font-semibold bg-[#EEF1FA]/40' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        :class="activeSection === 'payroll' && !{{ $isPayroll ? 'true' : 'false' }} ? 'bg-slate-50 text-gray-900 font-semibold' : ''"
+                    >
+                        <span class="flex items-center min-w-0">
+                            <svg class="mr-2.5 h-4 w-4 shrink-0 {{ $isPayroll ? 'text-[#0B1849]' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                            <span class="truncate">Employees & Payroll</span>
+                        </span>
+                        <svg 
+                            :class="activeSection === 'payroll' ? 'rotate-180 text-gray-600' : 'text-gray-400'" 
+                            class="w-3.5 h-3.5 ml-2 shrink-0 transform transition-transform duration-200" 
+                            fill="none" 
+                            viewBox="0 0 24 24" 
+                            stroke="currentColor"
+                        >
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+
+                    <!-- Employees & Payroll Sub-menu -->
+                    <div 
+                        x-show="activeSection === 'payroll'" 
+                        x-transition:enter="transition ease-out duration-150"
+                        x-transition:enter-start="opacity-0 -translate-y-1"
+                        x-transition:enter-end="opacity-100 translate-y-0"
+                        x-transition:leave="transition ease-in duration-100"
+                        x-transition:leave-start="opacity-100 translate-y-0"
+                        x-transition:leave-end="opacity-0 -translate-y-1"
+                        class="mt-1 space-y-0.5 pl-3 border-l-2 border-gray-100 ml-4"
+                        style="display: none;"
+                    >
+                        <!-- Employee Registration -->
+                        @php $isEmployees = request()->routeIs('payroll.employees.*'); @endphp
+                        <a 
+                            href="{{ route('payroll.employees.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isEmployees ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isEmployees ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Employee Registration</span>
+                        </a>
+
+                        <!-- Employee Attendance -->
+                        @php $isAttendance = request()->routeIs('payroll.attendance.*'); @endphp
+                        <a 
+                            href="{{ route('payroll.attendance.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isAttendance ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isAttendance ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Employee Attendance</span>
+                        </a>
+
+                        <!-- Employee Salary -->
+                        @if(Auth::user() && (Auth::user()->isAdmin() || Auth::user()->hasPermission('view_salary')))
+                            @php $isSalary = request()->routeIs('payroll.salary.*'); @endphp
+                            <a 
+                                href="{{ route('payroll.salary.index') }}" 
+                                @click="if (window.innerWidth < 768) sidebarOpen = false"
+                                class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isSalary ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                            >
+                                <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isSalary ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                                <span class="truncate">Employee Salary</span>
+                            </a>
+                        @endif
+                    </div>
+                </div>
+
+                <!-- Expenses Expandable Section -->
+                <div>
+                    <button 
+                        type="button" 
+                        @click="toggleSection('expenses')"
+                        class="w-full flex items-center justify-between px-3 py-2 text-[13px] rounded-lg transition group cursor-pointer focus:outline-none {{ $isExpenses ? 'text-[#0B1849] font-semibold bg-[#EEF1FA]/40' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        :class="activeSection === 'expenses' && !{{ $isExpenses ? 'true' : 'false' }} ? 'bg-slate-50 text-gray-900 font-semibold' : ''"
+                    >
+                        <span class="flex items-center min-w-0">
+                            <svg class="mr-2.5 h-4 w-4 shrink-0 {{ $isExpenses ? 'text-[#0B1849]' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                            </svg>
+                            <span class="truncate">Expenses</span>
+                        </span>
+                        <svg 
+                            :class="activeSection === 'expenses' ? 'rotate-180 text-gray-600' : 'text-gray-400'" 
+                            class="w-3.5 h-3.5 ml-2 shrink-0 transform transition-transform duration-200" 
+                            fill="none" 
+                            viewBox="0 0 24 24" 
+                            stroke="currentColor"
+                        >
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+
+                    <!-- Expenses Sub-menu -->
+                    <div 
+                        x-show="activeSection === 'expenses'" 
+                        x-transition:enter="transition ease-out duration-150"
+                        x-transition:enter-start="opacity-0 -translate-y-1"
+                        x-transition:enter-end="opacity-100 translate-y-0"
+                        x-transition:leave="transition ease-in duration-100"
+                        x-transition:leave-start="opacity-100 translate-y-0"
+                        x-transition:leave-end="opacity-0 -translate-y-1"
+                        class="mt-1 space-y-0.5 pl-3 border-l-2 border-gray-100 ml-4"
+                        style="display: none;"
+                    >
+                        <!-- Expense Categories -->
+                        @php $isCategories = request()->routeIs('expenses.categories.*'); @endphp
+                        <a 
+                            href="{{ route('expenses.categories.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isCategories ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isCategories ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Expense Categories</span>
+                        </a>
+
+                        <!-- Expense Records -->
+                        @php $isRecords = request()->routeIs('expenses.records.*') || request()->routeIs('expenses.staff.*') || request()->routeIs('expenses.shop.*') || request()->routeIs('expenses.show') || request()->routeIs('expenses.edit'); @endphp
+                        <a 
+                            href="{{ route('expenses.records.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isRecords ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isRecords ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Expense Records</span>
+                        </a>
+                    </div>
+                </div>
+            </nav>
+        </div>
+
+        @if(Auth::user() && Auth::user()->isAdmin())
+            <!-- 3. ADMINISTRATION (Admin Only) -->
+            <div>
+                <div class="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                    Administration
+                </div>
+                <nav class="space-y-0.5">
+                    <!-- Staff Accounts -->
+                    @php $isStaff = request()->routeIs('admin.staff.*'); @endphp
+                    <a 
+                        href="{{ route('admin.staff.index') }}" 
+                        @click="if (window.innerWidth < 768) sidebarOpen = false"
+                        class="group flex items-center px-3 py-2 text-[13px] rounded-lg transition {{ $isStaff ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                    >
+                        <svg class="mr-2.5 h-4 w-4 shrink-0 {{ $isStaff ? 'text-[#0B1849]' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                        </svg>
+                        <span class="truncate">Staff Accounts</span>
+                    </a>
+
+                    <!-- Activity Logs -->
+                    @php $isLogs = request()->routeIs('admin.activity-logs.*'); @endphp
+                    <a 
+                        href="{{ route('admin.activity-logs.index') }}" 
+                        @click="if (window.innerWidth < 768) sidebarOpen = false"
+                        class="group flex items-center px-3 py-2 text-[13px] rounded-lg transition {{ $isLogs ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                    >
+                        <svg class="mr-2.5 h-4 w-4 shrink-0 {{ $isLogs ? 'text-[#0B1849]' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span class="truncate">Activity Logs</span>
+                    </a>
+                </nav>
+            </div>
+        @endif
+    </div>
+
+    <!-- Compact Clean Footer -->
+    <div class="p-3 border-t border-gray-100 bg-white shrink-0">
+        <div class="flex items-center justify-between text-[11px] text-gray-500 font-medium px-1">
+            <span class="inline-flex items-center text-emerald-600 font-medium">
+                <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-1.5 animate-pulse"></span>
+                System Online
+            </span>
+            <span class="text-[10px] text-gray-400 font-mono">
+                AutoCare v1.0
+            </span>
+        </div>
+    </div>
+</aside>
