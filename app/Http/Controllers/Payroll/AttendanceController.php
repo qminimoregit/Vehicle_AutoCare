@@ -21,7 +21,7 @@ class AttendanceController extends Controller
     public function index(Request $request): View
     {
         $user = Auth::user();
-        if (!$user->isAdmin() && !$user->hasPermission('mark_attendance')) {
+        if (! $user->isAdmin() && ! $user->hasPermission('mark_attendance')) {
             abort(403, 'Unauthorized access to employee attendance.');
         }
 
@@ -141,7 +141,7 @@ class AttendanceController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $user = Auth::user();
-        if (!$user->isAdmin() && !$user->hasPermission('mark_attendance')) {
+        if (! $user->isAdmin() && ! $user->hasPermission('mark_attendance')) {
             abort(403, 'Unauthorized to record attendance.');
         }
 
@@ -160,7 +160,7 @@ class AttendanceController extends Controller
         $targetDate = Carbon::parse($attendanceDate);
 
         // Security check for staff: only today or yesterday
-        if (!$user->isAdmin() && !$targetDate->isSameDay($today) && !$targetDate->isYesterday()) {
+        if (! $user->isAdmin() && ! $targetDate->isSameDay($today) && ! $targetDate->isYesterday()) {
             abort(403, 'Staff members cannot modify historical attendance beyond yesterday.');
         }
 
@@ -170,7 +170,7 @@ class AttendanceController extends Controller
         DB::transaction(function () use ($validated, $attendanceDate, $user, &$savedCount, &$clearedCount) {
             foreach ($validated['attendances'] as $employeeId => $data) {
                 $employee = Employee::find($employeeId);
-                if (!$employee) {
+                if (! $employee) {
                     continue;
                 }
 
@@ -178,8 +178,8 @@ class AttendanceController extends Controller
                 if (isset($data['status'])) {
                     $status = $data['status'];
                 } else {
-                    $isPresent = !empty($data['present']);
-                    $isHalfDay = !empty($data['half_day']);
+                    $isPresent = ! empty($data['present']);
+                    $isHalfDay = ! empty($data['half_day']);
 
                     if ($isPresent && $isHalfDay) {
                         $status = EmployeeAttendance::STATUS_HALF_DAY;
@@ -191,7 +191,7 @@ class AttendanceController extends Controller
                 }
 
                 $notes = $data['notes'] ?? null;
-                $isPaidLeave = !empty($data['is_paid_leave']);
+                $isPaidLeave = ! empty($data['is_paid_leave']);
 
                 if ($status === 'not_marked') {
                     // Remove record if existing
@@ -201,6 +201,7 @@ class AttendanceController extends Controller
                     if ($deleted) {
                         $clearedCount++;
                     }
+
                     continue;
                 }
 

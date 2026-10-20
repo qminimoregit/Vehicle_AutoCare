@@ -11,7 +11,9 @@ class EmployeeAdvance extends Model
     use HasFactory;
 
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_DEDUCTED = 'deducted';
+
     public const STATUS_CANCELLED = 'cancelled';
 
     protected $fillable = [
@@ -52,12 +54,13 @@ class EmployeeAdvance extends Model
     public static function generateNextAdvanceNumber(): string
     {
         $latest = static::orderByDesc('id')->first();
-        if (!$latest) {
+        if (! $latest) {
             return 'ADV-0001';
         }
 
         if (preg_match('/ADV-(\d+)/i', $latest->advance_number, $matches)) {
             $next = ((int) $matches[1]) + 1;
+
             return sprintf('ADV-%04d', $next);
         }
 

@@ -86,7 +86,7 @@ class Stage4EmployeeSeeder extends Seeder
         $start = Carbon::parse('2026-10-01');
 
         while ($start->lessThanOrEqualTo($today)) {
-            if (!$start->isSunday()) {
+            if (! $start->isSunday()) {
                 $dateStr = $start->toDateString();
 
                 // Nilantha: full day

@@ -42,12 +42,13 @@ class PayrollPayment extends Model
     public static function generateNextPaymentNumber(): string
     {
         $latest = static::orderByDesc('id')->first();
-        if (!$latest) {
+        if (! $latest) {
             return 'PAY-0001';
         }
 
         if (preg_match('/PAY-(\d+)/i', $latest->payment_number, $matches)) {
             $next = ((int) $matches[1]) + 1;
+
             return sprintf('PAY-%04d', $next);
         }
 

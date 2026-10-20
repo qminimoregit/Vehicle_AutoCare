@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\ActivityLog;
 use App\Models\CompanySetting;
+use App\Models\ExpenseCategory;
 use App\Models\Service;
 use App\Models\User;
 use App\Models\VehicleType;
@@ -102,7 +103,7 @@ class DatabaseSeeder extends Seeder
         );
 
         // 5. Seed default expense categories (Stage 5)
-        \App\Models\ExpenseCategory::seedDefaults();
+        ExpenseCategory::seedDefaults();
 
         ActivityLog::create([
             'user_id' => $staffUser->id,

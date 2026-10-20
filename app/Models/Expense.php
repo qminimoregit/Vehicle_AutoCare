@@ -11,9 +11,11 @@ class Expense extends Model
     use HasFactory;
 
     public const TYPE_STAFF = 'staff';
+
     public const TYPE_SHOP = 'shop';
 
     public const STATUS_ACTIVE = 'active';
+
     public const STATUS_VOIDED = 'voided';
 
     protected $fillable = [
@@ -111,12 +113,13 @@ class Expense extends Model
     public static function generateNextExpenseNumber(): string
     {
         $latest = static::orderByDesc('id')->first();
-        if (!$latest) {
+        if (! $latest) {
             return 'EXP-0001';
         }
 
         if (preg_match('/EXP-(\d+)/i', $latest->expense_number, $matches)) {
             $next = ((int) $matches[1]) + 1;
+
             return sprintf('EXP-%04d', $next);
         }
 
@@ -128,4 +131,3 @@ class Expense extends Model
         return $this->belongsTo(Branch::class, 'branch_id');
     }
 }
-

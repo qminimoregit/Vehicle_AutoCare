@@ -19,7 +19,7 @@ class EmployeeController extends Controller
     public function index(Request $request): View
     {
         $user = Auth::user();
-        if (!$user->isAdmin() && !$user->hasPermission('view_employees')) {
+        if (! $user->isAdmin() && ! $user->hasPermission('view_employees')) {
             abort(403, 'Unauthorized access to employee records.');
         }
 
@@ -28,7 +28,7 @@ class EmployeeController extends Controller
 
         $query = Employee::query()->with('wageRates');
 
-        if (!empty($search)) {
+        if (! empty($search)) {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                     ->orWhere('employee_number', 'like', "%{$search}%")
@@ -56,7 +56,7 @@ class EmployeeController extends Controller
      */
     public function create(): View
     {
-        if (!Auth::user()->isAdmin()) {
+        if (! Auth::user()->isAdmin()) {
             abort(403, 'Only administrators can register new employees.');
         }
 
@@ -73,7 +73,7 @@ class EmployeeController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        if (!Auth::user()->isAdmin()) {
+        if (! Auth::user()->isAdmin()) {
             abort(403, 'Only administrators can register new employees.');
         }
 
@@ -114,7 +114,7 @@ class EmployeeController extends Controller
 
         ActivityLog::log(
             'create_employee',
-            "Registered new employee {$employee->name} ({$employee->employee_number}) with daily wage LKR " . number_format($employee->daily_wage, 2),
+            "Registered new employee {$employee->name} ({$employee->employee_number}) with daily wage LKR ".number_format($employee->daily_wage, 2),
             'Payroll'
         );
 
@@ -128,7 +128,7 @@ class EmployeeController extends Controller
     public function show(Employee $employee): View
     {
         $user = Auth::user();
-        if (!$user->isAdmin() && !$user->hasPermission('view_employees')) {
+        if (! $user->isAdmin() && ! $user->hasPermission('view_employees')) {
             abort(403, 'Unauthorized access to employee details.');
         }
 
@@ -148,7 +148,7 @@ class EmployeeController extends Controller
      */
     public function edit(Employee $employee): View
     {
-        if (!Auth::user()->isAdmin()) {
+        if (! Auth::user()->isAdmin()) {
             abort(403, 'Only administrators can edit employee details.');
         }
 
@@ -166,7 +166,7 @@ class EmployeeController extends Controller
      */
     public function update(Request $request, Employee $employee): RedirectResponse
     {
-        if (!Auth::user()->isAdmin()) {
+        if (! Auth::user()->isAdmin()) {
             abort(403, 'Only administrators can update employee details.');
         }
 
@@ -195,7 +195,7 @@ class EmployeeController extends Controller
 
             ActivityLog::log(
                 'update_employee_wage',
-                "Updated wage for {$employee->name} from LKR " . number_format($oldWage, 2) . " to LKR " . number_format($newWage, 2) . " effective {$effectiveFrom}",
+                "Updated wage for {$employee->name} from LKR ".number_format($oldWage, 2).' to LKR '.number_format($newWage, 2)." effective {$effectiveFrom}",
                 'Payroll'
             );
         }
@@ -226,11 +226,11 @@ class EmployeeController extends Controller
      */
     public function toggleStatus(Employee $employee): RedirectResponse
     {
-        if (!Auth::user()->isAdmin()) {
+        if (! Auth::user()->isAdmin()) {
             abort(403, 'Only administrators can change employee status.');
         }
 
-        $employee->is_active = !$employee->is_active;
+        $employee->is_active = ! $employee->is_active;
         $employee->save();
 
         $statusStr = $employee->is_active ? 'activated' : 'deactivated';

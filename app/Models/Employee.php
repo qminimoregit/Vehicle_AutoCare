@@ -113,12 +113,13 @@ class Employee extends Model
     public static function generateNextEmployeeNumber(): string
     {
         $latest = static::orderByDesc('id')->first();
-        if (!$latest) {
+        if (! $latest) {
             return 'EMP-0001';
         }
 
         if (preg_match('/EMP-(\d+)/i', $latest->employee_number, $matches)) {
             $next = ((int) $matches[1]) + 1;
+
             return sprintf('EMP-%04d', $next);
         }
 
@@ -130,4 +131,3 @@ class Employee extends Model
         return $this->belongsTo(Branch::class, 'branch_id');
     }
 }
-

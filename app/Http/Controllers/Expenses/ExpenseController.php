@@ -8,7 +8,6 @@ use App\Models\Employee;
 use App\Models\EmployeeAdvance;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
-use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -26,7 +25,7 @@ class ExpenseController extends Controller
     public function index(Request $request): View
     {
         $user = Auth::user();
-        if (!$user->isAdmin() && !$user->hasPermission('view_expenses')) {
+        if (! $user->isAdmin() && ! $user->hasPermission('view_expenses')) {
             abort(403, 'Unauthorized access to expense records.');
         }
 
@@ -46,7 +45,7 @@ class ExpenseController extends Controller
 
         $query = Expense::with(['category', 'employee', 'advance', 'creator']);
 
-        if (!empty($search)) {
+        if (! empty($search)) {
             $query->where(function ($q) use ($search) {
                 $q->where('expense_number', 'like', "%{$search}%")
                     ->orWhere('description', 'like', "%{$search}%")
@@ -58,15 +57,15 @@ class ExpenseController extends Controller
             });
         }
 
-        if (!empty($categoryId)) {
+        if (! empty($categoryId)) {
             $query->where('category_id', $categoryId);
         }
 
-        if (!empty($expenseType) && $expenseType !== 'all') {
+        if (! empty($expenseType) && $expenseType !== 'all') {
             $query->where('expense_type', $expenseType);
         }
 
-        if (!empty($paymentMethod) && $paymentMethod !== 'all') {
+        if (! empty($paymentMethod) && $paymentMethod !== 'all') {
             $query->where('payment_method', $paymentMethod);
         }
 
@@ -76,15 +75,15 @@ class ExpenseController extends Controller
             $query->where('status', Expense::STATUS_VOIDED);
         }
 
-        if (!empty($fromDate)) {
+        if (! empty($fromDate)) {
             $query->whereDate('expense_date', '>=', $fromDate);
         }
 
-        if (!empty($toDate)) {
+        if (! empty($toDate)) {
             $query->whereDate('expense_date', '<=', $toDate);
         }
 
-        if (!empty($month)) {
+        if (! empty($month)) {
             $query->where('related_month', $month);
         }
 
@@ -128,7 +127,7 @@ class ExpenseController extends Controller
     public function createStaff(): View
     {
         $user = Auth::user();
-        if (!$user->isAdmin() && !$user->hasPermission('create_expenses')) {
+        if (! $user->isAdmin() && ! $user->hasPermission('create_expenses')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -145,7 +144,7 @@ class ExpenseController extends Controller
     public function storeStaff(Request $request): RedirectResponse
     {
         $user = Auth::user();
-        if (!$user->isAdmin() && !$user->hasPermission('create_expenses')) {
+        if (! $user->isAdmin() && ! $user->hasPermission('create_expenses')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -228,13 +227,13 @@ class ExpenseController extends Controller
 
         ActivityLog::log(
             'create_staff_expense',
-            "Recorded staff expense {$expenseNumber} for {$employee->name} (LKR " . number_format($validated['amount'], 2) . ")",
+            "Recorded staff expense {$expenseNumber} for {$employee->name} (LKR ".number_format($validated['amount'], 2).')',
             'Expenses'
         );
 
-        $successMsg = "Staff expense {$expenseNumber} of LKR " . number_format($validated['amount'], 2) . " saved successfully.";
+        $successMsg = "Staff expense {$expenseNumber} of LKR ".number_format($validated['amount'], 2).' saved successfully.';
         if ($employeeAdvanceId) {
-            $successMsg .= " Linked to Employee Salary Advance for payroll deduction.";
+            $successMsg .= ' Linked to Employee Salary Advance for payroll deduction.';
         }
 
         return redirect()->route('expenses.records.index')->with('success', $successMsg);
@@ -246,7 +245,7 @@ class ExpenseController extends Controller
     public function createShop(): View
     {
         $user = Auth::user();
-        if (!$user->isAdmin() && !$user->hasPermission('create_expenses')) {
+        if (! $user->isAdmin() && ! $user->hasPermission('create_expenses')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -265,7 +264,7 @@ class ExpenseController extends Controller
     public function storeShop(Request $request): RedirectResponse
     {
         $user = Auth::user();
-        if (!$user->isAdmin() && !$user->hasPermission('create_expenses')) {
+        if (! $user->isAdmin() && ! $user->hasPermission('create_expenses')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -315,12 +314,12 @@ class ExpenseController extends Controller
 
         ActivityLog::log(
             'create_shop_expense',
-            "Recorded shop expense {$expenseNumber} for {$category->name} (LKR " . number_format($validated['amount'], 2) . ")",
+            "Recorded shop expense {$expenseNumber} for {$category->name} (LKR ".number_format($validated['amount'], 2).')',
             'Expenses'
         );
 
         return redirect()->route('expenses.records.index')
-            ->with('success', "Shop expense {$expenseNumber} of LKR " . number_format($validated['amount'], 2) . " saved successfully.");
+            ->with('success', "Shop expense {$expenseNumber} of LKR ".number_format($validated['amount'], 2).' saved successfully.');
     }
 
     /**
@@ -329,7 +328,7 @@ class ExpenseController extends Controller
     public function show(Expense $expense): View
     {
         $user = Auth::user();
-        if (!$user->isAdmin() && !$user->hasPermission('view_expenses')) {
+        if (! $user->isAdmin() && ! $user->hasPermission('view_expenses')) {
             abort(403, 'Unauthorized access.');
         }
 
@@ -343,7 +342,7 @@ class ExpenseController extends Controller
      */
     public function edit(Expense $expense): View
     {
-        if (!Auth::user()->isAdmin()) {
+        if (! Auth::user()->isAdmin()) {
             abort(403, 'Only administrators can edit financial records.');
         }
 
@@ -363,7 +362,7 @@ class ExpenseController extends Controller
      */
     public function update(Request $request, Expense $expense): RedirectResponse
     {
-        if (!Auth::user()->isAdmin()) {
+        if (! Auth::user()->isAdmin()) {
             abort(403, 'Only administrators can edit financial records.');
         }
 
@@ -395,7 +394,7 @@ class ExpenseController extends Controller
         $oldAmount = (float) $expense->amount;
         $newAmount = (float) $validated['amount'];
 
-        DB::transaction(function () use ($expense, $validated, $receiptPath, $newAmount, $oldAmount) {
+        DB::transaction(function () use ($expense, $validated, $receiptPath, $newAmount) {
             $expense->update([
                 'category_id' => $validated['category_id'],
                 'expense_date' => $validated['expense_date'],
@@ -433,7 +432,7 @@ class ExpenseController extends Controller
      */
     public function void(Request $request, Expense $expense): RedirectResponse
     {
-        if (!Auth::user()->isAdmin()) {
+        if (! Auth::user()->isAdmin()) {
             abort(403, 'Only administrators can void financial records.');
         }
 
@@ -470,7 +469,7 @@ class ExpenseController extends Controller
 
         ActivityLog::log(
             'void_expense',
-            "Voided expense {$expense->expense_number} of LKR " . number_format($expense->amount, 2) . ". Reason: {$validated['void_reason']}",
+            "Voided expense {$expense->expense_number} of LKR ".number_format($expense->amount, 2).". Reason: {$validated['void_reason']}",
             'Expenses'
         );
 
@@ -483,15 +482,16 @@ class ExpenseController extends Controller
     public function downloadReceipt(Expense $expense): BinaryFileResponse|RedirectResponse
     {
         $user = Auth::user();
-        if (!$user->isAdmin() && !$user->hasPermission('view_expenses')) {
+        if (! $user->isAdmin() && ! $user->hasPermission('view_expenses')) {
             abort(403, 'Unauthorized access.');
         }
 
-        if (!$expense->receipt_path || !Storage::disk('public')->exists($expense->receipt_path)) {
+        if (! $expense->receipt_path || ! Storage::disk('public')->exists($expense->receipt_path)) {
             return back()->with('error', 'Receipt file not found.');
         }
 
         $filePath = Storage::disk('public')->path($expense->receipt_path);
+
         return response()->file($filePath);
     }
 
@@ -500,7 +500,7 @@ class ExpenseController extends Controller
      */
     public function export(Request $request): StreamedResponse
     {
-        if (!Auth::user()->isAdmin()) {
+        if (! Auth::user()->isAdmin()) {
             abort(403, 'Unauthorized access.');
         }
 
@@ -514,19 +514,19 @@ class ExpenseController extends Controller
 
         $query = Expense::with(['category', 'employee']);
 
-        if (!empty($search)) {
+        if (! empty($search)) {
             $query->where(function ($q) use ($search) {
                 $q->where('expense_number', 'like', "%{$search}%")
                     ->orWhere('description', 'like', "%{$search}%");
             });
         }
-        if (!empty($categoryId)) {
+        if (! empty($categoryId)) {
             $query->where('category_id', $categoryId);
         }
-        if (!empty($expenseType) && $expenseType !== 'all') {
+        if (! empty($expenseType) && $expenseType !== 'all') {
             $query->where('expense_type', $expenseType);
         }
-        if (!empty($paymentMethod) && $paymentMethod !== 'all') {
+        if (! empty($paymentMethod) && $paymentMethod !== 'all') {
             $query->where('payment_method', $paymentMethod);
         }
         if ($status === 'active') {
@@ -534,10 +534,10 @@ class ExpenseController extends Controller
         } elseif ($status === 'voided') {
             $query->where('status', Expense::STATUS_VOIDED);
         }
-        if (!empty($fromDate)) {
+        if (! empty($fromDate)) {
             $query->whereDate('expense_date', '>=', $fromDate);
         }
-        if (!empty($toDate)) {
+        if (! empty($toDate)) {
             $query->whereDate('expense_date', '<=', $toDate);
         }
 
@@ -545,7 +545,7 @@ class ExpenseController extends Controller
 
         $headers = [
             'Content-type' => 'text/csv',
-            'Content-Disposition' => 'attachment; filename=Expense_Records_' . date('Y-m-d') . '.csv',
+            'Content-Disposition' => 'attachment; filename=Expense_Records_'.date('Y-m-d').'.csv',
             'Pragma' => 'no-cache',
             'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
             'Expires' => '0',

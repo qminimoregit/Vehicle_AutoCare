@@ -5,9 +5,7 @@ namespace Tests\Feature;
 use App\Models\Employee;
 use App\Models\EmployeeAdvance;
 use App\Models\EmployeeAttendance;
-use App\Models\EmployeeWageRate;
 use App\Models\PayrollItem;
-use App\Models\PayrollPayment;
 use App\Models\PayrollPeriod;
 use App\Models\User;
 use Carbon\Carbon;
@@ -19,6 +17,7 @@ class EmployeeAndPayrollStage4Test extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $staff;
 
     protected function setUp(): void
@@ -136,7 +135,7 @@ class EmployeeAndPayrollStage4Test extends TestCase
 
         // Verify two wage rate records exist
         $this->assertCount(2, $employee->wageRates);
-        
+
         // Old rate should be capped at 2026-05-31
         $oldRate = $employee->wageRates()->where('daily_wage', 3000.00)->first();
         $this->assertNotNull($oldRate);

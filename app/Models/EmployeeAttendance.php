@@ -13,9 +13,13 @@ class EmployeeAttendance extends Model
     protected $table = 'employee_attendance';
 
     public const STATUS_FULL_DAY = 'full_day';
+
     public const STATUS_HALF_DAY = 'half_day';
+
     public const STATUS_ABSENT = 'absent';
+
     public const STATUS_LEAVE = 'leave';
+
     public const STATUS_DAY_OFF = 'day_off';
 
     protected $fillable = [

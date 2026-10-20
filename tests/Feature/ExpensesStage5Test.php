@@ -10,7 +10,6 @@ use App\Models\ExpenseCategory;
 use App\Models\PayrollItem;
 use App\Models\PayrollPeriod;
 use App\Models\User;
-use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -21,7 +20,9 @@ class ExpensesStage5Test extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $staff;
+
     protected Employee $employee;
 
     protected function setUp(): void
@@ -498,7 +499,7 @@ class ExpensesStage5Test extends TestCase
 
         $response = $this->actingAs($this->admin)->get(route('expenses.records.export'));
         $response->assertStatus(200);
-        $response->assertHeader('Content-Disposition', 'attachment; filename=Expense_Records_' . date('Y-m-d') . '.csv');
+        $response->assertHeader('Content-Disposition', 'attachment; filename=Expense_Records_'.date('Y-m-d').'.csv');
     }
 
     public function test_staff_cannot_edit_or_void_expenses(): void

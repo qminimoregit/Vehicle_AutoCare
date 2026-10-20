@@ -26,7 +26,7 @@ class SalaryController extends Controller
     private function authorizeSalaryView(): void
     {
         $user = Auth::user();
-        if (!$user || (!$user->isAdmin() && !$user->hasPermission('view_salary'))) {
+        if (! $user || (! $user->isAdmin() && ! $user->hasPermission('view_salary'))) {
             abort(403, 'Unauthorized access to employee salary and payroll records.');
         }
     }
@@ -34,7 +34,7 @@ class SalaryController extends Controller
     private function authorizeAdmin(): void
     {
         $user = Auth::user();
-        if (!$user || !$user->isAdmin()) {
+        if (! $user || ! $user->isAdmin()) {
             abort(403, 'Administrator access required for this payroll operation.');
         }
     }
@@ -64,7 +64,7 @@ class SalaryController extends Controller
         if ($request->has('generate') || $request->input('action') === 'generate') {
             $this->authorizeAdmin();
 
-            if ($period && !$period->isDraft()) {
+            if ($period && ! $period->isDraft()) {
                 return redirect()->route('payroll.salary.index', ['year' => $year, 'month' => $month])
                     ->with('error', 'Approved or paid payroll periods cannot be regenerated.');
             }
@@ -90,7 +90,7 @@ class SalaryController extends Controller
             $cursor = $periodDate->copy()->startOfMonth();
 
             while ($cursor->lessThanOrEqualTo($checkUntil)) {
-                if (!$cursor->isSunday()) {
+                if (! $cursor->isSunday()) {
                     $dayStr = $cursor->toDateString();
                     $markedCount = EmployeeAttendance::where('attendance_date', $dayStr)->count();
                     if ($markedCount < $activeEmpCount) {
@@ -319,7 +319,7 @@ class SalaryController extends Controller
     {
         $this->authorizeAdmin();
 
-        if (!$payrollItem->period->isDraft()) {
+        if (! $payrollItem->period->isDraft()) {
             return back()->with('error', 'Adjustments can only be updated when payroll is in draft status.');
         }
 
@@ -354,7 +354,7 @@ class SalaryController extends Controller
     {
         $this->authorizeAdmin();
 
-        if (!$period->isDraft()) {
+        if (! $period->isDraft()) {
             return back()->with('error', 'This payroll period is already approved.');
         }
 
@@ -392,7 +392,7 @@ class SalaryController extends Controller
 
         ActivityLog::log(
             'approve_payroll',
-            "Approved payroll for {$period->formatted_period} (Total Net: LKR " . number_format($period->total_net, 2) . ")",
+            "Approved payroll for {$period->formatted_period} (Total Net: LKR ".number_format($period->total_net, 2).')',
             'Payroll'
         );
 
@@ -416,7 +416,7 @@ class SalaryController extends Controller
         }
 
         $validated = $request->validate([
-            'amount' => 'required|numeric|min:0.01|max:' . $payrollItem->balance_due,
+            'amount' => 'required|numeric|min:0.01|max:'.$payrollItem->balance_due,
             'payment_date' => 'required|date',
             'payment_method' => 'required|string|in:cash,bank_transfer,cheque,other',
             'reference_number' => 'nullable|string|max:100',
@@ -442,11 +442,11 @@ class SalaryController extends Controller
 
         ActivityLog::log(
             'record_salary_payment',
-            "Recorded salary payment of LKR " . number_format($validated['amount'], 2) . " for {$payrollItem->employee_name_snapshot} ({$payrollItem->period->formatted_period})",
+            'Recorded salary payment of LKR '.number_format($validated['amount'], 2)." for {$payrollItem->employee_name_snapshot} ({$payrollItem->period->formatted_period})",
             'Payroll'
         );
 
-        return back()->with('success', "Payment of LKR " . number_format($validated['amount'], 2) . " recorded successfully ({$paymentNumber}).");
+        return back()->with('success', 'Payment of LKR '.number_format($validated['amount'], 2)." recorded successfully ({$paymentNumber}).");
     }
 
     /**
@@ -481,10 +481,10 @@ class SalaryController extends Controller
 
         ActivityLog::log(
             'record_advance',
-            "Recorded salary advance {$advanceNumber} of LKR " . number_format($advance->amount, 2) . " for {$employee->name}",
+            "Recorded salary advance {$advanceNumber} of LKR ".number_format($advance->amount, 2)." for {$employee->name}",
             'Payroll'
         );
 
-        return back()->with('success', "Salary advance {$advanceNumber} of LKR " . number_format($advance->amount, 2) . " recorded for {$employee->name}.");
+        return back()->with('success', "Salary advance {$advanceNumber} of LKR ".number_format($advance->amount, 2)." recorded for {$employee->name}.");
     }
 }

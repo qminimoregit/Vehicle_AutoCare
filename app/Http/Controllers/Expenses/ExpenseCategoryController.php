@@ -18,7 +18,7 @@ class ExpenseCategoryController extends Controller
     public function index(Request $request): View
     {
         $user = Auth::user();
-        if (!$user->isAdmin()) {
+        if (! $user->isAdmin()) {
             abort(403, 'Unauthorized access to expense categories.');
         }
 
@@ -30,7 +30,7 @@ class ExpenseCategoryController extends Controller
         $search = $request->input('search');
         $query = ExpenseCategory::withCount('expenses');
 
-        if (!empty($search)) {
+        if (! empty($search)) {
             $query->where('name', 'like', "%{$search}%");
         }
 
@@ -44,7 +44,7 @@ class ExpenseCategoryController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        if (!Auth::user()->isAdmin()) {
+        if (! Auth::user()->isAdmin()) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -75,12 +75,12 @@ class ExpenseCategoryController extends Controller
      */
     public function update(Request $request, ExpenseCategory $category): RedirectResponse
     {
-        if (!Auth::user()->isAdmin()) {
+        if (! Auth::user()->isAdmin()) {
             abort(403, 'Unauthorized action.');
         }
 
         $validated = $request->validate([
-            'name' => 'required|string|max:100|unique:expense_categories,name,' . $category->id,
+            'name' => 'required|string|max:100|unique:expense_categories,name,'.$category->id,
             'is_active' => 'required|boolean',
         ], [
             'name.required' => 'Please enter a category name.',
@@ -107,11 +107,11 @@ class ExpenseCategoryController extends Controller
      */
     public function toggleStatus(ExpenseCategory $category): RedirectResponse
     {
-        if (!Auth::user()->isAdmin()) {
+        if (! Auth::user()->isAdmin()) {
             abort(403, 'Unauthorized action.');
         }
 
-        $category->is_active = !$category->is_active;
+        $category->is_active = ! $category->is_active;
         $category->save();
 
         $statusStr = $category->is_active ? 'activated' : 'deactivated';
