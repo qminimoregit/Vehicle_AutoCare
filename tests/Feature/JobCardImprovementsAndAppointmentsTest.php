@@ -701,4 +701,27 @@ class JobCardImprovementsAndAppointmentsTest extends TestCase
             'status' => 'scheduled',
         ]);
     }
+
+    /**
+     * Test layout order: Appointment Header -> Appointment List -> Appointment Calendar
+     */
+    public function test_appointment_page_layout_order_list_above_calendar(): void
+    {
+        $this->actingAs($this->admin);
+
+        $response = $this->get(route('appointments.index'));
+        $response->assertStatus(200);
+
+        $content = $response->getContent();
+        $posHeader = strpos($content, 'Appointment Management');
+        $posList = strpos($content, '<!-- 1. APPOINTMENT LIST & QUICK FILTERS -->');
+        $posCalendar = strpos($content, '<!-- 2. APPOINTMENT CALENDAR CARD -->');
+
+        $this->assertNotFalse($posHeader, 'Appointment Management header must be present');
+        $this->assertNotFalse($posList, 'Appointment List section must be present');
+        $this->assertNotFalse($posCalendar, 'Appointment Calendar section must be present');
+
+        $this->assertTrue($posHeader < $posList, 'Header must appear before Appointment List');
+        $this->assertTrue($posList < $posCalendar, 'Appointment List must appear ABOVE the Calendar');
+    }
 }

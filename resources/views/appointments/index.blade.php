@@ -262,7 +262,215 @@
         </div>
     </div>
 
-    <!-- 1. APPOINTMENT CALENDAR CARD -->
+    <!-- 1. APPOINTMENT LIST & QUICK FILTERS -->
+    <div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
+        <!-- List Header & Filter Tabs -->
+        <div class="px-5 py-4 border-b border-gray-100 bg-slate-50/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <!-- Filter Tabs -->
+            <div class="flex items-center space-x-2">
+                <a 
+                    href="{{ route('appointments.index', ['filter' => 'today']) }}" 
+                    class="px-3 py-1.5 text-xs font-bold rounded-lg transition {{ $filter === 'today' ? 'bg-[#0B1849] text-white shadow-xs' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50' }}"
+                >
+                    Today ({{ $counts['today'] }})
+                </a>
+                <a 
+                    href="{{ route('appointments.index', ['filter' => 'upcoming']) }}" 
+                    class="px-3 py-1.5 text-xs font-bold rounded-lg transition {{ $filter === 'upcoming' ? 'bg-[#0B1849] text-white shadow-xs' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50' }}"
+                >
+                    Upcoming ({{ $counts['upcoming'] }})
+                </a>
+                <a 
+                    href="{{ route('appointments.index', ['filter' => 'all']) }}" 
+                    class="px-3 py-1.5 text-xs font-bold rounded-lg transition {{ $filter === 'all' ? 'bg-[#0B1849] text-white shadow-xs' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50' }}"
+                >
+                    All ({{ $counts['all'] }})
+                </a>
+            </div>
+
+            <!-- Search Form -->
+            <form action="{{ route('appointments.index') }}" method="GET" class="w-full sm:w-72">
+                <input type="hidden" name="filter" value="{{ $filter }}">
+                <div class="relative">
+                    <input 
+                        type="text" 
+                        name="search" 
+                        value="{{ $search }}"
+                        placeholder="Search vehicle, customer, or phone..." 
+                        class="block w-full py-2 pl-9 pr-3 text-xs text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white min-h-[36px]"
+                    >
+                    <svg class="w-4 h-4 text-gray-400 absolute left-2.5 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                </div>
+            </form>
+        </div>
+
+        <!-- Appointment Table -->
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-100 text-left text-xs sm:text-sm">
+                <thead class="bg-gray-50/50 text-gray-500 font-bold uppercase text-[10px] tracking-wider">
+                    <tr>
+                        <th class="px-5 py-3">Scheduled Time</th>
+                        <th class="px-4 py-3">Vehicle Number</th>
+                        <th class="px-4 py-3">Customer</th>
+                        <th class="px-4 py-3">Service</th>
+                        <th class="px-4 py-3 text-center">Status</th>
+                        <th class="px-4 py-3 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50 text-gray-800">
+                    @forelse($appointments as $apt)
+                        <tr class="hover:bg-slate-50/60 transition">
+                            <!-- Time & Date -->
+                            <td class="px-5 py-3.5 whitespace-nowrap">
+                                <div class="font-bold text-gray-900">{{ $apt->appointment_time }}</div>
+                                <div class="text-[11px] text-gray-500">{{ $apt->appointment_date ? $apt->appointment_date->format('M d, Y') : '' }}</div>
+                            </td>
+
+                            <!-- Vehicle -->
+                            <td class="px-4 py-3.5 whitespace-nowrap">
+                                <div class="font-black text-gray-900 tracking-tight">{{ $apt->vehicle_number }}</div>
+                                <div class="text-[11px] text-gray-500">{{ $apt->vehicleType?->name ?? 'Vehicle' }}</div>
+                            </td>
+
+                            <!-- Customer -->
+                            <td class="px-4 py-3.5">
+                                <div class="font-semibold text-gray-900">{{ $apt->customer_name }}</div>
+                                <div class="text-[11px] text-gray-500 font-mono">{{ $apt->mobile_number }}</div>
+                            </td>
+
+                            <!-- Service -->
+                            <td class="px-4 py-3.5">
+                                <div class="font-medium text-gray-900">{{ $apt->service?->name ?? $apt->service_name ?? 'General Service' }}</div>
+                                @if($apt->notes)
+                                    <div class="text-[11px] text-gray-500 italic truncate max-w-xs">{{ $apt->notes }}</div>
+                                @endif
+                            </td>
+
+                            <!-- Status -->
+                            <td class="px-4 py-3.5 text-center whitespace-nowrap">
+                                @if($apt->status === 'scheduled')
+                                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800">Scheduled</span>
+                                @elseif($apt->status === 'confirmed')
+                                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-teal-100 text-teal-800">Confirmed</span>
+                                @elseif($apt->status === 'arrived')
+                                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800">Arrived</span>
+                                @elseif($apt->status === 'in_service')
+                                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800">In Service</span>
+                                @elseif($apt->status === 'completed')
+                                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">Completed</span>
+                                @elseif($apt->status === 'cancelled')
+                                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-100 text-red-800">Cancelled</span>
+                                @elseif($apt->status === 'no_show')
+                                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-gray-100 text-gray-800">No Show</span>
+                                @endif
+                            </td>
+
+                            <!-- Actions -->
+                            <td class="px-4 py-3.5 text-right whitespace-nowrap">
+                                <div class="inline-flex items-center space-x-1.5">
+                                    <!-- View Details Button -->
+                                    <button 
+                                        type="button" 
+                                        @click="viewEvent({
+                                            id: {{ $apt->id }},
+                                            appointment_number: '{{ $apt->appointment_number }}',
+                                            title: '{{ $apt->appointment_time }} – {{ $apt->vehicle_number }} – {{ addslashes($apt->service?->name ?? $apt->service_name ?? 'Service') }}',
+                                            date: '{{ $apt->appointment_date ? $apt->appointment_date->format('Y-m-d') : '' }}',
+                                            time: '{{ $apt->appointment_time }}',
+                                            vehicle_number: '{{ $apt->vehicle_number }}',
+                                            customer_name: '{{ addslashes($apt->customer_name) }}',
+                                            mobile_number: '{{ $apt->mobile_number }}',
+                                            service_name: '{{ addslashes($apt->service?->name ?? $apt->service_name ?? 'General Service') }}',
+                                            service_id: {{ $apt->service_id ?? 'null' }},
+                                            vehicle_type_name: '{{ addslashes($apt->vehicleType?->name ?? 'Vehicle') }}',
+                                            vehicle_type_id: {{ $apt->vehicle_type_id ?? 'null' }},
+                                            status: '{{ $apt->status }}',
+                                            notes: '{{ addslashes($apt->notes ?? '') }}',
+                                            job_card_id: {{ $apt->job_card_id ?? 'null' }},
+                                            job_card_number: '{{ $apt->jobCard?->job_number ?? '' }}',
+                                            job_card_url: '{{ $apt->job_card_id ? route('operations.job-cards.show', $apt->job_card_id) : '' }}'
+                                        })"
+                                        class="px-2.5 py-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-semibold rounded shadow-xs transition cursor-pointer"
+                                    >
+                                        View
+                                    </button>
+
+                                    <!-- Customer Arrived Action -->
+                                    @if(in_array($apt->status, ['scheduled', 'confirmed']))
+                                        <form action="{{ route('appointments.arrive', $apt) }}" method="POST" class="inline">
+                                            @csrf
+                                            @method('PATCH')
+                                            <button 
+                                                type="submit" 
+                                                class="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded shadow-xs transition cursor-pointer"
+                                                title="Mark customer as arrived"
+                                            >
+                                                Arrived
+                                            </button>
+                                        </form>
+                                    @endif
+
+                                    <!-- Create Job Card or Open Job Card -->
+                                    @if($apt->job_card_id && $apt->jobCard)
+                                        <a 
+                                            href="{{ route('operations.job-cards.show', $apt->jobCard) }}" 
+                                            class="px-2.5 py-1 bg-[#0B1849] hover:bg-[#15286e] text-white text-xs font-bold rounded shadow-xs transition"
+                                        >
+                                            Open Job Card
+                                        </a>
+                                    @elseif($apt->status !== 'cancelled')
+                                        <form action="{{ route('appointments.create-job-card', $apt) }}" method="POST" class="inline">
+                                            @csrf
+                                            <button 
+                                                type="submit" 
+                                                class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded shadow-xs transition cursor-pointer"
+                                                title="Create Job Card from this appointment"
+                                            >
+                                                Create Job Card
+                                            </button>
+                                        </form>
+                                    @endif
+
+                                    <!-- Cancel Button -->
+                                    @if(!in_array($apt->status, ['cancelled', 'completed', 'in_service']))
+                                        <form action="{{ route('appointments.cancel', $apt) }}" method="POST" class="inline" onsubmit="return confirm('Cancel this appointment?');">
+                                            @csrf
+                                            @method('PATCH')
+                                            <button 
+                                                type="submit" 
+                                                class="p-1 text-gray-400 hover:text-red-600 transition"
+                                                title="Cancel Appointment"
+                                            >
+                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                            </button>
+                                        </form>
+                                    @endif
+                                </div>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="6" class="px-5 py-8 text-center text-xs sm:text-sm text-gray-400">
+                                No appointments found for the selected filter.
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+
+        @if($appointments->hasPages())
+            <div class="px-5 py-3 border-t border-gray-100 bg-slate-50/50">
+                {{ $appointments->links() }}
+            </div>
+        @endif
+    </div>
+
+    <!-- 2. APPOINTMENT CALENDAR CARD -->
     <div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
         <!-- Calendar Controls Header -->
         <div class="px-5 py-4 border-b border-gray-100 bg-slate-50/70 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -498,214 +706,6 @@
                 </div>
             </div>
         </div>
-    </div>
-
-    <!-- 2. APPOINTMENT LIST & QUICK FILTERS -->
-    <div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
-        <!-- List Header & Filter Tabs -->
-        <div class="px-5 py-4 border-b border-gray-100 bg-slate-50/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <!-- Filter Tabs -->
-            <div class="flex items-center space-x-2">
-                <a 
-                    href="{{ route('appointments.index', ['filter' => 'today']) }}" 
-                    class="px-3 py-1.5 text-xs font-bold rounded-lg transition {{ $filter === 'today' ? 'bg-[#0B1849] text-white shadow-xs' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50' }}"
-                >
-                    Today ({{ $counts['today'] }})
-                </a>
-                <a 
-                    href="{{ route('appointments.index', ['filter' => 'upcoming']) }}" 
-                    class="px-3 py-1.5 text-xs font-bold rounded-lg transition {{ $filter === 'upcoming' ? 'bg-[#0B1849] text-white shadow-xs' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50' }}"
-                >
-                    Upcoming ({{ $counts['upcoming'] }})
-                </a>
-                <a 
-                    href="{{ route('appointments.index', ['filter' => 'all']) }}" 
-                    class="px-3 py-1.5 text-xs font-bold rounded-lg transition {{ $filter === 'all' ? 'bg-[#0B1849] text-white shadow-xs' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50' }}"
-                >
-                    All ({{ $counts['all'] }})
-                </a>
-            </div>
-
-            <!-- Search Form -->
-            <form action="{{ route('appointments.index') }}" method="GET" class="w-full sm:w-72">
-                <input type="hidden" name="filter" value="{{ $filter }}">
-                <div class="relative">
-                    <input 
-                        type="text" 
-                        name="search" 
-                        value="{{ $search }}"
-                        placeholder="Search vehicle, customer, or phone..." 
-                        class="block w-full py-2 pl-9 pr-3 text-xs text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white min-h-[36px]"
-                    >
-                    <svg class="w-4 h-4 text-gray-400 absolute left-2.5 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                </div>
-            </form>
-        </div>
-
-        <!-- Appointment Table -->
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-100 text-left text-xs sm:text-sm">
-                <thead class="bg-gray-50/50 text-gray-500 font-bold uppercase text-[10px] tracking-wider">
-                    <tr>
-                        <th class="px-5 py-3">Scheduled Time</th>
-                        <th class="px-4 py-3">Vehicle Number</th>
-                        <th class="px-4 py-3">Customer</th>
-                        <th class="px-4 py-3">Service</th>
-                        <th class="px-4 py-3 text-center">Status</th>
-                        <th class="px-4 py-3 text-right">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-50 text-gray-800">
-                    @forelse($appointments as $apt)
-                        <tr class="hover:bg-slate-50/60 transition">
-                            <!-- Time & Date -->
-                            <td class="px-5 py-3.5 whitespace-nowrap">
-                                <div class="font-bold text-gray-900">{{ $apt->appointment_time }}</div>
-                                <div class="text-[11px] text-gray-500">{{ $apt->appointment_date ? $apt->appointment_date->format('M d, Y') : '' }}</div>
-                            </td>
-
-                            <!-- Vehicle -->
-                            <td class="px-4 py-3.5 whitespace-nowrap">
-                                <div class="font-black text-gray-900 tracking-tight">{{ $apt->vehicle_number }}</div>
-                                <div class="text-[11px] text-gray-500">{{ $apt->vehicleType?->name ?? 'Vehicle' }}</div>
-                            </td>
-
-                            <!-- Customer -->
-                            <td class="px-4 py-3.5">
-                                <div class="font-semibold text-gray-900">{{ $apt->customer_name }}</div>
-                                <div class="text-[11px] text-gray-500 font-mono">{{ $apt->mobile_number }}</div>
-                            </td>
-
-                            <!-- Service -->
-                            <td class="px-4 py-3.5">
-                                <div class="font-medium text-gray-900">{{ $apt->service?->name ?? $apt->service_name ?? 'General Service' }}</div>
-                                @if($apt->notes)
-                                    <div class="text-[11px] text-gray-500 italic truncate max-w-xs">{{ $apt->notes }}</div>
-                                @endif
-                            </td>
-
-                            <!-- Status -->
-                            <td class="px-4 py-3.5 text-center whitespace-nowrap">
-                                @if($apt->status === 'scheduled')
-                                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800">Scheduled</span>
-                                @elseif($apt->status === 'confirmed')
-                                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-teal-100 text-teal-800">Confirmed</span>
-                                @elseif($apt->status === 'arrived')
-                                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800">Arrived</span>
-                                @elseif($apt->status === 'in_service')
-                                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800">In Service</span>
-                                @elseif($apt->status === 'completed')
-                                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">Completed</span>
-                                @elseif($apt->status === 'cancelled')
-                                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-100 text-red-800">Cancelled</span>
-                                @elseif($apt->status === 'no_show')
-                                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-gray-100 text-gray-800">No Show</span>
-                                @endif
-                            </td>
-
-                            <!-- Actions -->
-                            <td class="px-4 py-3.5 text-right whitespace-nowrap">
-                                <div class="inline-flex items-center space-x-1.5">
-                                    <!-- View Details Button -->
-                                    <button 
-                                        type="button" 
-                                        @click="viewEvent({
-                                            id: {{ $apt->id }},
-                                            appointment_number: '{{ $apt->appointment_number }}',
-                                            title: '{{ $apt->appointment_time }} – {{ $apt->vehicle_number }} – {{ addslashes($apt->service?->name ?? $apt->service_name ?? 'Service') }}',
-                                            date: '{{ $apt->appointment_date ? $apt->appointment_date->format('Y-m-d') : '' }}',
-                                            time: '{{ $apt->appointment_time }}',
-                                            vehicle_number: '{{ $apt->vehicle_number }}',
-                                            customer_name: '{{ addslashes($apt->customer_name) }}',
-                                            mobile_number: '{{ $apt->mobile_number }}',
-                                            service_name: '{{ addslashes($apt->service?->name ?? $apt->service_name ?? 'General Service') }}',
-                                            service_id: {{ $apt->service_id ?? 'null' }},
-                                            vehicle_type_name: '{{ addslashes($apt->vehicleType?->name ?? 'Vehicle') }}',
-                                            vehicle_type_id: {{ $apt->vehicle_type_id ?? 'null' }},
-                                            status: '{{ $apt->status }}',
-                                            notes: '{{ addslashes($apt->notes ?? '') }}',
-                                            job_card_id: {{ $apt->job_card_id ?? 'null' }},
-                                            job_card_number: '{{ $apt->jobCard?->job_number ?? '' }}',
-                                            job_card_url: '{{ $apt->job_card_id ? route('operations.job-cards.show', $apt->job_card_id) : '' }}'
-                                        })"
-                                        class="px-2.5 py-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-semibold rounded shadow-xs transition cursor-pointer"
-                                    >
-                                        View
-                                    </button>
-
-                                    <!-- Customer Arrived Action -->
-                                    @if(in_array($apt->status, ['scheduled', 'confirmed']))
-                                        <form action="{{ route('appointments.arrive', $apt) }}" method="POST" class="inline">
-                                            @csrf
-                                            @method('PATCH')
-                                            <button 
-                                                type="submit" 
-                                                class="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded shadow-xs transition cursor-pointer"
-                                                title="Mark customer as arrived"
-                                            >
-                                                Arrived
-                                            </button>
-                                        </form>
-                                    @endif
-
-                                    <!-- Create Job Card or Open Job Card -->
-                                    @if($apt->job_card_id && $apt->jobCard)
-                                        <a 
-                                            href="{{ route('operations.job-cards.show', $apt->jobCard) }}" 
-                                            class="px-2.5 py-1 bg-[#0B1849] hover:bg-[#15286e] text-white text-xs font-bold rounded shadow-xs transition"
-                                        >
-                                            Open Job Card
-                                        </a>
-                                    @elseif($apt->status !== 'cancelled')
-                                        <form action="{{ route('appointments.create-job-card', $apt) }}" method="POST" class="inline">
-                                            @csrf
-                                            <button 
-                                                type="submit" 
-                                                class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded shadow-xs transition cursor-pointer"
-                                                title="Create Job Card from this appointment"
-                                            >
-                                                Create Job Card
-                                            </button>
-                                        </form>
-                                    @endif
-
-                                    <!-- Cancel Button -->
-                                    @if(!in_array($apt->status, ['cancelled', 'completed', 'in_service']))
-                                        <form action="{{ route('appointments.cancel', $apt) }}" method="POST" class="inline" onsubmit="return confirm('Cancel this appointment?');">
-                                            @csrf
-                                            @method('PATCH')
-                                            <button 
-                                                type="submit" 
-                                                class="p-1 text-gray-400 hover:text-red-600 transition"
-                                                title="Cancel Appointment"
-                                            >
-                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                                                </svg>
-                                            </button>
-                                        </form>
-                                    @endif
-                                </div>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="6" class="px-5 py-8 text-center text-xs sm:text-sm text-gray-400">
-                                No appointments found for the selected filter.
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-
-        @if($appointments->hasPages())
-            <div class="px-5 py-3 border-t border-gray-100 bg-slate-50/50">
-                {{ $appointments->links() }}
-            </div>
-        @endif
     </div>
 
     <!-- MODAL 1: NEW APPOINTMENT REGISTRATION -->
