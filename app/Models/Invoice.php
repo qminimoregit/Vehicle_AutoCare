@@ -35,12 +35,22 @@ class Invoice extends Model
         'notes',
         'terms_conditions',
         'customer_snapshot',
+        'cancellation_reason',
+        'cancelled_by',
+        'cancelled_at',
+        'original_invoice_date',
+        'date_changed_by',
+        'date_changed_at',
+        'date_change_reason',
         'created_by',
     ];
 
     protected $casts = [
         'invoice_date' => 'date',
         'due_date' => 'date',
+        'original_invoice_date' => 'date',
+        'cancelled_at' => 'datetime',
+        'date_changed_at' => 'datetime',
         'subtotal' => 'decimal:2',
         'discount_value' => 'decimal:2',
         'discount_amount' => 'decimal:2',
@@ -55,8 +65,8 @@ class Invoice extends Model
 
     public static function generateInvoiceNumber(): string
     {
-        $prefix = 'INV-' . date('Ym') . '-';
-        $lastInvoice = self::where('invoice_number', 'LIKE', $prefix . '%')
+        $prefix = 'INV-'.date('Ym').'-';
+        $lastInvoice = self::where('invoice_number', 'LIKE', $prefix.'%')
             ->orderBy('id', 'desc')
             ->first();
 
@@ -67,7 +77,7 @@ class Invoice extends Model
             $newSeq = '0001';
         }
 
-        return $prefix . $newSeq;
+        return $prefix.$newSeq;
     }
 
     public function customer()
@@ -85,6 +95,11 @@ class Invoice extends Model
         return $this->belongsTo(JobCard::class);
     }
 
+    public function directSale()
+    {
+        return $this->hasOne(DirectSale::class);
+    }
+
     public function items()
     {
         return $this->hasMany(InvoiceItem::class);
@@ -95,9 +110,24 @@ class Invoice extends Model
         return $this->hasMany(Payment::class);
     }
 
+    public function paymentAllocations()
+    {
+        return $this->hasMany(PaymentAllocation::class);
+    }
+
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function cancelledBy()
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
+    public function dateChangedBy()
+    {
+        return $this->belongsTo(User::class, 'date_changed_by');
     }
 
     public function branch()
@@ -105,4 +135,3 @@ class Invoice extends Model
         return $this->belongsTo(Branch::class, 'branch_id');
     }
 }
-

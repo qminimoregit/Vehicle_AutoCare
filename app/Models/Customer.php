@@ -52,6 +52,11 @@ class Customer extends Model
         return $this->hasMany(Payment::class);
     }
 
+    public function paymentReceipts()
+    {
+        return $this->hasMany(PaymentReceipt::class);
+    }
+
     public function isCompany(): bool
     {
         return $this->customer_type === 'company';

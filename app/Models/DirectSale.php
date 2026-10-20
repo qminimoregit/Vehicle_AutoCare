@@ -24,11 +24,17 @@ class DirectSale extends Model
         'payment_method',
         'status',
         'notes',
+        'cancellation_reason',
+        'cancelled_by',
+        'cancelled_at',
+        'stock_reversed',
         'created_by',
     ];
 
     protected $casts = [
         'sale_date' => 'date',
+        'cancelled_at' => 'datetime',
+        'stock_reversed' => 'boolean',
         'subtotal' => 'decimal:2',
         'discount_amount' => 'decimal:2',
         'tax_amount' => 'decimal:2',
@@ -39,8 +45,8 @@ class DirectSale extends Model
 
     public static function generateSaleNumber(): string
     {
-        $prefix = 'DS-' . date('Ym') . '-';
-        $lastSale = self::where('sale_number', 'LIKE', $prefix . '%')
+        $prefix = 'DS-'.date('Ym').'-';
+        $lastSale = self::where('sale_number', 'LIKE', $prefix.'%')
             ->orderBy('id', 'desc')
             ->first();
 
@@ -51,7 +57,7 @@ class DirectSale extends Model
             $newSeq = '0001';
         }
 
-        return $prefix . $newSeq;
+        return $prefix.$newSeq;
     }
 
     public function customer()
@@ -74,9 +80,13 @@ class DirectSale extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function cancelledBy()
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
     public function branch()
     {
         return $this->belongsTo(Branch::class, 'branch_id');
     }
 }
-

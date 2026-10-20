@@ -12,24 +12,29 @@ class Payment extends Model
     protected $fillable = [
         'invoice_id',
         'customer_id',
+        'payment_receipt_id',
         'payment_number',
         'payment_date',
         'amount',
         'payment_method',
         'reference_number',
         'notes',
+        'status',
+        'reversed_at',
+        'reversal_reason',
         'created_by',
     ];
 
     protected $casts = [
         'payment_date' => 'date',
+        'reversed_at' => 'datetime',
         'amount' => 'decimal:2',
     ];
 
     public static function generatePaymentNumber(): string
     {
-        $prefix = 'PAY-' . date('Ym') . '-';
-        $last = self::where('payment_number', 'LIKE', $prefix . '%')
+        $prefix = 'PAY-'.date('Ym').'-';
+        $last = self::where('payment_number', 'LIKE', $prefix.'%')
             ->orderBy('id', 'desc')
             ->first();
 
@@ -40,7 +45,7 @@ class Payment extends Model
             $newSeq = '0001';
         }
 
-        return $prefix . $newSeq;
+        return $prefix.$newSeq;
     }
 
     public function invoice()
@@ -51,6 +56,11 @@ class Payment extends Model
     public function customer()
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function receipt()
+    {
+        return $this->belongsTo(PaymentReceipt::class, 'payment_receipt_id');
     }
 
     public function creator()
