@@ -9,6 +9,7 @@ use App\Http\Controllers\Inventory\ProductController;
 use App\Http\Controllers\Inventory\StockReportController;
 use App\Http\Controllers\Inventory\SupplierController;
 use App\Http\Controllers\Inventory\SupplierPaymentController;
+use App\Http\Controllers\MasterData\BranchController;
 use App\Http\Controllers\MasterData\ClientSmsController;
 use App\Http\Controllers\MasterData\CompanyDetailController;
 use App\Http\Controllers\MasterData\ServiceController;
@@ -18,6 +19,7 @@ use App\Http\Controllers\Operations\DirectSaleController;
 use App\Http\Controllers\Operations\InvoiceController;
 use App\Http\Controllers\Operations\JobCardController;
 use App\Http\Controllers\Operations\VehicleRegistrationController;
+use App\Http\Controllers\Billing\QuotationController;
 use App\Http\Controllers\Expenses\ExpenseCategoryController;
 use App\Http\Controllers\Expenses\ExpenseController;
 use App\Http\Controllers\Payroll\AttendanceController;
@@ -76,9 +78,20 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/company-details', [CompanyDetailController::class, 'edit'])->name('company-details.edit');
         Route::put('/company-details', [CompanyDetailController::class, 'update'])->name('company-details.update');
 
+        // Branches Management
+        Route::post('/branches', [BranchController::class, 'store'])->name('branches.store');
+        Route::get('/branches/{branch}', [BranchController::class, 'show'])->name('branches.show');
+        Route::put('/branches/{branch}', [BranchController::class, 'update'])->name('branches.update');
+        Route::patch('/branches/{branch}/toggle-status', [BranchController::class, 'toggleStatus'])->name('branches.toggle-status');
+        Route::patch('/branches/{branch}/set-main', [BranchController::class, 'setMain'])->name('branches.set-main');
+
         // Search Client SMS
         Route::get('/client-sms', [ClientSmsController::class, 'index'])->name('client-sms.index');
     });
+
+    // Global Branch Selector Switch Route
+    Route::post('/branches/switch', [BranchController::class, 'switchBranch'])->name('branches.switch');
+
 
     // Suppliers & Inventory Module
     Route::prefix('inventory')->name('inventory.')->group(function () {
@@ -151,8 +164,40 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/direct-sales/search-products', [DirectSaleController::class, 'searchProducts'])->name('direct-sales.search-products');
         Route::post('/direct-sales', [DirectSaleController::class, 'store'])->name('direct-sales.store');
 
-        // Invoices & Billing
+        // Invoices (Operations legacy shortcuts)
+        Route::get('/invoices', [InvoiceController::class, 'index'])->name('invoices.index');
+        Route::get('/invoices/create', [InvoiceController::class, 'create'])->name('invoices.create');
+        Route::post('/invoices', [InvoiceController::class, 'store'])->name('invoices.store');
         Route::get('/invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
+        Route::get('/invoices/{invoice}/print', [InvoiceController::class, 'print'])->name('invoices.print');
+        Route::get('/invoices/{invoice}/pdf', [InvoiceController::class, 'downloadPdf'])->name('invoices.pdf');
+        Route::post('/invoices/{invoice}/payment', [InvoiceController::class, 'addPayment'])->name('invoices.payment');
+    });
+
+    // Sales & Billing Module
+    Route::prefix('billing')->name('billing.')->group(function () {
+        // Quotations
+        Route::get('/quotations', [QuotationController::class, 'index'])->name('quotations.index');
+        Route::get('/quotations/create', [QuotationController::class, 'create'])->name('quotations.create');
+        Route::post('/quotations', [QuotationController::class, 'store'])->name('quotations.store');
+        Route::get('/quotations/{quotation}', [QuotationController::class, 'show'])->name('quotations.show');
+        Route::get('/quotations/{quotation}/edit', [QuotationController::class, 'edit'])->name('quotations.edit');
+        Route::put('/quotations/{quotation}', [QuotationController::class, 'update'])->name('quotations.update');
+        Route::get('/quotations/{quotation}/pdf', [QuotationController::class, 'downloadPdf'])->name('quotations.pdf');
+        Route::get('/quotations/{quotation}/print', [QuotationController::class, 'print'])->name('quotations.print');
+        Route::post('/quotations/{quotation}/send', [QuotationController::class, 'markAsSent'])->name('quotations.send');
+        Route::post('/quotations/{quotation}/accept', [QuotationController::class, 'accept'])->name('quotations.accept');
+        Route::post('/quotations/{quotation}/reject', [QuotationController::class, 'reject'])->name('quotations.reject');
+        Route::post('/quotations/{quotation}/convert-to-invoice', [QuotationController::class, 'convertToInvoice'])->name('quotations.convert-to-invoice');
+        Route::post('/quotations/{quotation}/create-job-card', [QuotationController::class, 'createJobCard'])->name('quotations.create-job-card');
+        Route::post('/quotations/{quotation}/clone', [QuotationController::class, 'clone'])->name('quotations.clone');
+
+        // Invoices
+        Route::get('/invoices', [InvoiceController::class, 'index'])->name('invoices.index');
+        Route::get('/invoices/create', [InvoiceController::class, 'create'])->name('invoices.create');
+        Route::post('/invoices', [InvoiceController::class, 'store'])->name('invoices.store');
+        Route::get('/invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
+        Route::get('/invoices/{invoice}/pdf', [InvoiceController::class, 'downloadPdf'])->name('invoices.pdf');
         Route::get('/invoices/{invoice}/print', [InvoiceController::class, 'print'])->name('invoices.print');
         Route::post('/invoices/{invoice}/payment', [InvoiceController::class, 'addPayment'])->name('invoices.payment');
     });
