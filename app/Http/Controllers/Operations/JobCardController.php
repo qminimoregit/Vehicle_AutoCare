@@ -13,6 +13,7 @@ use App\Models\Service;
 use App\Models\ServiceVehiclePrice;
 use App\Models\User;
 use App\Services\Inventory\StockService;
+use App\Services\QuantityFormatter;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -90,8 +91,11 @@ class JobCardController extends Controller
             'assignedTechnician',
             'creator',
             'invoice',
+            'supplementaryInvoices',
             'services.service',
             'products.product',
+            'issues.approvedByUser',
+            'issues.recordedByUser',
         ]);
 
         $availableServices = Service::active()->orderBy('name')->get();
@@ -148,6 +152,7 @@ class JobCardController extends Controller
             'quantity' => ['nullable', 'numeric', 'min:0.1'],
             'technician_name' => ['nullable', 'string', 'max:100'],
             'notes' => ['nullable', 'string', 'max:255'],
+            'job_issue_id' => ['nullable', 'exists:job_issues,id'],
         ]);
 
         $service = Service::findOrFail($validated['service_id']);
@@ -172,6 +177,7 @@ class JobCardController extends Controller
 
         $qty = ! empty($validated['quantity']) ? (float) $validated['quantity'] : 1.0;
         $lineTotal = round($unitPrice * $qty, 2);
+        $isAdditional = ($jobCard->status === 'additional_work') || ($jobCard->invoice_id !== null);
 
         $jobCard->services()->create([
             'service_id' => $service->id,
@@ -181,6 +187,8 @@ class JobCardController extends Controller
             'quantity' => $qty,
             'line_total' => $lineTotal,
             'is_price_custom' => $isPriceCustom,
+            'is_additional' => $isAdditional,
+            'job_issue_id' => $validated['job_issue_id'] ?? null,
             'technician_name' => $validated['technician_name'] ?? null,
             'notes' => $validated['notes'] ?? null,
         ]);
@@ -197,6 +205,10 @@ class JobCardController extends Controller
     {
         if (in_array($jobCard->status, ['completed', 'delivered', 'cancelled'])) {
             return back()->with('error', 'Cannot modify services on a finished or cancelled job.');
+        }
+
+        if ($serviceItem->invoice_id) {
+            return back()->with('error', 'Cannot remove a service that has already been invoiced.');
         }
 
         if ($serviceItem->job_card_id !== $jobCard->id) {
@@ -224,17 +236,23 @@ class JobCardController extends Controller
             'quantity' => ['required', 'numeric', 'min:0.01'],
             'unit_price' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string', 'max:255'],
+            'job_issue_id' => ['nullable', 'exists:job_issues,id'],
         ]);
 
-        $product = Product::findOrFail($validated['product_id']);
+        $product = Product::with('uom')->findOrFail($validated['product_id']);
         $quantity = (float) $validated['quantity'];
+
+        if (! $product->allowsFractionalQuantity() && floor($quantity) != $quantity) {
+            return back()->with('error', "Product '{$product->product_name}' ({$product->uom?->name}) requires a whole-number quantity.")->withInput();
+        }
 
         // Selling price defaults to product selling price
         $unitPrice = ! empty($validated['unit_price']) ? (float) $validated['unit_price'] : (float) $product->selling_price;
         $lineTotal = round($unitPrice * $quantity, 2);
+        $isAdditional = ($jobCard->status === 'additional_work') || ($jobCard->invoice_id !== null);
 
         try {
-            DB::transaction(function () use ($jobCard, $product, $quantity, $unitPrice, $lineTotal, $validated) {
+            DB::transaction(function () use ($jobCard, $product, $quantity, $unitPrice, $lineTotal, $validated, $isAdditional) {
                 // Deduct stock using FIFO atomically
                 $issueResult = $this->stockService->issueStockFifo(
                     $product,
@@ -255,6 +273,8 @@ class JobCardController extends Controller
                     'unit_cost' => $unitCost,
                     'line_total' => $lineTotal,
                     'is_stock_deducted' => true,
+                    'is_additional' => $isAdditional,
+                    'job_issue_id' => $validated['job_issue_id'] ?? null,
                     'batch_allocations' => $issueResult['batches'],
                     'notes' => $validated['notes'] ?? null,
                 ]);
@@ -262,7 +282,9 @@ class JobCardController extends Controller
                 $jobCard->recalculateTotals();
             });
 
-            return back()->with('success', "Product '{$product->product_name}' (Qty: {$quantity}) issued to Job Card.");
+            $fmtQty = QuantityFormatter::format($quantity);
+
+            return back()->with('success', "Product '{$product->product_name}' (Qty: {$fmtQty}) issued to Job Card.");
         } catch (Exception $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -275,6 +297,10 @@ class JobCardController extends Controller
     {
         if (in_array($jobCard->status, ['completed', 'delivered', 'cancelled'])) {
             return back()->with('error', 'Cannot remove products from a finished or cancelled job.');
+        }
+
+        if ($productItem->invoice_id) {
+            return back()->with('error', 'Cannot remove a product that has already been invoiced.');
         }
 
         if ($productItem->job_card_id !== $jobCard->id) {
@@ -539,11 +565,183 @@ class JobCardController extends Controller
                 ]);
             }
 
-            // Link invoice to job card
+            // Link invoice to job card and items
             $jobCard->update(['invoice_id' => $invoice->id]);
+            $jobCard->services()->update(['invoice_id' => $invoice->id]);
+            $jobCard->products()->update(['invoice_id' => $invoice->id]);
+            $jobCard->issues()->where('status', 'approved')->update(['status' => 'fixed']);
 
             return redirect()->route('operations.invoices.show', $invoice)
                 ->with('success', "Invoice #{$invoice->invoice_number} generated for Job #{$jobCard->job_number}.");
         });
+    }
+
+    /**
+     * Reopen a completed or in-progress job for approved additional repair work.
+     */
+    public function startAdditionalWork(JobCard $jobCard): RedirectResponse
+    {
+        if (in_array($jobCard->status, ['delivered', 'cancelled'])) {
+            return back()->with('error', 'Cannot add additional work to delivered or cancelled jobs. Please create a follow-up job card instead.');
+        }
+
+        // Must have at least one approved issue or allow opening
+        $hasApprovedIssues = $jobCard->issues()->where('status', 'approved')->exists();
+        if (! $hasApprovedIssues && $jobCard->status === 'completed') {
+            return back()->with('error', 'Please record and approve a vehicle issue before starting additional work.');
+        }
+
+        $jobCard->update([
+            'status' => 'additional_work',
+        ]);
+
+        return back()->with('success', "Job #{$jobCard->job_number} workflow changed to Additional Work In Progress. You can now add approved services and parts.");
+    }
+
+    /**
+     * Mark additional repair work completed.
+     */
+    public function completeAdditionalWork(JobCard $jobCard): RedirectResponse
+    {
+        if ($jobCard->status !== 'additional_work') {
+            return back()->with('error', 'Job is not currently in Additional Work status.');
+        }
+
+        $jobCard->update([
+            'status' => 'completed',
+            'completed_at' => now(),
+        ]);
+
+        // Mark any approved issues as fixed
+        $jobCard->issues()->where('status', 'approved')->update([
+            'status' => 'fixed',
+        ]);
+
+        $jobCard->recalculateTotals();
+
+        return back()->with('success', "Additional work for Job #{$jobCard->job_number} completed. Ready for billing.");
+    }
+
+    /**
+     * Generate a supplementary invoice for additional repair work on an already-invoiced job card.
+     */
+    public function generateSupplementaryInvoice(JobCard $jobCard): RedirectResponse
+    {
+        if (! $jobCard->invoice_id) {
+            // If original invoice was never created, redirect to standard generate invoice
+            return $this->generateInvoice($jobCard);
+        }
+
+        // Get unbilled services and products
+        $unbilledServices = $jobCard->services()->whereNull('invoice_id')->get();
+        $unbilledProducts = $jobCard->products()->whereNull('invoice_id')->get();
+
+        if ($unbilledServices->isEmpty() && $unbilledProducts->isEmpty()) {
+            return back()->with('error', 'No unbilled additional services or products found on this Job Card.');
+        }
+
+        return DB::transaction(function () use ($jobCard, $unbilledServices, $unbilledProducts) {
+            $invoiceNumber = Invoice::generateInvoiceNumber();
+            $subtotal = (float) $unbilledServices->sum('line_total') + (float) $unbilledProducts->sum('line_total');
+
+            $customerSnapshot = [
+                'customer_name' => $jobCard->customer->customer_name,
+                'phone' => $jobCard->customer->phone,
+                'vehicle_number' => $jobCard->vehicle->vehicle_number,
+                'vehicle_type' => $jobCard->vehicleType->name,
+                'current_mileage' => $jobCard->current_mileage,
+                'next_service_mileage' => $jobCard->next_service_mileage,
+                'is_supplementary' => true,
+                'parent_invoice' => $jobCard->invoice?->invoice_number,
+            ];
+
+            $invoice = Invoice::create([
+                'invoice_number' => $invoiceNumber,
+                'branch_id' => $jobCard->branch_id,
+                'invoice_date' => now()->toDateString(),
+                'due_date' => now()->toDateString(),
+                'customer_id' => $jobCard->customer_id,
+                'job_card_id' => $jobCard->id,
+                'invoice_type' => 'job_card',
+                'subject' => "Supplementary Invoice – Additional Work for {$jobCard->vehicle->vehicle_number} (Job #{$jobCard->job_number})",
+                'reference' => "{$jobCard->job_number}-SUP",
+                'subtotal' => $subtotal,
+                'discount_amount' => 0,
+                'tax_amount' => 0,
+                'grand_total' => $subtotal,
+                'amount_paid' => 0,
+                'balance_amount' => $subtotal,
+                'status' => 'issued',
+                'customer_snapshot' => $customerSnapshot,
+                'notes' => "Supplementary billing for additional repair work on Job #{$jobCard->job_number} (Original Invoice #{$jobCard->invoice?->invoice_number})",
+                'created_by' => Auth::id(),
+            ]);
+
+            // Add unbilled services
+            foreach ($unbilledServices as $serviceItem) {
+                InvoiceItem::create([
+                    'invoice_id' => $invoice->id,
+                    'item_type' => 'service',
+                    'item_id' => $serviceItem->service_id,
+                    'item_code' => $serviceItem->service_code,
+                    'item_name' => $serviceItem->service_name.' (Additional Work)',
+                    'quantity' => $serviceItem->quantity,
+                    'unit_price' => $serviceItem->unit_price,
+                    'line_total' => $serviceItem->line_total,
+                    'notes' => $serviceItem->notes,
+                ]);
+
+                $serviceItem->update(['invoice_id' => $invoice->id]);
+            }
+
+            // Add unbilled products
+            foreach ($unbilledProducts as $productItem) {
+                InvoiceItem::create([
+                    'invoice_id' => $invoice->id,
+                    'item_type' => 'product',
+                    'item_id' => $productItem->product_id,
+                    'item_code' => $productItem->product_sku,
+                    'item_name' => $productItem->product_name.' (Additional Work)',
+                    'quantity' => $productItem->quantity,
+                    'unit_price' => $productItem->unit_price,
+                    'unit_cost' => $productItem->unit_cost,
+                    'line_total' => $productItem->line_total,
+                    'notes' => $productItem->notes,
+                ]);
+
+                $productItem->update(['invoice_id' => $invoice->id]);
+            }
+
+            // Mark approved issues as fixed
+            $jobCard->issues()->where('status', 'approved')->update([
+                'status' => 'fixed',
+            ]);
+
+            return redirect()->route('operations.invoices.show', $invoice)
+                ->with('success', "Supplementary Invoice #{$invoice->invoice_number} generated for additional repair work.");
+        });
+    }
+
+    /**
+     * Create a linked follow-up Job Card for a delivered vehicle returning on another date.
+     */
+    public function createFollowUp(JobCard $jobCard): RedirectResponse
+    {
+        $newJob = JobCard::create([
+            'job_number' => JobCard::generateJobNumber(),
+            'branch_id' => $jobCard->branch_id,
+            'customer_id' => $jobCard->customer_id,
+            'vehicle_id' => $jobCard->vehicle_id,
+            'vehicle_type_id' => $jobCard->vehicle_type_id,
+            'date' => now()->toDateString(),
+            'current_mileage' => $jobCard->vehicle->current_mileage,
+            'next_service_mileage' => $jobCard->vehicle->next_service_mileage,
+            'service_notes' => "Follow-up visit for previous Job #{$jobCard->job_number}",
+            'status' => 'pending',
+            'created_by' => Auth::id(),
+        ]);
+
+        return redirect()->route('operations.job-cards.show', $newJob)
+            ->with('success', "Follow-up Job Card #{$newJob->job_number} created for {$jobCard->vehicle->vehicle_number}.");
     }
 }

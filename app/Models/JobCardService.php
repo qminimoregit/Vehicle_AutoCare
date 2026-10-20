@@ -18,6 +18,9 @@ class JobCardService extends Model
         'quantity',
         'line_total',
         'is_price_custom',
+        'is_additional',
+        'job_issue_id',
+        'invoice_id',
         'technician_name',
         'notes',
     ];
@@ -27,6 +30,7 @@ class JobCardService extends Model
         'quantity' => 'decimal:2',
         'line_total' => 'decimal:2',
         'is_price_custom' => 'boolean',
+        'is_additional' => 'boolean',
     ];
 
     public function jobCard()
@@ -37,5 +41,15 @@ class JobCardService extends Model
     public function service()
     {
         return $this->belongsTo(Service::class);
+    }
+
+    public function issue()
+    {
+        return $this->belongsTo(JobIssue::class, 'job_issue_id');
+    }
+
+    public function invoice()
+    {
+        return $this->belongsTo(Invoice::class, 'invoice_id');
     }
 }

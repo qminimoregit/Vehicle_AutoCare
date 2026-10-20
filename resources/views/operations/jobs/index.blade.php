@@ -22,16 +22,6 @@
         </x-slot:actions>
     </x-page-header>
 
-    @if(session('success'))
-        <x-alert type="success" :message="session('success')" />
-    @endif
-    @if(session('warning'))
-        <x-alert type="warning" :message="session('warning')" />
-    @endif
-    @if(session('error'))
-        <x-alert type="error" :message="session('error')" />
-    @endif
-
     <!-- Quick Status Tabs -->
     <div class="flex items-center overflow-x-auto space-x-2 pb-1 border-b border-gray-200 text-xs sm:text-sm font-semibold scrollbar-none">
         <a 

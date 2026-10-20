@@ -19,6 +19,9 @@ class JobCardProduct extends Model
         'unit_cost',
         'line_total',
         'is_stock_deducted',
+        'is_additional',
+        'job_issue_id',
+        'invoice_id',
         'batch_allocations',
         'notes',
     ];
@@ -29,6 +32,7 @@ class JobCardProduct extends Model
         'unit_cost' => 'decimal:2',
         'line_total' => 'decimal:2',
         'is_stock_deducted' => 'boolean',
+        'is_additional' => 'boolean',
         'batch_allocations' => 'array',
     ];
 
@@ -40,5 +44,15 @@ class JobCardProduct extends Model
     public function product()
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function issue()
+    {
+        return $this->belongsTo(JobIssue::class, 'job_issue_id');
+    }
+
+    public function invoice()
+    {
+        return $this->belongsTo(Invoice::class, 'invoice_id');
     }
 }

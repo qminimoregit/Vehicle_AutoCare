@@ -35,6 +35,31 @@ class Branch extends Model
     }
 
     /**
+     * Alias for branch_name to support $branch->name.
+     */
+    public function getNameAttribute(): string
+    {
+        return $this->branch_name ?? '';
+    }
+
+    /**
+     * Create a new Eloquent query builder for the model, mapping 'name' to 'branch_name'.
+     */
+    public function newEloquentBuilder($query): Builder
+    {
+        return new class($query) extends Builder {
+            public function orderBy($column, $direction = 'asc')
+            {
+                if ($column === 'name') {
+                    $column = 'branch_name';
+                }
+
+                return parent::orderBy($column, $direction);
+            }
+        };
+    }
+
+    /**
      * The company this branch belongs to.
      */
     public function company(): BelongsTo
@@ -120,6 +145,14 @@ class Branch extends Model
     public function quotations(): HasMany
     {
         return $this->hasMany(Quotation::class, 'branch_id');
+    }
+
+    /**
+     * Appointments scheduled for this branch.
+     */
+    public function appointments(): HasMany
+    {
+        return $this->hasMany(Appointment::class, 'branch_id');
     }
 
     /**

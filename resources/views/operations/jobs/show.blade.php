@@ -10,6 +10,26 @@
         showAddProductModal: false,
         showCancelModal: false,
         showEditModal: false,
+        showAddIssueModal: false,
+        showApprovalModal: false,
+
+        // Issue Approval state
+        selectedIssueId: null,
+        selectedIssueDescription: '',
+        approvalDecision: 'approved',
+        approvalMethod: 'verbal',
+        approvalContact: '{{ $jobCard->customer?->phone ?? '' }}',
+        approvalRemarks: '',
+
+        openApprovalModal(issue) {
+            this.selectedIssueId = issue.id;
+            this.selectedIssueDescription = issue.description;
+            this.approvalDecision = 'approved';
+            this.approvalMethod = 'verbal';
+            this.approvalContact = '{{ $jobCard->customer?->phone ?? '' }}';
+            this.approvalRemarks = '';
+            this.showApprovalModal = true;
+        },
 
         // Service selection state
         selectedServiceId: '',
@@ -89,6 +109,8 @@
                     <span class="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800">Pending</span>
                 @elseif($jobCard->status === 'in_progress')
                     <span class="px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">In Progress</span>
+                @elseif($jobCard->status === 'additional_work')
+                    <span class="px-3 py-1 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800">Additional Work In Progress</span>
                 @elseif($jobCard->status === 'completed')
                     <span class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">Completed</span>
                 @elseif($jobCard->status === 'delivered')
@@ -135,9 +157,37 @@
                         Complete Job
                     </button>
                 </form>
+            @elseif($jobCard->status === 'additional_work')
+                <form action="{{ route('operations.job-cards.additional-work.complete', $jobCard) }}" method="POST">
+                    @csrf
+                    <button 
+                        type="submit" 
+                        class="inline-flex items-center justify-center px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-lg shadow-xs transition cursor-pointer min-h-[44px]"
+                    >
+                        <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        Complete Additional Work
+                    </button>
+                </form>
             @endif
 
             @if(in_array($jobCard->status, ['completed', 'delivered']))
+                @if($jobCard->status === 'completed' && $jobCard->issues->where('status', 'approved')->count() > 0)
+                    <form action="{{ route('operations.job-cards.additional-work.start', $jobCard) }}" method="POST">
+                        @csrf
+                        <button 
+                            type="submit" 
+                            class="inline-flex items-center justify-center px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-lg shadow-xs transition cursor-pointer min-h-[44px]"
+                        >
+                            <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                            Add Additional Work
+                        </button>
+                    </form>
+                @endif
+
                 @if(!$jobCard->invoice_id)
                     <form action="{{ route('operations.job-cards.generate-invoice', $jobCard) }}" method="POST">
                         @csrf
@@ -161,6 +211,21 @@
                         </svg>
                         View Invoice ({{ $jobCard->invoice->invoice_number }})
                     </a>
+
+                    @if($jobCard->status === 'completed' && ($jobCard->services->whereNull('invoice_id')->count() > 0 || $jobCard->products->whereNull('invoice_id')->count() > 0))
+                        <form action="{{ route('operations.job-cards.supplementary-invoice', $jobCard) }}" method="POST">
+                            @csrf
+                            <button 
+                                type="submit" 
+                                class="inline-flex items-center justify-center px-4 py-2.5 bg-[#0B1849] hover:bg-[#15286e] text-white font-bold text-sm rounded-lg shadow-xs transition cursor-pointer min-h-[44px]"
+                            >
+                                <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Supplementary Invoice
+                            </button>
+                        </form>
+                    @endif
                 @endif
 
                 @if($jobCard->status === 'completed')
@@ -176,6 +241,19 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                             </svg>
                             Mark Delivered
+                        </button>
+                    </form>
+                @elseif($jobCard->status === 'delivered')
+                    <form action="{{ route('operations.job-cards.follow-up', $jobCard) }}" method="POST">
+                        @csrf
+                        <button 
+                            type="submit" 
+                            class="inline-flex items-center justify-center px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-sm rounded-lg shadow-xs transition cursor-pointer min-h-[44px]"
+                        >
+                            <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Follow-up Job Card
                         </button>
                     </form>
                 @endif
@@ -207,16 +285,6 @@
             @endif
         </div>
     </div>
-
-    @if(session('success'))
-        <x-alert type="success" :message="session('success')" />
-    @endif
-    @if(session('warning'))
-        <x-alert type="warning" :message="session('warning')" />
-    @endif
-    @if(session('error'))
-        <x-alert type="error" :message="session('error')" />
-    @endif
 
     <!-- Cancelled Job Alert Notice -->
     @if($jobCard->status === 'cancelled')
@@ -331,7 +399,12 @@
                             @forelse($jobCard->services as $srv)
                                 <tr class="hover:bg-slate-50/50">
                                     <td class="px-4 py-3">
-                                        <span class="font-semibold text-gray-900 block">{{ $srv->service_name }}</span>
+                                        <div class="flex items-center">
+                                            <span class="font-semibold text-gray-900">{{ $srv->service_name }}</span>
+                                            @if($srv->is_additional)
+                                                <span class="ml-2 px-1.5 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-800 rounded">Additional Work</span>
+                                            @endif
+                                        </div>
                                         @if($srv->is_price_custom)
                                             <span class="text-[10px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">Custom Price</span>
                                         @endif
@@ -343,22 +416,26 @@
                                         LKR {{ number_format($srv->unit_price, 2) }}
                                     </td>
                                     <td class="px-4 py-3 text-right font-medium text-gray-600">
-                                        {{ (float) $srv->quantity }}
+                                        @quantity($srv->quantity)
                                     </td>
                                     <td class="px-4 py-3 text-right font-bold text-gray-900 whitespace-nowrap">
                                         LKR {{ number_format($srv->line_total, 2) }}
                                     </td>
                                     @if(!in_array($jobCard->status, ['completed', 'delivered', 'cancelled']))
                                         <td class="px-3 py-3 text-center">
-                                            <form action="{{ route('operations.job-cards.services.remove', [$jobCard, $srv]) }}" method="POST" onsubmit="return confirm('Remove service {{ addslashes($srv->service_name) }}?')">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit" class="text-gray-400 hover:text-red-600 transition p-1 cursor-pointer" title="Remove">
-                                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                    </svg>
-                                                </button>
-                                            </form>
+                                            @if(!$srv->invoice_id)
+                                                <form action="{{ route('operations.job-cards.services.remove', [$jobCard, $srv]) }}" method="POST" onsubmit="return confirm('Remove service {{ addslashes($srv->service_name) }}?')">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="text-gray-400 hover:text-red-600 transition p-1 cursor-pointer" title="Remove">
+                                                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                        </svg>
+                                                    </button>
+                                                </form>
+                                            @else
+                                                <span class="text-[10px] text-gray-400">Invoiced</span>
+                                            @endif
                                         </td>
                                     @endif
                                 </tr>
@@ -389,7 +466,7 @@
                         <svg class="w-4 h-4 text-[#0B1849]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                         </svg>
-                        <h3 class="text-sm font-bold uppercase tracking-wider text-gray-900">Products & Parts Issued</h3>
+                        <h3 class="text-sm font-bold uppercase tracking-wider text-gray-900">Products & Parts</h3>
                     </div>
 
                     @if(!in_array($jobCard->status, ['completed', 'delivered', 'cancelled']))
@@ -423,7 +500,12 @@
                             @forelse($jobCard->products as $prod)
                                 <tr class="hover:bg-slate-50/50">
                                     <td class="px-4 py-3">
-                                        <span class="font-semibold text-gray-900 block">{{ $prod->product_name }}</span>
+                                        <div class="flex items-center">
+                                            <span class="font-semibold text-gray-900">{{ $prod->product_name }}</span>
+                                            @if($prod->is_additional)
+                                                <span class="ml-2 px-1.5 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-800 rounded">Additional Part</span>
+                                            @endif
+                                        </div>
                                         <span class="text-[11px] text-gray-500 font-mono">{{ $prod->product_sku ?? 'SKU N/A' }}</span>
                                         @if($prod->is_stock_deducted)
                                             <span class="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -435,22 +517,26 @@
                                         LKR {{ number_format($prod->unit_price, 2) }}
                                     </td>
                                     <td class="px-4 py-3 text-right font-medium text-gray-600">
-                                        {{ (float) $prod->quantity }}
+                                        @quantity($prod->quantity)
                                     </td>
                                     <td class="px-4 py-3 text-right font-bold text-gray-900 whitespace-nowrap">
                                         LKR {{ number_format($prod->line_total, 2) }}
                                     </td>
                                     @if(!in_array($jobCard->status, ['completed', 'delivered', 'cancelled']))
                                         <td class="px-3 py-3 text-center">
-                                            <form action="{{ route('operations.job-cards.products.remove', [$jobCard, $prod]) }}" method="POST" onsubmit="return confirm('Remove product {{ addslashes($prod->product_name) }}? Issued stock will be returned to inventory.')">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit" class="text-gray-400 hover:text-red-600 transition p-1 cursor-pointer" title="Remove & Reverse Stock">
-                                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                    </svg>
-                                                </button>
-                                            </form>
+                                            @if(!$prod->invoice_id)
+                                                <form action="{{ route('operations.job-cards.products.remove', [$jobCard, $prod]) }}" method="POST" onsubmit="return confirm('Remove product {{ addslashes($prod->product_name) }}? Issued stock will be returned to inventory.')">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="text-gray-400 hover:text-red-600 transition p-1 cursor-pointer" title="Remove & Reverse Stock">
+                                                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                        </svg>
+                                                    </button>
+                                                </form>
+                                            @else
+                                                <span class="text-[10px] text-gray-400">Invoiced</span>
+                                            @endif
                                         </td>
                                     @endif
                                 </tr>
@@ -474,12 +560,184 @@
         </div>
     </div>
 
+    <!-- VEHICLE ISSUES & ADDITIONAL WORK -->
+    <div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
+        <!-- Section Header -->
+        <div class="px-5 py-4 border-b border-gray-100 bg-slate-50/60 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center space-x-2">
+                <svg class="w-4 h-4 text-[#0B1849]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <h3 class="text-sm font-bold uppercase tracking-wider text-gray-900">Vehicle Issues & Additional Work</h3>
+                @if($jobCard->issues->count() > 0)
+                    <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-700">
+                        {{ $jobCard->issues->count() }}
+                    </span>
+                @endif
+            </div>
+
+            <div class="flex items-center space-x-2">
+                @if($jobCard->status !== 'cancelled')
+                    <button 
+                        type="button" 
+                        @click="showAddIssueModal = true" 
+                        class="inline-flex items-center px-3 py-1.5 bg-[#0B1849] hover:bg-[#15286e] text-white text-xs font-semibold rounded-md shadow-xs transition min-h-[36px] cursor-pointer"
+                    >
+                        <svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                        Add Issue
+                    </button>
+                @endif
+
+                @if($jobCard->status === 'completed' && $jobCard->issues->where('status', 'approved')->count() > 0)
+                    <form action="{{ route('operations.job-cards.additional-work.start', $jobCard) }}" method="POST">
+                        @csrf
+                        <button 
+                            type="submit" 
+                            class="inline-flex items-center px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-md shadow-xs transition min-h-[36px] cursor-pointer"
+                        >
+                            <svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                            Add Additional Work
+                        </button>
+                    </form>
+                @endif
+            </div>
+        </div>
+
+        <!-- Issues Table -->
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-100 text-left text-xs sm:text-sm">
+                <thead class="bg-gray-50/50 text-gray-500 font-bold uppercase text-[10px] tracking-wider">
+                    <tr>
+                        <th class="px-5 py-2.5">Issue Description</th>
+                        <th class="px-4 py-2.5">Recommended Repair</th>
+                        <th class="px-4 py-2.5 text-right">Estimated Cost</th>
+                        <th class="px-4 py-2.5 text-center">Status</th>
+                        <th class="px-4 py-2.5">Approval / Notes</th>
+                        <th class="px-4 py-2.5 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50 text-gray-800">
+                    @forelse($jobCard->issues as $issue)
+                        <tr class="hover:bg-slate-50/60 transition">
+                            <td class="px-5 py-3 font-medium text-gray-900">
+                                <div>{{ $issue->description }}</div>
+                                <div class="text-[11px] text-gray-400 mt-0.5">Recorded by {{ $issue->recordedByUser?->name ?? 'Staff' }} on {{ $issue->created_at->format('M d, Y') }}</div>
+                            </td>
+                            <td class="px-4 py-3 text-gray-700 font-medium">
+                                {{ $issue->recommended_repair }}
+                            </td>
+                            <td class="px-4 py-3 text-right font-semibold text-gray-900 whitespace-nowrap">
+                                {{ $issue->estimated_cost ? 'LKR ' . number_format($issue->estimated_cost, 2) : '—' }}
+                            </td>
+                            <td class="px-4 py-3 text-center whitespace-nowrap">
+                                @if($issue->status === 'notified')
+                                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800">Pending Approval</span>
+                                @elseif($issue->status === 'approved')
+                                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">Approved</span>
+                                @elseif($issue->status === 'declined')
+                                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-100 text-red-800">Declined</span>
+                                @elseif($issue->status === 'fixed')
+                                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800">Fixed</span>
+                                @elseif($issue->status === 'deferred')
+                                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800">Deferred</span>
+                                @endif
+                            </td>
+                            <td class="px-4 py-3 text-xs text-gray-600 max-w-xs">
+                                @if($issue->approval_method)
+                                    <div class="font-medium text-gray-800">
+                                        {{ ucfirst($issue->approval_method) }} approval {{ $issue->approved_at ? 'on ' . \Carbon\Carbon::parse($issue->approved_at)->format('M d, Y') : '' }}
+                                    </div>
+                                @endif
+                                @if($issue->approval_note)
+                                    <div class="text-[11px] text-gray-500 italic mt-0.5">{{ $issue->approval_note }}</div>
+                                @endif
+                                @if(!$issue->approval_method && !$issue->approval_note)
+                                    <span class="text-gray-400">—</span>
+                                @endif
+                            </td>
+                            <td class="px-4 py-3 text-right whitespace-nowrap">
+                                @if($issue->status === 'notified')
+                                    <div class="inline-flex items-center space-x-1.5">
+                                        <button 
+                                            type="button" 
+                                            @click="openApprovalModal({{ $issue->toJson() }})"
+                                            class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded shadow-xs transition cursor-pointer"
+                                        >
+                                            Approve
+                                        </button>
+                                        <form action="{{ route('operations.job-issues.approval', $issue) }}" method="POST" class="inline">
+                                            @csrf
+                                            @method('PATCH')
+                                            <input type="hidden" name="status" value="declined">
+                                            <button 
+                                                type="submit" 
+                                                onclick="return confirm('Record customer decision as Declined?');"
+                                                class="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-semibold rounded border border-red-200 transition cursor-pointer"
+                                            >
+                                                Decline
+                                            </button>
+                                        </form>
+                                    </div>
+                                @elseif($issue->status === 'approved' && $jobCard->status === 'completed')
+                                    <form action="{{ route('operations.job-cards.additional-work.start', $jobCard) }}" method="POST" class="inline">
+                                        @csrf
+                                        <button 
+                                            type="submit" 
+                                            class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold rounded border border-indigo-200 transition cursor-pointer"
+                                        >
+                                            Add Additional Work
+                                        </button>
+                                    </form>
+                                @else
+                                    <span class="text-xs text-gray-400 font-medium">Logged</span>
+                                @endif
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="6" class="px-5 py-6 text-center text-xs sm:text-sm text-gray-400">
+                                No additional vehicle issues recorded.
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+
+        @if($jobCard->supplementaryInvoices->count() > 0)
+            <div class="px-5 py-3 bg-indigo-50/70 border-t border-indigo-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span class="font-bold text-indigo-900">Supplementary Invoices for Additional Work:</span>
+                <div class="flex flex-wrap items-center gap-2">
+                    @foreach($jobCard->supplementaryInvoices as $supInv)
+                        <a href="{{ route('operations.invoices.show', $supInv) }}" class="inline-flex items-center px-2 py-1 bg-white border border-indigo-200 text-indigo-800 rounded font-semibold hover:bg-indigo-100 transition">
+                            Invoice #{{ $supInv->invoice_number }} (LKR {{ number_format($supInv->grand_total, 2) }})
+                        </a>
+                    @endforeach
+                </div>
+            </div>
+        @endif
+    </div>
+
     <!-- 3. FINANCIAL SUMMARY & INVOICE STATUS CARD -->
+    @php
+        $unbilledServicesTotal = (float) $jobCard->services->whereNull('invoice_id')->sum('line_total');
+        $unbilledProductsTotal = (float) $jobCard->products->whereNull('invoice_id')->sum('line_total');
+        $unbilledTotal = $unbilledServicesTotal + $unbilledProductsTotal;
+    @endphp
     <div class="bg-white border border-gray-200 rounded-xl shadow-xs p-5 sm:p-6">
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
                 <h3 class="text-base font-bold text-gray-900">Job Cost Summary</h3>
                 <p class="text-xs text-gray-500 mt-0.5">Summary of all services, materials, applicable discounts, and grand total.</p>
+                @if($jobCard->invoice_id && $unbilledTotal > 0)
+                    <div class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900">
+                        <span class="font-bold">Supplementary Work Notice:</span> Original Invoice #{{ $jobCard->invoice->invoice_number }} was issued for LKR {{ number_format($jobCard->invoice->grand_total, 2) }}. Additional unbilled work of <strong>LKR {{ number_format($unbilledTotal, 2) }}</strong> is ready for supplementary billing.
+                    </div>
+                @endif
             </div>
 
             <div class="w-full sm:w-80 space-y-2 bg-[#EEF1FA]/50 p-4 rounded-xl border border-[#0B1849]/10 text-xs sm:text-sm">
@@ -501,6 +759,12 @@
                     <span>Grand Total:</span>
                     <span>LKR {{ number_format($jobCard->grand_total, 2) }}</span>
                 </div>
+                @if($jobCard->invoice_id && $unbilledTotal > 0)
+                    <div class="pt-2 border-t border-amber-200 flex justify-between text-xs font-bold text-amber-800">
+                        <span>Unbilled Additional Work:</span>
+                        <span>LKR {{ number_format($unbilledTotal, 2) }}</span>
+                    </div>
+                @endif
             </div>
         </div>
     </div>
@@ -671,7 +935,7 @@
                                     data-stock="{{ $prod->available_stock }}"
                                     data-price="{{ $prod->selling_price }}"
                                 >
-                                    {{ $prod->product_name }} (Stock: {{ (float) $prod->available_stock }} | LKR {{ number_format($prod->selling_price, 2) }})
+                                    {{ $prod->product_name }} (Stock: @quantity($prod->available_stock) | LKR {{ number_format($prod->selling_price, 2) }})
                                 </option>
                             @endforeach
                         </select>
@@ -681,7 +945,7 @@
                     <div x-show="selectedProductId" class="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900">
                         <div class="flex justify-between font-semibold">
                             <span>Available Stock:</span>
-                            <span class="font-bold" x-text="productAvailableStock + ' units'"></span>
+                            <span class="font-bold" x-text="(Number.isInteger(parseFloat(productAvailableStock)) ? parseFloat(productAvailableStock) : parseFloat(parseFloat(productAvailableStock).toFixed(4))) + ' units'"></span>
                         </div>
                         <div class="flex justify-between font-semibold mt-1">
                             <span>Selling Price:</span>
@@ -909,6 +1173,226 @@
                             class="px-5 py-2.5 bg-[#0B1849] hover:bg-[#15286e] text-white text-xs font-bold rounded-lg shadow-xs transition min-h-[44px]"
                         >
                             Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 5: ADD VEHICLE ISSUE -->
+    <div 
+        x-show="showAddIssueModal" 
+        class="fixed inset-0 z-50 overflow-y-auto"
+        style="display: none;"
+    >
+        <div class="flex items-center justify-center min-h-screen px-4 py-6">
+            <div class="fixed inset-0 bg-gray-900/50 backdrop-blur-xs transition-opacity" @click="showAddIssueModal = false"></div>
+
+            <div class="relative bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-gray-200 space-y-4">
+                <div class="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <h3 class="text-base font-bold text-gray-900">Record Vehicle Issue</h3>
+                    <button type="button" @click="showAddIssueModal = false" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <form action="{{ route('operations.job-cards.issues.store', $jobCard) }}" method="POST" class="space-y-4">
+                    @csrf
+                    <div>
+                        <label for="issue_description" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                            Issue Description <span class="text-red-500">*</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            name="description" 
+                            id="issue_description" 
+                            placeholder="e.g. Front brake pads worn out"
+                            class="block w-full py-2.5 px-3 text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white min-h-[44px]"
+                            required
+                        >
+                    </div>
+
+                    <div>
+                        <label for="recommended_repair" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                            Recommended Repair <span class="text-red-500">*</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            name="recommended_repair" 
+                            id="recommended_repair" 
+                            placeholder="e.g. Replace front brake pads"
+                            class="block w-full py-2.5 px-3 text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white min-h-[44px]"
+                            required
+                        >
+                    </div>
+
+                    <div>
+                        <label for="estimated_cost" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                            Estimated Cost (LKR - Optional)
+                        </label>
+                        <input 
+                            type="number" 
+                            step="0.01" 
+                            name="estimated_cost" 
+                            id="estimated_cost" 
+                            placeholder="e.g. 12000"
+                            class="block w-full py-2.5 px-3 text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white min-h-[44px]"
+                        >
+                    </div>
+
+                    <div>
+                        <label for="issue_remarks" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                            Remarks / Technical Notes (Optional)
+                        </label>
+                        <textarea 
+                            name="remarks" 
+                            id="issue_remarks" 
+                            rows="2"
+                            placeholder="e.g. Notified during full service check"
+                            class="block w-full py-2 px-3 text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white"
+                        ></textarea>
+                    </div>
+
+                    <div class="flex items-center justify-end space-x-3 pt-3 border-t border-gray-100">
+                        <button 
+                            type="button" 
+                            @click="showAddIssueModal = false"
+                            class="px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 rounded-lg transition min-h-[40px]"
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            type="submit" 
+                            class="px-5 py-2.5 bg-[#0B1849] hover:bg-[#15286e] text-white text-xs font-bold rounded-lg shadow-xs transition min-h-[44px]"
+                        >
+                            Save Vehicle Issue
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 6: RECORD CUSTOMER APPROVAL -->
+    <div 
+        x-show="showApprovalModal" 
+        class="fixed inset-0 z-50 overflow-y-auto"
+        style="display: none;"
+    >
+        <div class="flex items-center justify-center min-h-screen px-4 py-6">
+            <div class="fixed inset-0 bg-gray-900/50 backdrop-blur-xs transition-opacity" @click="showApprovalModal = false"></div>
+
+            <div class="relative bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-gray-200 space-y-4">
+                <div class="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <h3 class="text-base font-bold text-gray-900">Record Customer Decision</h3>
+                    <button type="button" @click="showApprovalModal = false" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="p-3 bg-slate-50 border border-gray-200 rounded-lg text-xs text-gray-700">
+                    <span class="font-bold text-gray-900">Issue:</span> <span x-text="selectedIssueDescription"></span>
+                </div>
+
+                <form :action="'{{ url('/operations/job-issues') }}/' + selectedIssueId + '/approval'" method="POST" class="space-y-4">
+                    @csrf
+                    @method('PATCH')
+
+                    <div>
+                        <label for="approval_decision" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                            Customer Decision <span class="text-red-500">*</span>
+                        </label>
+                        <select 
+                            name="status" 
+                            id="approval_decision" 
+                            x-model="approvalDecision"
+                            class="block w-full py-2.5 px-3 text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white min-h-[44px]"
+                            required
+                        >
+                            <option value="approved">Approved – Proceed with repair</option>
+                            <option value="declined">Declined – Do not repair</option>
+                            <option value="deferred">Deferred – For later attention</option>
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label for="approval_method" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                                Approval Method <span class="text-red-500">*</span>
+                            </label>
+                            <select 
+                                name="approval_method" 
+                                id="approval_method" 
+                                x-model="approvalMethod"
+                                class="block w-full py-2.5 px-3 text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white min-h-[44px]"
+                                required
+                            >
+                                <option value="verbal">Verbal</option>
+                                <option value="phone">Phone Call</option>
+                                <option value="written">Written / Message</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="approval_date" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                                Approval Date <span class="text-red-500">*</span>
+                            </label>
+                            <input 
+                                type="date" 
+                                name="approval_date" 
+                                id="approval_date" 
+                                value="{{ now()->toDateString() }}"
+                                class="block w-full py-2.5 px-3 text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white min-h-[44px]"
+                                required
+                            >
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="approval_contact" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                            Approved By / Customer Contact
+                        </label>
+                        <input 
+                            type="text" 
+                            name="approval_contact" 
+                            id="approval_contact" 
+                            x-model="approvalContact"
+                            placeholder="e.g. Customer Name or Phone Number"
+                            class="block w-full py-2.5 px-3 text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white min-h-[44px]"
+                        >
+                    </div>
+
+                    <div>
+                        <label for="approval_note" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                            Optional Remarks / Note
+                        </label>
+                        <textarea 
+                            name="approval_note" 
+                            id="approval_note" 
+                            x-model="approvalRemarks"
+                            rows="2"
+                            placeholder="e.g. Customer authorized replacing front brake pads verbally over the phone"
+                            class="block w-full py-2 px-3 text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white"
+                        ></textarea>
+                    </div>
+
+                    <div class="flex items-center justify-end space-x-3 pt-3 border-t border-gray-100">
+                        <button 
+                            type="button" 
+                            @click="showApprovalModal = false"
+                            class="px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 rounded-lg transition min-h-[40px]"
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            type="submit" 
+                            class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition min-h-[44px]"
+                        >
+                            Record Decision
                         </button>
                     </div>
                 </form>

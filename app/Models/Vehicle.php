@@ -78,4 +78,15 @@ class Vehicle extends Model
     {
         return $this->hasMany(Quotation::class);
     }
+
+    public function issues()
+    {
+        return $this->hasMany(JobIssue::class, 'vehicle_id')->latest();
+    }
+
+    public function appointments()
+    {
+        return $this->hasMany(Appointment::class, 'vehicle_id');
+    }
 }
+

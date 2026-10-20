@@ -26,6 +26,7 @@ class JobCard extends Model
         'tax_amount',
         'grand_total',
         'invoice_id',
+        'appointment_id',
         'customer_notes',
         'service_notes',
         'cancellation_reason',
@@ -129,4 +130,46 @@ class JobCard extends Model
     {
         return $this->belongsTo(Branch::class, 'branch_id');
     }
+
+    public function issues()
+    {
+        return $this->hasMany(JobIssue::class, 'job_card_id')->latest();
+    }
+
+    public function appointment()
+    {
+        return $this->belongsTo(Appointment::class, 'appointment_id');
+    }
+
+    public function supplementaryInvoices()
+    {
+        return $this->hasMany(Invoice::class, 'job_card_id')
+            ->where(function ($q) {
+                if ($this->invoice_id) {
+                    $q->where('id', '!=', $this->invoice_id);
+                }
+            })
+            ->latest();
+    }
+
+    public function additionalServices()
+    {
+        return $this->hasMany(JobCardService::class)->where('is_additional', true);
+    }
+
+    public function additionalProducts()
+    {
+        return $this->hasMany(JobCardProduct::class)->where('is_additional', true);
+    }
+
+    public function isAdditionalWorkInProgress(): bool
+    {
+        return $this->status === 'additional_work';
+    }
+
+    public function hasApprovedIssues(): bool
+    {
+        return $this->issues()->where('status', 'approved')->exists();
+    }
 }
+
