@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
 class Product extends Model
 {
@@ -20,7 +21,14 @@ class Product extends Model
         'min_stock',
         'max_stock',
         'selling_price',
+        'image_path',
         'is_active',
+    ];
+
+    protected $appends = [
+        'product_name',
+        'image_url',
+        'available_stock',
     ];
 
     protected function casts(): array
@@ -66,6 +74,24 @@ class Product extends Model
     public function getProductNameAttribute(): string
     {
         return $this->name ?? '';
+    }
+
+    public function getImageUrlAttribute(): ?string
+    {
+        if (empty($this->image_path)) {
+            return null;
+        }
+
+        if (str_starts_with($this->image_path, 'http://') || str_starts_with($this->image_path, 'https://')) {
+            return $this->image_path;
+        }
+
+        return Storage::disk('public')->url($this->image_path);
+    }
+
+    public function hasImage(): bool
+    {
+        return ! empty($this->image_path) && Storage::disk('public')->exists($this->image_path);
     }
 
     public function getAvailableStockAttribute(): float

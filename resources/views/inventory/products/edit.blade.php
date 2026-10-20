@@ -15,7 +15,7 @@
 
         <!-- Form Card -->
         <div class="bg-white border border-gray-200 rounded-xl p-6 sm:p-8 shadow-xs">
-            <form method="POST" action="{{ route('inventory.products.update', $product) }}" class="space-y-6" novalidate>
+            <form method="POST" action="{{ route('inventory.products.update', $product) }}" enctype="multipart/form-data" class="space-y-6" novalidate>
                 @csrf
                 @method('PUT')
 
@@ -35,6 +35,105 @@
                         />
                     </div>
                     @error('name')
+                        <p class="mt-1.5 text-xs text-rose-600 font-medium">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <!-- Product Image -->
+                <div x-data="{
+                    imagePreview: null,
+                    hasExisting: {{ $product->image_url ? 'true' : 'false' }},
+                    removeExisting: false,
+                    fileChosen(event) {
+                        const file = event.target.files[0];
+                        if (!file) return;
+                        this.removeExisting = false;
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            this.imagePreview = e.target.result;
+                        };
+                        reader.readAsDataURL(file);
+                    },
+                    clearNew() {
+                        this.imagePreview = null;
+                        this.$refs.imageInput.value = '';
+                    },
+                    markRemove() {
+                        this.removeExisting = true;
+                        this.clearNew();
+                    },
+                    undoRemove() {
+                        this.removeExisting = false;
+                    }
+                }">
+                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+                        Product Image <span class="text-gray-400 font-normal normal-case">(JPG, JPEG, PNG, WEBP - Max 2MB)</span>
+                    </label>
+
+                    <input type="hidden" name="remove_image" :value="removeExisting ? '1' : '0'">
+
+                    <div class="mt-2 flex items-center space-x-4">
+                        <!-- Preview Thumbnail / Current Image / Placeholder -->
+                        <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-xl border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center overflow-hidden shrink-0 relative shadow-2xs">
+                            <template x-if="imagePreview">
+                                <img :src="imagePreview" alt="New Preview" class="w-full h-full object-contain p-1" />
+                            </template>
+                            <template x-if="!imagePreview && hasExisting && !removeExisting">
+                                <img src="{{ $product->image_url }}" alt="{{ $product->name }}" class="w-full h-full object-contain p-1" />
+                            </template>
+                            <template x-if="(!imagePreview && !hasExisting) || (!imagePreview && removeExisting)">
+                                <div class="text-center p-2 text-gray-400">
+                                    <svg class="mx-auto h-7 w-7 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                    <span class="text-[10px] block font-medium mt-0.5" x-text="removeExisting ? 'Removed' : 'No image'"></span>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Upload controls -->
+                        <div class="flex-1 space-y-1.5">
+                            <input 
+                                type="file" 
+                                name="image" 
+                                id="image" 
+                                accept="image/jpeg,image/png,image/jpg,image/webp"
+                                x-ref="imageInput"
+                                @change="fileChosen"
+                                class="block w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[#EEF1FA] file:text-[#0B1849] hover:file:bg-[#dce4f7] cursor-pointer"
+                            />
+                            <div class="flex items-center justify-between text-[11px] text-gray-500">
+                                <span>Choose a file to replace existing image, or clear</span>
+                                <div class="space-x-2">
+                                    <button 
+                                        type="button" 
+                                        x-show="imagePreview" 
+                                        @click="clearNew" 
+                                        class="text-amber-600 hover:text-amber-800 font-semibold cursor-pointer"
+                                    >
+                                        Cancel new file
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        x-show="hasExisting && !removeExisting && !imagePreview" 
+                                        @click="markRemove" 
+                                        class="text-rose-600 hover:text-rose-800 font-semibold cursor-pointer"
+                                    >
+                                        Remove image
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        x-show="removeExisting" 
+                                        @click="undoRemove" 
+                                        class="text-blue-600 hover:text-blue-800 font-semibold cursor-pointer"
+                                    >
+                                        Keep image
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    @error('image')
                         <p class="mt-1.5 text-xs text-rose-600 font-medium">{{ $message }}</p>
                     @enderror
                 </div>

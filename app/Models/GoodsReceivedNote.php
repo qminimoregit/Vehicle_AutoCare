@@ -77,7 +77,7 @@ class GoodsReceivedNote extends Model
 
     public function getPaidAmountAttribute(): float
     {
-        return (float) $this->payments()->sum('amount');
+        return (float) $this->payments()->where('status', '!=', 'reversed')->sum('amount');
     }
 
     public function getOutstandingAmountAttribute(): float
@@ -121,4 +121,3 @@ class GoodsReceivedNote extends Model
         return $this->belongsTo(Branch::class, 'branch_id');
     }
 }
-

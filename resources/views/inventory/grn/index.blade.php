@@ -3,7 +3,39 @@
 @section('title', 'Purchasing (GRN)')
 
 @section('content')
-    <div>
+    <div x-data="{
+        paymentModalOpen: false,
+        submitting: false,
+        selectedGrn: {
+            id: null,
+            grn_number: '',
+            supplier_name: '',
+            supplier_invoice_number: '',
+            total_amount: '0.00',
+            total_amount_raw: 0,
+            already_paid: '0.00',
+            outstanding_balance: '0.00',
+            outstanding_raw: 0,
+            action_url: ''
+        },
+        paymentForm: {
+            amount: '',
+            payment_method: 'cash',
+            payment_date: '{{ date('Y-m-d') }}',
+            reference_number: '',
+            notes: ''
+        },
+        openPaymentModal(data) {
+            this.selectedGrn = data;
+            this.paymentForm.amount = data.outstanding_raw > 0 ? Number(data.outstanding_raw).toFixed(2) : '';
+            this.paymentForm.payment_method = 'cash';
+            this.paymentForm.payment_date = '{{ date('Y-m-d') }}';
+            this.paymentForm.reference_number = '';
+            this.paymentForm.notes = '';
+            this.submitting = false;
+            this.paymentModalOpen = true;
+        }
+    }">
         <!-- Page Header -->
         <x-page-header 
             title="Purchasing (GRN)" 
@@ -115,7 +147,7 @@
                                 Stock Status
                             </th>
                             <th scope="col" class="px-6 py-3.5 text-center text-xs font-bold text-gray-700 uppercase tracking-wider">
-                                Payment
+                                Payment Status
                             </th>
                             <th scope="col" class="px-6 py-3.5 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
                                 Actions
@@ -190,13 +222,41 @@
                                 </td>
 
                                 <!-- Actions -->
-                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-1.5">
                                     <a 
                                         href="{{ route('inventory.grn.show', $grn) }}" 
                                         class="inline-flex items-center px-2.5 py-1.5 text-xs font-semibold rounded-md text-[#0B1849] bg-blue-50 hover:bg-blue-100 border border-blue-200 transition"
                                     >
                                         View
                                     </a>
+
+                                    @if($grn->outstanding_amount > 0 && (Auth::user()->isAdmin() || Auth::user()->hasPermission('record_payments')))
+                                        <button 
+                                            type="button" 
+                                            @click="openPaymentModal({
+                                                id: {{ $grn->id }},
+                                                grn_number: '{{ $grn->grn_number }}',
+                                                supplier_name: '{{ addslashes($grn->supplier->name ?? 'N/A') }}',
+                                                supplier_invoice_number: '{{ addslashes($grn->supplier_invoice_number ?: 'N/A') }}',
+                                                total_amount: '{{ number_format($grn->total_amount, 2) }}',
+                                                total_amount_raw: {{ (float) $grn->total_amount }},
+                                                already_paid: '{{ number_format($grn->paid_amount, 2) }}',
+                                                outstanding_balance: '{{ number_format($grn->outstanding_amount, 2) }}',
+                                                outstanding_raw: {{ (float) $grn->outstanding_amount }},
+                                                action_url: '{{ route('inventory.grn.payments.store', $grn) }}'
+                                            })"
+                                            class="inline-flex items-center px-2.5 py-1.5 text-xs font-semibold rounded-md text-white bg-[#0B1849] hover:bg-[#15286e] shadow-2xs transition cursor-pointer"
+                                        >
+                                            Record Payment
+                                        </button>
+                                    @else
+                                        <a 
+                                            href="{{ route('inventory.grn.show', $grn) }}#payments-section" 
+                                            class="inline-flex items-center px-2.5 py-1.5 text-xs font-semibold rounded-md text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition"
+                                        >
+                                            View Payments
+                                        </a>
+                                    @endif
 
                                     <a 
                                         href="{{ route('inventory.grn.print', $grn) }}" 
@@ -242,6 +302,173 @@
                     {{ $grns->links() }}
                 </div>
             @endif
+        </div>
+        <!-- MODAL: RECORD SUPPLIER PAYMENT -->
+        <div 
+            x-show="paymentModalOpen" 
+            class="fixed inset-0 z-50 overflow-y-auto"
+            style="display: none;"
+            x-cloak
+        >
+            <div class="flex items-center justify-center min-h-screen px-4 py-6">
+                <div class="fixed inset-0 bg-gray-900/50 backdrop-blur-xs transition-opacity" @click="paymentModalOpen = false"></div>
+
+                <div class="relative bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-gray-200 space-y-4">
+                    <!-- Modal Header -->
+                    <div class="flex items-center justify-between border-b border-gray-100 pb-3">
+                        <div>
+                            <h3 class="text-base font-bold text-gray-900">Record Supplier Payment</h3>
+                            <p class="text-xs text-gray-500">Record a disbursement against supplier goods received note.</p>
+                        </div>
+                        <button type="button" @click="paymentModalOpen = false" class="text-gray-400 hover:text-gray-600 cursor-pointer">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- GRN Info Summary (Read-Only) -->
+                    <div class="bg-gray-50 rounded-xl p-4 border border-gray-200/80 text-xs space-y-2">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <span class="text-gray-500 block">GRN Number</span>
+                                <span class="font-bold text-gray-900 font-mono" x-text="selectedGrn.grn_number"></span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500 block">Supplier Name</span>
+                                <span class="font-bold text-gray-900" x-text="selectedGrn.supplier_name"></span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500 block">Supplier Invoice Number</span>
+                                <span class="font-medium text-gray-800 font-mono" x-text="selectedGrn.supplier_invoice_number"></span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500 block">GRN Total</span>
+                                <span class="font-bold text-gray-900 font-mono">LKR <span x-text="selectedGrn.total_amount"></span></span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500 block">Already Paid</span>
+                                <span class="font-semibold text-emerald-700 font-mono">LKR <span x-text="selectedGrn.already_paid"></span></span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500 block">Outstanding Balance</span>
+                                <span class="font-bold text-rose-700 font-mono text-sm">LKR <span x-text="selectedGrn.outstanding_balance"></span></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Payment Form -->
+                    <form 
+                        :action="selectedGrn.action_url" 
+                        method="POST" 
+                        class="space-y-4"
+                        @submit="if(submitting){ $event.preventDefault(); return false; } submitting = true;"
+                    >
+                        @csrf
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                                    Payment Amount (LKR) <span class="text-rose-600">*</span>
+                                </label>
+                                <input 
+                                    type="number" 
+                                    name="amount" 
+                                    step="0.01" 
+                                    min="0.01" 
+                                    :max="selectedGrn.outstanding_raw" 
+                                    x-model="paymentForm.amount"
+                                    required
+                                    class="block w-full px-3 py-2 text-sm font-mono font-bold text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849]"
+                                />
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                                    Payment Method <span class="text-rose-600">*</span>
+                                </label>
+                                <select 
+                                    name="payment_method" 
+                                    x-model="paymentForm.payment_method" 
+                                    required
+                                    class="block w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] bg-white"
+                                >
+                                    <option value="cash">Cash</option>
+                                    <option value="bank_transfer">Bank Transfer</option>
+                                    <option value="card">Card</option>
+                                    <option value="cheque">Cheque</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                                    Payment Date <span class="text-rose-600">*</span>
+                                </label>
+                                <input 
+                                    type="date" 
+                                    name="payment_date" 
+                                    x-model="paymentForm.payment_date" 
+                                    required
+                                    class="block w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] bg-white"
+                                />
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                                    Payment Reference <span class="text-gray-400 font-normal">(optional)</span>
+                                </label>
+                                <input 
+                                    type="text" 
+                                    name="reference_number" 
+                                    x-model="paymentForm.reference_number" 
+                                    placeholder="e.g. Chq #, Bank slip ref"
+                                    class="block w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849]"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                                Note <span class="text-gray-400 font-normal">(optional)</span>
+                            </label>
+                            <textarea 
+                                name="notes" 
+                                rows="2" 
+                                x-model="paymentForm.notes" 
+                                placeholder="Additional remarks or notes..."
+                                class="block w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849]"
+                            ></textarea>
+                        </div>
+
+                        <!-- Modal Actions -->
+                        <div class="flex items-center justify-end space-x-3 pt-3 border-t border-gray-100">
+                            <button 
+                                type="button" 
+                                @click="paymentModalOpen = false" 
+                                :disabled="submitting"
+                                class="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                type="submit" 
+                                :disabled="submitting"
+                                class="inline-flex items-center px-5 py-2 text-xs font-semibold text-white bg-[#0B1849] hover:bg-[#15286e] rounded-lg transition shadow-xs cursor-pointer disabled:opacity-50"
+                            >
+                                <span x-show="!submitting">Save Payment</span>
+                                <span x-show="submitting" class="inline-flex items-center">
+                                    <svg class="animate-spin -ml-1 mr-2 h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                                    </svg>
+                                    Saving...
+                                </span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
     </div>
 @endsection

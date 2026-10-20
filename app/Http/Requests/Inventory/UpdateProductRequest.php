@@ -36,6 +36,8 @@ class UpdateProductRequest extends FormRequest
             'max_stock' => ['nullable', 'numeric', 'min:0'],
             'selling_price' => ['required', 'numeric', 'min:0'],
             'is_active' => ['nullable', 'boolean'],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'remove_image' => ['nullable', 'boolean'],
         ];
     }
 
@@ -51,6 +53,9 @@ class UpdateProductRequest extends FormRequest
             'selling_price.required' => 'Selling price is required.',
             'selling_price.min' => 'Selling price must be 0 or higher.',
             'sku.unique' => 'This product code / SKU is already registered.',
+            'image.image' => 'The uploaded file must be a valid image.',
+            'image.mimes' => 'Product image must be in JPG, JPEG, PNG, or WEBP format.',
+            'image.max' => 'Product image size cannot exceed 2 MB.',
         ];
     }
 }

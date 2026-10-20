@@ -11,6 +11,7 @@ use App\Models\Supplier;
 use App\Models\UnitOfMeasurement;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 class ProductController extends Controller
@@ -63,6 +64,11 @@ class ProductController extends Controller
         $data = $request->validated();
         $data['is_active'] = $request->boolean('is_active', true);
 
+        if ($request->hasFile('image')) {
+            $data['image_path'] = $request->file('image')->store('products', 'public');
+        }
+        unset($data['image']);
+
         $product = Product::create($data);
 
         ActivityLog::log(
@@ -100,7 +106,30 @@ class ProductController extends Controller
             $data['is_active'] = $request->boolean('is_active');
         }
 
+        $oldImagePath = $product->image_path;
+        $newImagePath = null;
+
+        if ($request->hasFile('image')) {
+            $newImagePath = $request->file('image')->store('products', 'public');
+            $data['image_path'] = $newImagePath;
+        } elseif ($request->boolean('remove_image')) {
+            $data['image_path'] = null;
+        }
+
+        unset($data['image'], $data['remove_image']);
+
         $product->update($data);
+
+        // Delete old image only after successful DB update and if unreferenced by other records
+        if ($oldImagePath && ($newImagePath || $request->boolean('remove_image'))) {
+            $isReferencedElsewhere = Product::where('id', '!=', $product->id)
+                ->where('image_path', $oldImagePath)
+                ->exists();
+
+            if (! $isReferencedElsewhere && Storage::disk('public')->exists($oldImagePath)) {
+                Storage::disk('public')->delete($oldImagePath);
+            }
+        }
 
         ActivityLog::log(
             action: 'updated',

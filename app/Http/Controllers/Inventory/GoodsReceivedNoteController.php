@@ -189,6 +189,7 @@ class GoodsReceivedNoteController extends Controller
             'items.product.uom',
             'stockBatches',
             'payments.createdBy',
+            'payments.reversedBy',
             'postedBy',
             'createdBy',
         ]);
