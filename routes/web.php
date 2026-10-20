@@ -3,7 +3,14 @@
 use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\StaffManagementController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\Billing\AvoidDirectSaleController;
+use App\Http\Controllers\Billing\AvoidServiceSaleController;
+use App\Http\Controllers\Billing\InvoiceDateChangeController;
+use App\Http\Controllers\Billing\MultipleInvoicePaymentController;
+use App\Http\Controllers\Billing\QuotationController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Expenses\ExpenseCategoryController;
+use App\Http\Controllers\Expenses\ExpenseController;
 use App\Http\Controllers\Inventory\GoodsReceivedNoteController;
 use App\Http\Controllers\Inventory\ProductController;
 use App\Http\Controllers\Inventory\StockReportController;
@@ -19,9 +26,6 @@ use App\Http\Controllers\Operations\DirectSaleController;
 use App\Http\Controllers\Operations\InvoiceController;
 use App\Http\Controllers\Operations\JobCardController;
 use App\Http\Controllers\Operations\VehicleRegistrationController;
-use App\Http\Controllers\Billing\QuotationController;
-use App\Http\Controllers\Expenses\ExpenseCategoryController;
-use App\Http\Controllers\Expenses\ExpenseController;
 use App\Http\Controllers\Payroll\AttendanceController;
 use App\Http\Controllers\Payroll\EmployeeController;
 use App\Http\Controllers\Payroll\SalaryController;
@@ -92,7 +96,6 @@ Route::middleware(['auth', 'active'])->group(function () {
     // Global Branch Selector Switch Route
     Route::post('/branches/switch', [BranchController::class, 'switchBranch'])->name('branches.switch');
 
-
     // Suppliers & Inventory Module
     Route::prefix('inventory')->name('inventory.')->group(function () {
         // Suppliers
@@ -149,7 +152,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::patch('/job-cards/{jobCard}/status', [JobCardController::class, 'updateStatus'])->name('job-cards.status');
         Route::post('/job-cards/{jobCard}/cancel', [JobCardController::class, 'cancel'])->name('job-cards.cancel');
         Route::post('/job-cards/{jobCard}/generate-invoice', [JobCardController::class, 'generateInvoice'])->name('job-cards.generate-invoice');
-        
+
         // Job Card Services
         Route::get('/job-cards/{jobCard}/services/{service}/price', [JobCardController::class, 'getServicePrice'])->name('job-cards.service-price');
         Route::post('/job-cards/{jobCard}/services', [JobCardController::class, 'addService'])->name('job-cards.services.add');
@@ -200,6 +203,25 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/invoices/{invoice}/pdf', [InvoiceController::class, 'downloadPdf'])->name('invoices.pdf');
         Route::get('/invoices/{invoice}/print', [InvoiceController::class, 'print'])->name('invoices.print');
         Route::post('/invoices/{invoice}/payment', [InvoiceController::class, 'addPayment'])->name('invoices.payment');
+
+        // Stage 6: Avoid Direct Sale (Admin Only)
+        Route::get('/avoid-direct-sale', [AvoidDirectSaleController::class, 'index'])->name('avoid-direct-sale.index');
+        Route::post('/avoid-direct-sale/{directSale}', [AvoidDirectSaleController::class, 'cancel'])->name('avoid-direct-sale.cancel');
+
+        // Stage 6: Avoid Service Sale (Admin Only)
+        Route::get('/avoid-service-sale', [AvoidServiceSaleController::class, 'index'])->name('avoid-service-sale.index');
+        Route::post('/avoid-service-sale/{invoice}', [AvoidServiceSaleController::class, 'cancel'])->name('avoid-service-sale.cancel');
+
+        // Stage 6: Invoice Date Change (Admin Only)
+        Route::get('/invoice-date-change', [InvoiceDateChangeController::class, 'index'])->name('invoice-date-change.index');
+        Route::post('/invoice-date-change/{invoice}', [InvoiceDateChangeController::class, 'update'])->name('invoice-date-change.update');
+
+        // Stage 6: Multiple Invoice Payment (Admin & Staff)
+        Route::get('/multiple-invoice-payment', [MultipleInvoicePaymentController::class, 'index'])->name('multiple-invoice-payment.index');
+        Route::get('/multiple-invoice-payment/search-invoice', [MultipleInvoicePaymentController::class, 'searchInvoice'])->name('multiple-invoice-payment.search-invoice');
+        Route::get('/multiple-invoice-payment/customers/{customer}/invoices', [MultipleInvoicePaymentController::class, 'customerInvoices'])->name('multiple-invoice-payment.customer-invoices');
+        Route::post('/multiple-invoice-payment/split', [MultipleInvoicePaymentController::class, 'storeSplitPayment'])->name('multiple-invoice-payment.split');
+        Route::post('/multiple-invoice-payment/bulk', [MultipleInvoicePaymentController::class, 'storeBulkPayment'])->name('multiple-invoice-payment.bulk');
     });
 
     // Employees & Payroll Module (Stage 4)

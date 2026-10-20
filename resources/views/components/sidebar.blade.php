@@ -2,10 +2,16 @@
     $isMasterData = request()->routeIs('master-data.*');
     $isInventory = request()->routeIs('inventory.*');
     $isOperations = request()->routeIs('operations.*');
-    $isBilling = request()->routeIs('billing.*', 'operations.invoices.*');
+    $isAdjustments = request()->routeIs(
+        'billing.avoid-direct-sale.*',
+        'billing.avoid-service-sale.*',
+        'billing.invoice-date-change.*',
+        'billing.multiple-invoice-payment.*'
+    );
+    $isBilling = request()->routeIs('billing.quotations.*', 'billing.invoices.*', 'operations.invoices.*');
     $isPayroll = request()->routeIs('payroll.*');
     $isExpenses = request()->routeIs('expenses.*');
-    $defaultSection = $isBilling ? 'billing' : ($isExpenses ? 'expenses' : ($isPayroll ? 'payroll' : ($isOperations ? 'operations' : ($isMasterData ? 'master-data' : ($isInventory ? 'inventory' : '')))));
+    $defaultSection = $isAdjustments ? 'adjustments' : ($isBilling ? 'billing' : ($isExpenses ? 'expenses' : ($isPayroll ? 'payroll' : ($isOperations ? 'operations' : ($isMasterData ? 'master-data' : ($isInventory ? 'inventory' : ''))))));
 @endphp
 
 <!-- Mobile Backdrop -->
@@ -386,6 +392,99 @@
                         </a>
                     </div>
                 </div>
+
+                <!-- Invoice Adjustments Expandable Section -->
+                @if(Auth::user() && (Auth::user()->isAdmin() || Auth::user()->hasPermission('record_payments')))
+                <div>
+                    <button 
+                        type="button" 
+                        @click="toggleSection('adjustments')"
+                        class="w-full flex items-center justify-between px-3 py-2 text-[13px] rounded-lg transition group cursor-pointer focus:outline-none {{ $isAdjustments ? 'text-[#0B1849] font-semibold bg-[#EEF1FA]/40' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        :class="activeSection === 'adjustments' && !{{ $isAdjustments ? 'true' : 'false' }} ? 'bg-slate-50 text-gray-900 font-semibold' : ''"
+                    >
+                        <span class="flex items-center min-w-0">
+                            <svg class="mr-2.5 h-4 w-4 shrink-0 {{ $isAdjustments ? 'text-[#0B1849]' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                            <span class="truncate">Invoice Adjustments</span>
+                        </span>
+                        <svg 
+                            :class="activeSection === 'adjustments' ? 'rotate-180 text-gray-600' : 'text-gray-400'" 
+                            class="w-3.5 h-3.5 ml-2 shrink-0 transform transition-transform duration-200" 
+                            fill="none" 
+                            viewBox="0 0 24 24" 
+                            stroke="currentColor"
+                        >
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+
+                    <!-- Invoice Adjustments Sub-menu -->
+                    <div 
+                        x-show="activeSection === 'adjustments'" 
+                        x-transition:enter="transition ease-out duration-150"
+                        x-transition:enter-start="opacity-0 -translate-y-1"
+                        x-transition:enter-end="opacity-100 translate-y-0"
+                        x-transition:leave="transition ease-in duration-100"
+                        x-transition:leave-start="opacity-100 translate-y-0"
+                        x-transition:leave-end="opacity-0 -translate-y-1"
+                        class="mt-1 space-y-0.5 pl-3 border-l-2 border-gray-100 ml-4"
+                        style="display: none;"
+                    >
+                        <!-- Avoid Direct Sale (Admin Only) -->
+                        @if(Auth::user()->isAdmin())
+                        @php $isAvoidDirect = request()->routeIs('billing.avoid-direct-sale.*'); @endphp
+                        <a 
+                            href="{{ route('billing.avoid-direct-sale.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isAvoidDirect ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isAvoidDirect ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Avoid Direct Sale</span>
+                        </a>
+                        @endif
+
+                        <!-- Avoid Service Sale (Admin Only) -->
+                        @if(Auth::user()->isAdmin())
+                        @php $isAvoidService = request()->routeIs('billing.avoid-service-sale.*'); @endphp
+                        <a 
+                            href="{{ route('billing.avoid-service-sale.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isAvoidService ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isAvoidService ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Avoid Service Sale</span>
+                        </a>
+                        @endif
+
+                        <!-- Invoice Date Change (Admin Only) -->
+                        @if(Auth::user()->isAdmin())
+                        @php $isDateChange = request()->routeIs('billing.invoice-date-change.*'); @endphp
+                        <a 
+                            href="{{ route('billing.invoice-date-change.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isDateChange ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isDateChange ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Invoice Date Change</span>
+                        </a>
+                        @endif
+
+                        <!-- Multiple Invoice Payment -->
+                        @if(Auth::user()->isAdmin() || Auth::user()->hasPermission('record_payments'))
+                        @php $isMultiPayment = request()->routeIs('billing.multiple-invoice-payment.*'); @endphp
+                        <a 
+                            href="{{ route('billing.multiple-invoice-payment.index') }}" 
+                            @click="if (window.innerWidth < 768) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isMultiPayment ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isMultiPayment ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Multiple Invoice Payment</span>
+                        </a>
+                        @endif
+                    </div>
+                </div>
+                @endif
 
                 <!-- Employees & Payroll Expandable Section -->
                 <div>
