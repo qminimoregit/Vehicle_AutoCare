@@ -11,46 +11,52 @@
 @php
     $slides = [
         [
-            'image' => asset('images/login/vehicle-01.webp'),
-            'alt' => 'Modern luxury sports car at auto care service center',
-            'tag' => 'Car Care & Performance',
-            'title' => 'Manage Your Auto Care Center',
-            'desc' => 'Complete operational control, scheduling, and job card tracking in one unified interface.'
-        ],
-        [
-            'image' => asset('images/login/vehicle-02.webp'),
-            'alt' => 'Premium luxury SUV in detailing and service bay',
-            'tag' => 'SUV & Luxury Detailing',
+            'image' => 'images/login/vehicle-01.webp',
+            'fallback' => 'images/login/vehicle-01.jpg',
+            'alt' => 'Luxury Range Rover SUV in modern detailing bay',
+            'tag' => 'Luxury SUV Care',
             'title' => 'Professional Vehicle Services',
             'desc' => 'Deliver superior auto detailing, inspections, and customer service with precision.'
         ],
         [
-            'image' => asset('images/login/vehicle-03.webp'),
-            'alt' => 'Rugged 4x4 Jeep Wrangler in workshop service bay',
-            'tag' => '4x4 & Jeep Maintenance',
+            'image' => 'images/login/vehicle-02.webp',
+            'fallback' => 'images/login/vehicle-02.jpg',
+            'alt' => 'Modern luxury sedan undergoing computerized diagnostics in service bay',
+            'tag' => 'Modern Sedan Diagnostics',
+            'title' => 'Manage Your Auto Care Center',
+            'desc' => 'High-accuracy fault diagnostics, electronic calibrations, and comprehensive service records.'
+        ],
+        [
+            'image' => 'images/login/vehicle-03.webp',
+            'fallback' => 'images/login/vehicle-03.jpg',
+            'alt' => 'Modern performance sports car on high-gloss workshop floor',
+            'tag' => 'Sports Car & Performance',
+            'title' => 'Precision Mechanical Service',
+            'desc' => 'Complete operational control, scheduling, and high-performance workshop tracking.'
+        ],
+        [
+            'image' => 'images/login/vehicle-04.webp',
+            'fallback' => 'images/login/vehicle-04.jpg',
+            'alt' => 'Rugged premium Jeep Wrangler 4x4 in off-road service bay',
+            'tag' => 'Premium Jeep Maintenance',
             'title' => 'Manage Every Job with Confidence',
             'desc' => 'Track technician assignments, issue spare parts, and verify repair stages in real time.'
         ],
         [
-            'image' => asset('images/login/vehicle-04.webp'),
-            'alt' => 'Modern passenger and commercial van in service center',
-            'tag' => 'Van & Fleet Maintenance',
+            'image' => 'images/login/vehicle-05.webp',
+            'fallback' => 'images/login/vehicle-05.jpg',
+            'alt' => '4x4 double cab pickup truck on hydraulic workshop service lift',
+            'tag' => 'Pickup & Fleet Care',
             'title' => 'Smart Fleet & Van Care',
-            'desc' => 'Streamlined appointment booking, bay management, and automated client notifications.'
+            'desc' => 'Full chassis, suspension, tire care, and preventive fleet maintenance with live updates.'
         ],
         [
-            'image' => asset('images/login/vehicle-05.webp'),
-            'alt' => '4x4 double cab pickup truck on workshop service lift',
-            'tag' => 'Pickup & Truck Care',
-            'title' => 'Precision Mechanical Service',
-            'desc' => 'Full chassis, suspension, tire care, and preventive maintenance with live job updates.'
-        ],
-        [
-            'image' => asset('images/login/vehicle-06.webp'),
-            'alt' => 'Technician performing computerized diagnostics on 4-wheel vehicle',
-            'tag' => 'Workshop Diagnostics',
+            'image' => 'images/login/vehicle-06.webp',
+            'fallback' => 'images/login/vehicle-06.jpg',
+            'alt' => 'Modern luxury 4x4 Land Rover Defender in state-of-the-art service center',
+            'tag' => 'Luxury 4x4 Vehicle Care',
             'title' => 'Customers, Vehicles & Invoices',
-            'desc' => 'Instant invoice creation, multi-method payment collection, and complete service histories.'
+            'desc' => 'Instant invoice creation, multi-method payment collection, and complete customer history.'
         ],
     ];
 @endphp
@@ -253,30 +259,32 @@
         x-init="initSlider()"
         @mouseenter="stopAutoplay()"
         @mouseleave="startAutoplay()"
-        class="hidden lg:flex lg:w-[55%] xl:w-[58%] 2xl:w-[60%] relative h-full bg-slate-950 overflow-hidden select-none"
+        class="hidden lg:flex lg:w-[55%] xl:w-[58%] 2xl:w-[60%] relative h-full bg-[#0B1849] overflow-hidden select-none"
         @keydown.right.window="next()"
         @keydown.left.window="prev()"
     >
         <!-- Background Slide Images with Object-fit Cover and Smooth Fade Transitions -->
         @foreach($slides as $index => $slide)
             <div 
-                class="absolute inset-0 w-full h-full transition-opacity duration-1000 ease-in-out"
-                :class="active === {{ $index }} ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'"
-                @if($index === 0) :class="active === 0 ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'" @else style="opacity: 0;" @endif
+                class="absolute inset-0 w-full h-full transition-opacity duration-1000 ease-in-out {{ $index === 0 ? 'opacity-100 z-10 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none' }}"
+                :class="active === {{ $index }} ? 'opacity-100 z-10 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none'"
             >
-                <img 
-                    src="{{ $slide['image'] }}" 
-                    alt="{{ $slide['alt'] }}" 
-                    class="w-full h-full object-cover object-center"
-                    loading="eager"
-                />
+                <picture class="w-full h-full">
+                    <source srcset="{{ asset($slide['image']) }}" type="image/webp">
+                    <img 
+                        src="{{ asset($slide['fallback']) }}" 
+                        alt="{{ $slide['alt'] }}" 
+                        class="w-full h-full object-cover object-center"
+                        loading="{{ $index === 0 ? 'eager' : 'lazy' }}"
+                    />
+                </picture>
                 <!-- Subtle dark gradient overlay near bottom for readable white text -->
-                <div class="absolute inset-0 bg-linear-to-t from-black/85 via-black/35 to-black/10"></div>
+                <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/15"></div>
             </div>
         @endforeach
 
         <!-- Slide Overlay Content: Text & Controls -->
-        <div class="relative z-20 w-full h-full flex flex-col justify-end p-8 sm:p-12 lg:p-14 xl:p-16">
+        <div class="relative z-20 w-full h-full flex flex-col justify-end p-8 sm:p-12 lg:p-14 xl:p-16 pointer-events-none">
             
             <!-- Marketing Headlines (Synchronized with each Slide) -->
             <div class="min-h-[140px] flex flex-col justify-end">
@@ -290,6 +298,7 @@
                         x-transition:leave-start="opacity-100 translate-y-0"
                         x-transition:leave-end="opacity-0 -translate-y-2"
                         class="space-y-2.5 max-w-xl"
+                        @if($index !== 0) style="display: none;" @endif
                     >
                         <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold tracking-wider uppercase bg-white/15 text-white/95 backdrop-blur-md border border-white/20">
                             {{ $slide['tag'] }}
@@ -305,7 +314,7 @@
             </div>
 
             <!-- Slider Navigation Row: Small Indicator Dots & Manual Arrow Navigation -->
-            <div class="mt-8 flex items-center justify-between pt-5 border-t border-white/15">
+            <div class="mt-8 flex items-center justify-between pt-5 border-t border-white/15 pointer-events-auto">
                 
                 <!-- Indicator Dots (● ○ ○ ○ ○ ○) -->
                 <div class="flex items-center space-x-2.5" role="tablist" aria-label="Slider navigation">
@@ -314,7 +323,7 @@
                             type="button"
                             @click="goTo({{ $index }})"
                             class="transition-all duration-300 rounded-full focus:outline-hidden focus:ring-2 focus:ring-white/60 cursor-pointer"
-                            :class="active === {{ $index }} ? 'w-8 h-2.5 bg-white' : 'w-2.5 h-2.5 bg-white/40 hover:bg-white/70'"
+                            :class="active === {{ $index }} ? 'w-8 h-2.5 bg-white shadow-xs' : 'w-2.5 h-2.5 bg-white/40 hover:bg-white/70'"
                             aria-label="Go to slide {{ $index + 1 }}: {{ $slide['title'] }}"
                         ></button>
                     @endforeach
@@ -417,5 +426,8 @@
             }
         };
     }
+
+    // Expose globally on window so Alpine can bind under all script-loading contexts
+    window.vehicleSlider = vehicleSlider;
 </script>
 @endpush
