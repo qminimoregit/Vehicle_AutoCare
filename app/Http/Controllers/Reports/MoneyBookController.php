@@ -55,7 +55,8 @@ class MoneyBookController extends Controller
         if ($branchId && $branchId !== 'all') {
             $paymentQuery->where(function ($q) use ($branchId) {
                 $q->whereHas('invoice', fn ($iq) => $iq->where('branch_id', $branchId))
-                  ->orWhereHas('jobCard', fn ($jq) => $jq->where('branch_id', $branchId));
+                  ->orWhereHas('jobCard', fn ($jq) => $jq->where('branch_id', $branchId))
+                  ->orWhereHas('receipt', fn ($rq) => $rq->where('branch_id', $branchId));
             });
         }
 
@@ -63,9 +64,38 @@ class MoneyBookController extends Controller
             $paymentQuery->where('payment_method', $methodFilter);
         }
 
-        $payments = $paymentQuery->orderBy('payment_date', 'desc')
+        $allPayments = $paymentQuery->orderBy('payment_date', 'desc')
             ->orderBy('id', 'desc')
             ->get();
+
+        // Collapse multi-invoice payment allocations so that the master receipt is shown only once in Money Book
+        $processedReceiptIds = [];
+        $displayPayments = collect();
+
+        foreach ($allPayments as $p) {
+            if ($p->payment_receipt_id) {
+                if (in_array($p->payment_receipt_id, $processedReceiptIds)) {
+                    continue;
+                }
+                $processedReceiptIds[] = $p->payment_receipt_id;
+
+                $receipt = $p->receipt;
+                $receiptPayments = $allPayments->where('payment_receipt_id', $p->payment_receipt_id);
+                $receiptInvoices = $receiptPayments->pluck('invoice.invoice_number')->filter()->unique()->values();
+
+                $receiptEntry = clone $p;
+                $receiptEntry->payment_number = $receipt?->receipt_number ?? $p->payment_number;
+                $receiptEntry->amount = $receiptPayments->sum('amount');
+                if ($receiptInvoices->count() > 1) {
+                    $receiptEntry->setRelation('invoice', null); // Displays as Multiple / Split
+                }
+                $displayPayments->push($receiptEntry);
+            } else {
+                $displayPayments->push($p);
+            }
+        }
+
+        $payments = $displayPayments;
 
         // Query Credit Sales Created in this date range (Invoices issued with remaining credit balance)
         $creditSalesQuery = Invoice::with(['customer', 'branch'])
@@ -217,11 +247,36 @@ class MoneyBookController extends Controller
         if ($branchId && $branchId !== 'all') {
             $paymentQuery->where(function ($q) use ($branchId) {
                 $q->whereHas('invoice', fn ($iq) => $iq->where('branch_id', $branchId))
-                  ->orWhereHas('jobCard', fn ($jq) => $jq->where('branch_id', $branchId));
+                  ->orWhereHas('jobCard', fn ($jq) => $jq->where('branch_id', $branchId))
+                  ->orWhereHas('receipt', fn ($rq) => $rq->where('branch_id', $branchId));
             });
         }
 
-        $payments = $paymentQuery->orderBy('payment_date', 'desc')->get();
+        $allPayments = $paymentQuery->orderBy('payment_date', 'desc')->get();
+        $processedReceiptIds = [];
+        $displayPayments = collect();
+
+        foreach ($allPayments as $p) {
+            if ($p->payment_receipt_id) {
+                if (in_array($p->payment_receipt_id, $processedReceiptIds)) {
+                    continue;
+                }
+                $processedReceiptIds[] = $p->payment_receipt_id;
+                $receiptPayments = $allPayments->where('payment_receipt_id', $p->payment_receipt_id);
+                $receiptInvoices = $receiptPayments->pluck('invoice.invoice_number')->filter()->unique()->values();
+
+                $receiptEntry = clone $p;
+                $receiptEntry->payment_number = $p->receipt?->receipt_number ?? $p->payment_number;
+                $receiptEntry->amount = $receiptPayments->sum('amount');
+                if ($receiptInvoices->count() > 1) {
+                    $receiptEntry->setRelation('invoice', null);
+                }
+                $displayPayments->push($receiptEntry);
+            } else {
+                $displayPayments->push($p);
+            }
+        }
+        $payments = $displayPayments;
         $fileName = 'money_book_'.now()->format('Y_m_d_His').'.csv';
 
         $headers = [

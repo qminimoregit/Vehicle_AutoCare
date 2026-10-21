@@ -26,6 +26,7 @@ class MultipleInvoicePaymentController extends Controller
     public function index(Request $request): View
     {
         $activeBranchId = BranchContext::getActiveBranchId();
+        $selectedCustomerId = $request->query('customer_id');
 
         // Load customers that have at least one issued or partially paid invoice
         $customersQuery = Customer::where('status', 'active')
@@ -51,13 +52,45 @@ class MultipleInvoicePaymentController extends Controller
 
         $customers = $customersQuery->get();
 
-        // Optional pre-selected invoice search
-        $invoiceSearch = trim((string) $request->query('invoice_number', ''));
+        // If a customer_id is requested but not in the list, try to include them
+        if ($selectedCustomerId && ! $customers->contains('id', (int) $selectedCustomerId)) {
+            $extraCust = Customer::withCount(['invoices as unpaid_invoices_count' => function ($q) use ($activeBranchId) {
+                $q->whereIn('status', ['issued', 'partially_paid'])
+                    ->where('balance_amount', '>', 0);
+                if ($activeBranchId) {
+                    $q->where(function ($sub) use ($activeBranchId) {
+                        $sub->where('branch_id', $activeBranchId)->orWhereNull('branch_id');
+                    });
+                }
+            }])->find($selectedCustomerId);
+
+            if ($extraCust) {
+                $customers->prepend($extraCust);
+            }
+        }
+
+        // Optional pre-selected invoice search (normalized)
+        $rawInvoiceSearch = trim((string) $request->query('invoice_number', ''));
         $splitInvoice = null;
 
-        if ($invoiceSearch !== '') {
+        if ($rawInvoiceSearch !== '') {
+            $normSearch = ltrim($rawInvoiceSearch, " \t\n\r\0\x0B#");
+            $normSearch = trim($normSearch);
+
+            $candidates = array_unique(array_filter([
+                $rawInvoiceSearch,
+                $normSearch,
+                '#' . $normSearch,
+                strtoupper($normSearch),
+                '#' . strtoupper($normSearch),
+            ]));
+
             $splitQuery = Invoice::with(['customer', 'jobCard.vehicle', 'payments'])
-                ->where('invoice_number', $invoiceSearch);
+                ->where(function ($q) use ($candidates, $normSearch) {
+                    $q->whereIn('invoice_number', $candidates)
+                      ->orWhereRaw('LOWER(invoice_number) = ?', [strtolower($normSearch)]);
+                });
+
             if ($activeBranchId) {
                 $splitQuery->where(function ($q) use ($activeBranchId) {
                     $q->where('branch_id', $activeBranchId)->orWhereNull('branch_id');
@@ -66,40 +99,89 @@ class MultipleInvoicePaymentController extends Controller
             $splitInvoice = $splitQuery->first();
         }
 
-        return view('billing.multiple-invoice-payment.index', compact('customers', 'splitInvoice', 'invoiceSearch'));
+        $initialTab = 'split';
+        if ($request->query('tab') === 'multiple' || $request->query('tab') === 'bulk' || $request->has('customer_id')) {
+            $initialTab = 'bulk';
+        }
+
+        return view('billing.multiple-invoice-payment.index', compact(
+            'customers',
+            'splitInvoice',
+            'rawInvoiceSearch',
+            'initialTab',
+            'selectedCustomerId'
+        ));
     }
 
     /**
      * JSON search endpoint for Option 1: fetch single invoice details and outstanding balance.
+     * Supports both 'INV-...' and '#INV-...' formats, whitespace normalization, and branch isolation.
      */
     public function searchInvoice(Request $request): JsonResponse
     {
-        $number = trim((string) $request->query('number', ''));
-        if ($number === '') {
-            return response()->json(['success' => false, 'message' => 'Invoice number required.'], 400);
+        $rawNumber = trim((string) $request->query('number', ''));
+        if ($rawNumber === '') {
+            return response()->json(['success' => false, 'message' => 'Please enter an invoice number.'], 400);
         }
 
+        $user = Auth::user();
         $activeBranchId = BranchContext::getActiveBranchId();
 
-        $query = Invoice::with(['customer', 'jobCard.vehicle'])->where('invoice_number', $number);
-        if ($activeBranchId) {
-            $query->where(function ($q) use ($activeBranchId) {
-                $q->where('branch_id', $activeBranchId)->orWhereNull('branch_id');
-            });
-        }
+        // Normalize: strip leading '#' and clean spaces
+        $normalized = ltrim($rawNumber, " \t\n\r\0\x0B#");
+        $normalized = trim($normalized);
 
-        $invoice = $query->first();
+        $candidates = array_unique(array_filter([
+            $rawNumber,
+            $normalized,
+            '#' . $normalized,
+            strtoupper($normalized),
+            '#' . strtoupper($normalized),
+        ]));
+
+        // Check if invoice exists anywhere in the system first
+        $invoice = Invoice::with(['customer', 'jobCard.vehicle'])
+            ->where(function ($q) use ($candidates, $normalized) {
+                $q->whereIn('invoice_number', $candidates)
+                  ->orWhereRaw('LOWER(invoice_number) = ?', [strtolower($normalized)]);
+            })
+            ->first();
 
         if (! $invoice) {
-            return response()->json(['success' => false, 'message' => "Invoice '{$number}' not found."], 404);
+            return response()->json([
+                'success' => false,
+                'message' => "Invoice '{$rawNumber}' not found.",
+            ], 404);
+        }
+
+        // Branch authorization check
+        if ($invoice->branch_id && $user && ! $user->canAccessBranch($invoice->branch_id)) {
+            return response()->json([
+                'success' => false,
+                'message' => "You are not authorized to view or collect payments for this invoice branch.",
+            ], 403);
+        }
+
+        // Check active branch scope if set and not admin
+        if ($activeBranchId && $invoice->branch_id && (int) $invoice->branch_id !== (int) $activeBranchId && (! $user || ! $user->isAdmin())) {
+            return response()->json([
+                'success' => false,
+                'message' => "Invoice '{$rawNumber}' belongs to another branch under your account scope.",
+            ], 403);
         }
 
         if ($invoice->status === 'cancelled') {
-            return response()->json(['success' => false, 'message' => "Invoice '{$number}' is cancelled and cannot accept payments."], 422);
+            return response()->json([
+                'success' => false,
+                'message' => "Invoice '{$invoice->invoice_number}' is cancelled and cannot accept payments.",
+            ], 422);
         }
 
         if ($invoice->status === 'paid' || (float) $invoice->balance_amount <= 0) {
-            return response()->json(['success' => false, 'message' => "Invoice '{$number}' is already fully settled."], 422);
+            return response()->json([
+                'success' => false,
+                'message' => "Invoice '{$invoice->invoice_number}' is already fully settled.",
+            ], 422);
         }
 
         return response()->json([
@@ -107,8 +189,9 @@ class MultipleInvoicePaymentController extends Controller
             'invoice' => [
                 'id' => $invoice->id,
                 'invoice_number' => $invoice->invoice_number,
-                'invoice_date' => $invoice->invoice_date->format('d M Y'),
-                'customer_name' => $invoice->customer->customer_name,
+                'invoice_date' => $invoice->invoice_date ? $invoice->invoice_date->format('d M Y') : '—',
+                'customer_name' => $invoice->customer?->customer_name ?? 'N/A',
+                'company_name' => $invoice->customer?->company_name ?? null,
                 'vehicle_number' => $invoice->jobCard?->vehicle?->vehicle_number ?? 'N/A',
                 'grand_total' => (float) $invoice->grand_total,
                 'amount_paid' => (float) $invoice->amount_paid,
@@ -119,7 +202,7 @@ class MultipleInvoicePaymentController extends Controller
     }
 
     /**
-     * JSON endpoint for Option 2: fetch all unpaid invoices for a given customer.
+     * JSON endpoint for Option 2: fetch all unpaid invoices for a given customer within branch scope.
      */
     public function customerInvoices(Customer $customer): JsonResponse
     {
@@ -142,13 +225,15 @@ class MultipleInvoicePaymentController extends Controller
             return [
                 'id' => $inv->id,
                 'invoice_number' => $inv->invoice_number,
-                'invoice_date' => $inv->invoice_date->format('d M Y'),
-                'invoice_type' => ucfirst(str_replace('_', ' ', $inv->invoice_type)),
-                'vehicle_number' => $inv->jobCard?->vehicle?->vehicle_number ?? '-',
+                'invoice_date' => $inv->invoice_date ? $inv->invoice_date->format('d M Y') : '—',
+                'invoice_type' => ucfirst(str_replace('_', ' ', $inv->invoice_type ?? 'job_card')),
+                'vehicle_number' => $inv->jobCard?->vehicle?->vehicle_number ?? '—',
                 'grand_total' => (float) $inv->grand_total,
                 'amount_paid' => (float) $inv->amount_paid,
                 'balance_amount' => (float) $inv->balance_amount,
                 'status' => $inv->status,
+                'selected' => true, // Selected by default
+                'allocated' => 0,
             ];
         });
 
@@ -158,7 +243,7 @@ class MultipleInvoicePaymentController extends Controller
                 'id' => $customer->id,
                 'name' => $customer->customer_name,
                 'phone' => $customer->phone ?? 'N/A',
-                'type' => ucfirst($customer->customer_type),
+                'type' => ucfirst($customer->customer_type ?? 'individual'),
                 'company_name' => $customer->company_name,
             ],
             'invoices' => $invoices,
@@ -190,15 +275,29 @@ class MultipleInvoicePaymentController extends Controller
             DB::transaction(function () use ($validated, $user) {
                 $invoice = Invoice::where('id', $validated['invoice_id'])->lockForUpdate()->firstOrFail();
 
+                if ($invoice->branch_id && ! $user->canAccessBranch($invoice->branch_id)) {
+                    throw new Exception('Unauthorized to record payments for this invoice branch.');
+                }
+
                 if ($invoice->status === 'cancelled') {
                     throw new Exception('Cannot record payments against a cancelled invoice.');
                 }
 
-                $currentBalance = (float) $invoice->balance_amount;
+                $currentBalance = round((float) $invoice->balance_amount, 2);
                 $totalPaying = 0.0;
 
                 foreach ($validated['payments'] as $p) {
-                    $totalPaying += (float) $p['amount'];
+                    $amt = (float) $p['amount'];
+                    $method = $p['payment_method'];
+                    $ref = trim((string) ($p['reference_number'] ?? ''));
+
+                    // Require reference for card, bank transfer, and cheque
+                    if (in_array($method, ['card', 'bank_transfer', 'cheque']) && $ref === '') {
+                        $methodName = ucfirst(str_replace('_', ' ', $method));
+                        throw new Exception("Reference number / transaction ID is required for {$methodName} payments.");
+                    }
+
+                    $totalPaying += $amt;
                 }
 
                 if ($totalPaying <= 0) {
@@ -214,13 +313,14 @@ class MultipleInvoicePaymentController extends Controller
 
                 // Record each split payment
                 foreach ($validated['payments'] as $p) {
-                    $amt = (float) $p['amount'];
+                    $amt = round((float) $p['amount'], 2);
                     if ($amt <= 0) {
                         continue;
                     }
 
                     Payment::create([
                         'invoice_id' => $invoice->id,
+                        'job_card_id' => $invoice->job_card_id,
                         'customer_id' => $invoice->customer_id,
                         'payment_number' => Payment::generatePaymentNumber(),
                         'payment_date' => $validated['payment_date'],
@@ -228,14 +328,16 @@ class MultipleInvoicePaymentController extends Controller
                         'payment_method' => $p['payment_method'],
                         'reference_number' => $p['reference_number'] ?? null,
                         'notes' => $p['notes'] ?? 'Split payment entry',
+                        'status' => 'completed',
                         'created_by' => $user->id,
                     ]);
                 }
 
-                // Update Invoice balance and status
+                // Update Invoice financial state
                 $newPaid = round((float) $invoice->amount_paid + $totalPaying, 2);
-                $newBalance = max(0, round((float) $invoice->grand_total - $newPaid, 2));
-                $newStatus = $newBalance <= 0 ? 'paid' : 'partially_paid';
+                $grandTotal = round((float) $invoice->grand_total, 2);
+                $newBalance = max(0, round($grandTotal - $newPaid, 2));
+                $newStatus = ($newBalance <= 0.0001 || $newPaid >= $grandTotal) ? 'paid' : 'partially_paid';
 
                 $invoice->update([
                     'amount_paid' => $newPaid,
@@ -252,8 +354,9 @@ class MultipleInvoicePaymentController extends Controller
                 );
             });
 
-            return redirect()->route('billing.multiple-invoice-payment.index', ['invoice_number' => Invoice::find($validated['invoice_id'])->invoice_number])
-                ->with('success', 'Split payment recorded successfully.');
+            return redirect()->route('billing.multiple-invoice-payment.index', [
+                'invoice_number' => Invoice::find($validated['invoice_id'])->invoice_number,
+            ])->with('success', 'Split payment recorded successfully.');
         } catch (Exception $e) {
             return back()->withInput()->with('error', "Payment failed: {$e->getMessage()}");
         }
@@ -288,6 +391,13 @@ class MultipleInvoicePaymentController extends Controller
                 $customerId = $validated['customer_id'];
                 $totalReceived = round((float) $validated['total_received'], 2);
                 $allocations = $validated['allocations'];
+                $method = $validated['payment_method'];
+                $ref = trim((string) ($validated['reference_number'] ?? ''));
+
+                if (in_array($method, ['card', 'bank_transfer', 'cheque']) && $ref === '') {
+                    $methodName = ucfirst(str_replace('_', ' ', $method));
+                    throw new Exception("Reference number / Cheque details are required for {$methodName} payments.");
+                }
 
                 // Filter out zero allocations
                 $activeAllocations = array_filter($allocations, function ($alloc) {
@@ -334,6 +444,10 @@ class MultipleInvoicePaymentController extends Controller
                         ->lockForUpdate()
                         ->firstOrFail();
 
+                    if ($invoice->branch_id && ! $user->canAccessBranch($invoice->branch_id)) {
+                        throw new Exception("Unauthorized to allocate payments to Invoice #{$invoice->invoice_number}.");
+                    }
+
                     if ($invoice->status === 'cancelled') {
                         throw new Exception("Invoice #{$invoice->invoice_number} is cancelled and cannot receive payments.");
                     }
@@ -353,9 +467,10 @@ class MultipleInvoicePaymentController extends Controller
                         'notes' => "Allocated from Receipt #{$receiptNumber}",
                     ]);
 
-                    // Create standard Payment record for seamless compatibility with existing views/PDFs
+                    // Create standard Payment record linked to receipt and invoice
                     Payment::create([
                         'invoice_id' => $invoice->id,
+                        'job_card_id' => $invoice->job_card_id,
                         'customer_id' => $customerId,
                         'payment_receipt_id' => $receipt->id,
                         'payment_number' => Payment::generatePaymentNumber(),
@@ -364,19 +479,29 @@ class MultipleInvoicePaymentController extends Controller
                         'payment_method' => $validated['payment_method'],
                         'reference_number' => $validated['reference_number'] ?? $receiptNumber,
                         'notes' => "Bulk Payment Receipt #{$receiptNumber}",
+                        'status' => 'completed',
                         'created_by' => $user->id,
                     ]);
 
                     // Update invoice balances and status
                     $newPaid = round((float) $invoice->amount_paid + $allocAmt, 2);
-                    $newBalance = max(0, round((float) $invoice->grand_total - $newPaid, 2));
-                    $newStatus = $newBalance <= 0 ? 'paid' : 'partially_paid';
+                    $grandTotal = round((float) $invoice->grand_total, 2);
+                    $newBalance = max(0, round($grandTotal - $newPaid, 2));
+                    $newStatus = ($newBalance <= 0.0001 || $newPaid >= $grandTotal) ? 'paid' : 'partially_paid';
 
                     $invoice->update([
                         'amount_paid' => $newPaid,
                         'balance_amount' => $newBalance,
                         'status' => $newStatus,
                     ]);
+                }
+
+                // If receipt branch is null, set to first invoice's branch
+                if (! $receipt->branch_id) {
+                    $firstInv = Invoice::find($activeAllocations[array_key_first($activeAllocations)]['invoice_id']);
+                    if ($firstInv && $firstInv->branch_id) {
+                        $receipt->update(['branch_id' => $firstInv->branch_id]);
+                    }
                 }
 
                 // 3. Activity Log Audit
@@ -388,7 +513,7 @@ class MultipleInvoicePaymentController extends Controller
                 );
             });
 
-            return redirect()->route('billing.multiple-invoice-payment.index')
+            return redirect()->route('billing.multiple-invoice-payment.index', ['tab' => 'bulk'])
                 ->with('success', 'Multiple Invoice Payment receipt recorded successfully.');
         } catch (Exception $e) {
             return back()->withInput()->with('error', "Payment allocation failed: {$e->getMessage()}");
