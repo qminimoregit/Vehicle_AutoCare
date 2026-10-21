@@ -55,6 +55,28 @@ class CompanySetting extends Model
     }
 
     /**
+     * Accessor for logo attribute alias to logo_path.
+     */
+    public function getLogoAttribute(): ?string
+    {
+        return $this->logo_path;
+    }
+
+    /**
+     * Get accessible public URL for the company logo with automatic fallback.
+     */
+    public function getLogoUrl(): string
+    {
+        if (!empty($this->logo_path) && file_exists(public_path('storage/' . $this->logo_path))) {
+            return asset('storage/' . $this->logo_path);
+        }
+        if (file_exists(public_path('images/branding/viran_auto_care_logo.png'))) {
+            return asset('images/branding/viran_auto_care_logo.png');
+        }
+        return asset('images/branding/autocare-logo-transparent.png');
+    }
+
+    /**
      * Resolve base64 data URI for logo to ensure 100% reliable DomPDF rendering.
      */
     public function getLogoBase64(): ?string

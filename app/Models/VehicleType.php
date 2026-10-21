@@ -13,7 +13,12 @@ class VehicleType extends Model
         'name',
         'image',
         'description',
+        'enable_carpets',
         'status',
+    ];
+
+    protected $casts = [
+        'enable_carpets' => 'boolean',
     ];
 
     /**
@@ -47,6 +52,16 @@ class VehicleType extends Model
     public function servicePrices()
     {
         return $this->hasMany(ServiceVehiclePrice::class);
+    }
+
+    public function carpetCategories()
+    {
+        return $this->belongsToMany(CarpetCategory::class, 'carpet_category_vehicle_type');
+    }
+
+    public function hasCarpets(): bool
+    {
+        return (bool) $this->enable_carpets;
     }
 
     public function getImageUrlAttribute(): ?string

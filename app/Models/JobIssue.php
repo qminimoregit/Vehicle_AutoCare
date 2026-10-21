@@ -53,6 +53,11 @@ class JobIssue extends Model
         return $this->belongsTo(User::class, 'recorded_by');
     }
 
+    public function recordedByUser(): BelongsTo
+    {
+        return $this->recorder();
+    }
+
     public function supplementaryInvoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class, 'supplementary_invoice_id');

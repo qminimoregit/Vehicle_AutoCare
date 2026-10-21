@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\JobCard;
 use App\Models\Vehicle;
 use App\Models\VehicleType;
+use App\Services\BranchContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,7 +22,7 @@ class VehicleRegistrationController extends Controller
      */
     public function index(Request $request): View
     {
-        $vehicleTypes = VehicleType::active()->orderBy('name')->get();
+        $vehicleTypes = VehicleType::active()->with('carpetCategories')->orderBy('name')->get();
         $initialSearch = trim((string) $request->query('search', ''));
 
         return view('operations.vehicles.index', compact('vehicleTypes', 'initialSearch'));
@@ -42,15 +43,19 @@ class VehicleRegistrationController extends Controller
 
         $normalized = Vehicle::normalizeNumber($input);
 
-        $vehicle = Vehicle::with(['customer', 'vehicleType'])
-            ->where('vehicle_number_normalized', $normalized)
+        $vehicle = Vehicle::with(['customer.creditAccount', 'vehicleType.carpetCategories'])
+            ->where(function ($q) use ($normalized, $input) {
+                $q->where('vehicle_number_normalized', $normalized)
+                    ->orWhereRaw("UPPER(REPLACE(REPLACE(vehicle_number, '-', ''), ' ', '')) = ?", [$normalized])
+                    ->orWhere('vehicle_number', strtoupper($input));
+            })
             ->first();
 
         if (! $vehicle) {
             return response()->json([
                 'exists' => false,
                 'normalized' => $normalized,
-                'message' => 'This is a new vehicle. Enter the details to start its first job.',
+                'message' => 'New Vehicle – Enter Customer Details',
             ]);
         }
 
@@ -95,6 +100,7 @@ class VehicleRegistrationController extends Controller
 
         return response()->json([
             'exists' => true,
+            'message' => 'Existing Vehicle Found – Customer Details Loaded',
             'vehicle' => [
                 'id' => $vehicle->id,
                 'vehicle_number' => $vehicle->vehicle_number,
@@ -105,6 +111,11 @@ class VehicleRegistrationController extends Controller
                 'current_mileage' => $vehicle->current_mileage,
                 'next_service_mileage' => $vehicle->next_service_mileage,
                 'notes' => $vehicle->notes,
+                'enable_carpets' => (bool) $vehicle->vehicleType?->enable_carpets,
+                'carpet_categories' => $vehicle->vehicleType?->carpetCategories->map(fn ($c) => [
+                    'id' => $c->id,
+                    'name' => $c->name,
+                ]),
             ],
             'customer' => [
                 'id' => $vehicle->customer->id,
@@ -113,7 +124,13 @@ class VehicleRegistrationController extends Controller
                 'email' => $vehicle->customer->email,
                 'customer_type' => $vehicle->customer->customer_type,
                 'company_name' => $vehicle->customer->company_name,
+                'registration_number' => $vehicle->customer->registration_number,
+                'tax_number' => $vehicle->customer->tax_number,
                 'address' => $vehicle->customer->address,
+                'is_company' => $vehicle->customer->isCompany(),
+                'has_credit_account' => $vehicle->customer->hasCreditAccount(),
+                'outstanding_credit' => $vehicle->customer->outstanding_credit,
+                'available_credit' => $vehicle->customer->available_credit,
             ],
             'ongoing_jobs' => $ongoingJobs,
             'service_history' => $serviceHistory,
@@ -139,43 +156,68 @@ class VehicleRegistrationController extends Controller
             'make_model' => ['nullable', 'string', 'max:100'],
             'customer_notes' => ['nullable', 'string'],
             'ignore_active_job' => ['nullable', 'boolean'],
+            'carpets' => ['nullable', 'array'],
+            'carpets.*.category_id' => ['required_with:carpets', 'exists:carpet_categories,id'],
+            'carpets.*.quantity' => ['required_with:carpets', 'integer', 'min:1'],
         ]);
 
         $normalized = Vehicle::normalizeNumber($validated['vehicle_number']);
 
         return DB::transaction(function () use ($validated, $normalized) {
             // Find existing vehicle or create new
-            $vehicle = Vehicle::where('vehicle_number_normalized', $normalized)->first();
+            $vehicle = Vehicle::where(function ($q) use ($normalized, $validated) {
+                $q->where('vehicle_number_normalized', $normalized)
+                    ->orWhereRaw("UPPER(REPLACE(REPLACE(vehicle_number, '-', ''), ' ', '')) = ?", [$normalized])
+                    ->orWhere('vehicle_number', strtoupper(trim($validated['vehicle_number'])));
+            })->first();
 
             // Find or create customer
             if ($vehicle && $vehicle->customer_id) {
                 $customer = Customer::find($vehicle->customer_id);
-                $customer->update([
+                $customerUpdate = [
                     'customer_name' => $validated['customer_name'],
                     'phone' => $validated['phone'],
                     'email' => $validated['email'] ?? $customer->email,
-                    'customer_type' => $validated['customer_type'] ?? $customer->customer_type,
-                    'company_name' => $validated['company_name'] ?? $customer->company_name,
                     'address' => $validated['address'] ?? $customer->address,
-                ]);
+                ];
+
+                if ($customer->customer_type === 'company') {
+                    if (! empty($validated['company_name'])) {
+                        $customerUpdate['company_name'] = $validated['company_name'];
+                    }
+                } elseif (! empty($validated['customer_type'])) {
+                    $customerUpdate['customer_type'] = $validated['customer_type'];
+                    if ($validated['customer_type'] === 'company' && ! empty($validated['company_name'])) {
+                        $customerUpdate['company_name'] = $validated['company_name'];
+                    }
+                }
+
+                $customer->update($customerUpdate);
             } else {
                 // Check if customer with this phone exists, otherwise create
                 $customer = Customer::where('phone', $validated['phone'])->first();
                 if ($customer) {
-                    $customer->update([
+                    $customerUpdate = [
                         'customer_name' => $validated['customer_name'],
                         'email' => $validated['email'] ?? $customer->email,
-                        'customer_type' => $validated['customer_type'] ?? $customer->customer_type,
-                        'company_name' => $validated['company_name'] ?? $customer->company_name,
                         'address' => $validated['address'] ?? $customer->address,
-                    ]);
+                    ];
+                    if ($customer->customer_type === 'company' && ! empty($validated['company_name'])) {
+                        $customerUpdate['company_name'] = $validated['company_name'];
+                    } elseif (! empty($validated['customer_type'])) {
+                        $customerUpdate['customer_type'] = $validated['customer_type'];
+                        if ($validated['customer_type'] === 'company' && ! empty($validated['company_name'])) {
+                            $customerUpdate['company_name'] = $validated['company_name'];
+                        }
+                    }
+                    $customer->update($customerUpdate);
                 } else {
                     $customer = Customer::create([
                         'customer_name' => $validated['customer_name'],
                         'phone' => $validated['phone'],
                         'email' => $validated['email'] ?? null,
                         'customer_type' => $validated['customer_type'] ?? 'individual',
-                        'company_name' => $validated['company_name'] ?? null,
+                        'company_name' => ($validated['customer_type'] ?? '') === 'company' ? ($validated['company_name'] ?? null) : null,
                         'address' => $validated['address'] ?? null,
                         'status' => 'active',
                     ]);
@@ -191,6 +233,7 @@ class VehicleRegistrationController extends Controller
                     'customer_id' => $customer->id,
                     'vehicle_type_id' => $validated['vehicle_type_id'],
                     'vehicle_number' => strtoupper(trim($validated['vehicle_number'])),
+                    'vehicle_number_normalized' => $normalized,
                     'make_model' => $validated['make_model'] ?? $vehicle->make_model,
                     'current_mileage' => $currentMileage > 0 ? $currentMileage : $vehicle->current_mileage,
                     'next_service_mileage' => $nextMileage ?? $vehicle->next_service_mileage,
@@ -219,9 +262,12 @@ class VehicleRegistrationController extends Controller
                     ->with('warning', "Vehicle {$vehicle->vehicle_number} already has an active Job Card (#{$activeJob->job_number}). Opened the existing job.");
             }
 
+            $activeBranchId = BranchContext::getActiveBranchId();
+
             // Create new JobCard
             $jobCard = JobCard::create([
                 'job_number' => JobCard::generateJobNumber(),
+                'branch_id' => $activeBranchId,
                 'date' => now()->toDateString(),
                 'customer_id' => $customer->id,
                 'vehicle_id' => $vehicle->id,
@@ -232,6 +278,24 @@ class VehicleRegistrationController extends Controller
                 'customer_notes' => $validated['customer_notes'] ?? null,
                 'created_by' => Auth::id(),
             ]);
+
+            // Save Carpet Details if enabled for this vehicle type
+            $selectedType = VehicleType::with('carpetCategories')->find($validated['vehicle_type_id']);
+            if ($selectedType && $selectedType->enable_carpets && ! empty($validated['carpets'])) {
+                $allowedCatIds = $selectedType->carpetCategories->pluck('id')->all();
+                foreach ($validated['carpets'] as $carpetItem) {
+                    $catId = (int) ($carpetItem['category_id'] ?? 0);
+                    $qty = (int) ($carpetItem['quantity'] ?? 0);
+                    if ($qty > 0 && in_array($catId, $allowedCatIds)) {
+                        $cat = $selectedType->carpetCategories->firstWhere('id', $catId);
+                        $jobCard->carpets()->create([
+                            'carpet_category_id' => $catId,
+                            'category_name' => $cat ? $cat->name : 'Carpet',
+                            'quantity' => $qty,
+                        ]);
+                    }
+                }
+            }
 
             return redirect()->route('operations.job-cards.show', $jobCard)
                 ->with('success', "Job Card #{$jobCard->job_number} created successfully for {$vehicle->vehicle_number}.");

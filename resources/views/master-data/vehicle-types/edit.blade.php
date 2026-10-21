@@ -143,6 +143,117 @@
                     </div>
                 </div>
 
+                <!-- Carpet Configuration Section -->
+                <div class="pt-4 border-t border-gray-100" x-data="{
+                    enableCarpets: {{ old('enable_carpets', $vehicleType->enable_carpets ? 'true' : 'false') }},
+                    newCategoryName: '',
+                    isAddingCategory: false,
+                    categories: {{ json_encode($availableCarpetCategories->map(fn($c) => ['id' => $c->id, 'name' => $c->name])) }},
+                    selectedCategories: {{ json_encode(old('carpet_categories', $vehicleType->carpetCategories->pluck('id')->toArray())) }},
+
+                    async addNewCategory() {
+                        let name = this.newCategoryName.trim();
+                        if (!name) return;
+                        this.isAddingCategory = true;
+                        try {
+                            let res = await fetch('{{ route('master-data.vehicle-types.carpet-categories.store') }}', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                                    'Accept': 'application/json'
+                                },
+                                body: JSON.stringify({ name: name })
+                            });
+                            let data = await res.json();
+                            if (data.success && data.category) {
+                                if (!this.categories.some(c => c.id === data.category.id)) {
+                                    this.categories.push(data.category);
+                                }
+                                if (!this.selectedCategories.includes(data.category.id)) {
+                                    this.selectedCategories.push(data.category.id);
+                                }
+                                this.newCategoryName = '';
+                            } else {
+                                alert(data.message || 'Error adding carpet category');
+                            }
+                        } catch (e) {
+                            console.error(e);
+                            alert('Failed to connect to server.');
+                        } finally {
+                            this.isAddingCategory = false;
+                        }
+                    }
+                }">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+                                Carpet Details Configuration
+                            </label>
+                            <p class="text-xs text-gray-500 mt-0.5">Configure whether this vehicle type supports carpet tracking during registration.</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                name="enable_carpets" 
+                                value="1" 
+                                x-model="enableCarpets"
+                                class="sr-only peer"
+                            >
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#0B1849]"></div>
+                            <span class="ml-2.5 text-xs font-bold text-gray-800" x-text="enableCarpets ? 'Enabled' : 'Disabled'"></span>
+                        </label>
+                    </div>
+
+                    <!-- Applicable Categories (Visible when enableCarpets is true) -->
+                    <div x-show="enableCarpets" x-cloak class="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-4">
+                        <div>
+                            <span class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-2">
+                                Applicable Carpet Categories:
+                            </span>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                                <template x-for="cat in categories" :key="cat.id">
+                                    <label class="flex items-center p-2.5 bg-white border border-gray-200 rounded-lg hover:border-gray-300 cursor-pointer transition select-none">
+                                        <input 
+                                            type="checkbox" 
+                                            name="carpet_categories[]" 
+                                            :value="cat.id" 
+                                            x-model="selectedCategories"
+                                            class="h-4 w-4 text-[#0B1849] focus:ring-[#0B1849] border-gray-300 rounded cursor-pointer"
+                                        >
+                                        <span class="ml-2 text-xs font-semibold text-gray-800" x-text="cat.name"></span>
+                                    </label>
+                                </template>
+                            </div>
+                            <p class="text-[11px] text-gray-500 mt-2">
+                                Select the carpet categories applicable to this vehicle type (e.g. Front, Rear, Boot).
+                            </p>
+                        </div>
+
+                        <!-- Inline Quick-Add New Carpet Category -->
+                        <div class="pt-3 border-t border-gray-200/80">
+                            <span class="block text-xs font-semibold text-gray-600 mb-1.5">+ Add New Carpet Category Name:</span>
+                            <div class="flex items-center gap-2 max-w-md">
+                                <input 
+                                    type="text" 
+                                    x-model="newCategoryName" 
+                                    @keydown.enter.prevent="addNewCategory()"
+                                    placeholder="e.g. Third Row Carpet or Custom Mat"
+                                    class="block flex-1 px-3 py-1.5 text-xs text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0B1849] bg-white"
+                                >
+                                <button 
+                                    type="button" 
+                                    @click="addNewCategory()"
+                                    :disabled="isAddingCategory || !newCategoryName.trim()"
+                                    class="px-3.5 py-1.5 bg-[#0B1849] text-white text-xs font-semibold rounded-lg hover:bg-[#15286e] disabled:opacity-50 transition cursor-pointer"
+                                >
+                                    <span x-text="isAddingCategory ? 'Adding...' : 'Add'"></span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Buttons: [Cancel] [Save Changes] -->
                 <div class="pt-6 border-t border-gray-100 flex items-center justify-end space-x-3">
                     <a 

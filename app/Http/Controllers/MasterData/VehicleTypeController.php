@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\MasterData\StoreVehicleTypeRequest;
 use App\Http\Requests\MasterData\UpdateVehicleTypeRequest;
 use App\Models\ActivityLog;
+use App\Models\CarpetCategory;
 use App\Models\VehicleType;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -22,7 +24,7 @@ class VehicleTypeController extends Controller
         $search = trim((string) $request->input('search'));
         $status = $request->input('status');
 
-        $query = VehicleType::query();
+        $query = VehicleType::with('carpetCategories');
 
         if ($search !== '') {
             $query->search($search);
@@ -47,7 +49,9 @@ class VehicleTypeController extends Controller
             abort(403, 'Unauthorized. Administrator access is required to add vehicle types.');
         }
 
-        return view('master-data.vehicle-types.create');
+        $availableCarpetCategories = CarpetCategory::active()->orderBy('name')->get();
+
+        return view('master-data.vehicle-types.create', compact('availableCarpetCategories'));
     }
 
     /**
@@ -56,6 +60,8 @@ class VehicleTypeController extends Controller
     public function store(StoreVehicleTypeRequest $request): RedirectResponse
     {
         $data = $request->validated();
+        $enableCarpets = $request->boolean('enable_carpets');
+        $data['enable_carpets'] = $enableCarpets;
 
         if ($request->hasFile('image')) {
             $data['image'] = $request->file('image')->store('vehicle-types', 'public');
@@ -63,9 +69,23 @@ class VehicleTypeController extends Controller
 
         $vehicleType = VehicleType::create($data);
 
+        // Sync carpet categories if carpets are enabled
+        if ($enableCarpets) {
+            $categoryIds = $request->input('carpet_categories', []);
+            if (! empty($data['new_carpet_category'])) {
+                $newCat = CarpetCategory::firstOrCreate([
+                    'name' => trim($data['new_carpet_category']),
+                ]);
+                $categoryIds[] = $newCat->id;
+            }
+            $vehicleType->carpetCategories()->sync(array_unique($categoryIds));
+        } else {
+            $vehicleType->carpetCategories()->detach();
+        }
+
         ActivityLog::log(
             action: 'created',
-            description: "Added new vehicle type: {$vehicleType->name}.",
+            description: "Added new vehicle type: {$vehicleType->name} (Carpets: ".($enableCarpets ? 'Enabled' : 'Disabled').').',
             module: 'Vehicle Types'
         );
 
@@ -82,7 +102,10 @@ class VehicleTypeController extends Controller
             abort(403, 'Unauthorized. Administrator access is required to edit vehicle types.');
         }
 
-        return view('master-data.vehicle-types.edit', compact('vehicleType'));
+        $vehicleType->load('carpetCategories');
+        $availableCarpetCategories = CarpetCategory::active()->orderBy('name')->get();
+
+        return view('master-data.vehicle-types.edit', compact('vehicleType', 'availableCarpetCategories'));
     }
 
     /**
@@ -91,6 +114,8 @@ class VehicleTypeController extends Controller
     public function update(UpdateVehicleTypeRequest $request, VehicleType $vehicleType): RedirectResponse
     {
         $data = $request->validated();
+        $enableCarpets = $request->boolean('enable_carpets');
+        $data['enable_carpets'] = $enableCarpets;
 
         if ($request->hasFile('image')) {
             // Delete old image if it exists
@@ -106,14 +131,74 @@ class VehicleTypeController extends Controller
 
         $vehicleType->update($data);
 
+        // Sync carpet categories if carpets are enabled
+        if ($enableCarpets) {
+            $categoryIds = $request->input('carpet_categories', []);
+            if (! empty($data['new_carpet_category'])) {
+                $newCat = CarpetCategory::firstOrCreate([
+                    'name' => trim($data['new_carpet_category']),
+                ]);
+                $categoryIds[] = $newCat->id;
+            }
+            $vehicleType->carpetCategories()->sync(array_unique($categoryIds));
+        } else {
+            $vehicleType->carpetCategories()->detach();
+        }
+
         ActivityLog::log(
             action: 'updated',
-            description: "Updated vehicle type: {$vehicleType->name}.",
+            description: "Updated vehicle type: {$vehicleType->name} (Carpets: ".($enableCarpets ? 'Enabled' : 'Disabled').').',
             module: 'Vehicle Types'
         );
 
         return redirect()->route('master-data.vehicle-types.index')
             ->with('success', 'Vehicle type updated successfully.');
+    }
+
+    /**
+     * Add a new carpet category dynamically (AJAX).
+     */
+    public function storeCarpetCategory(Request $request): JsonResponse
+    {
+        if (! $request->user()->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:100'],
+        ]);
+
+        $name = trim($validated['name']);
+        $category = CarpetCategory::firstOrCreate(
+            ['name' => $name],
+            ['status' => 'active']
+        );
+
+        return response()->json([
+            'success' => true,
+            'category' => [
+                'id' => $category->id,
+                'name' => $category->name,
+            ],
+            'message' => "Carpet category '{$category->name}' is ready.",
+        ]);
+    }
+
+    /**
+     * Remove a carpet category (AJAX).
+     */
+    public function destroyCarpetCategory(Request $request, CarpetCategory $carpetCategory): JsonResponse
+    {
+        if (! $request->user()->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        $carpetCategory->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Carpet category removed.',
+        ]);
     }
 
     /**

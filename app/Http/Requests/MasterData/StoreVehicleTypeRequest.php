@@ -26,6 +26,10 @@ class StoreVehicleTypeRequest extends FormRequest
             'name' => ['required', 'string', 'max:100', 'unique:vehicle_types,name'],
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'description' => ['nullable', 'string', 'max:1000'],
+            'enable_carpets' => ['nullable', 'boolean'],
+            'carpet_categories' => ['nullable', 'array'],
+            'carpet_categories.*' => ['exists:carpet_categories,id'],
+            'new_carpet_category' => ['nullable', 'string', 'max:100'],
             'status' => ['nullable', 'in:active,inactive'],
         ];
     }
