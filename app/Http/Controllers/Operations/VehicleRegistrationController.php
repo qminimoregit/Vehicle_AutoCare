@@ -129,6 +129,7 @@ class VehicleRegistrationController extends Controller
             'vehicle_number' => ['required', 'string', 'max:50'],
             'customer_name' => ['required', 'string', 'max:150'],
             'phone' => ['required', 'string', 'max:50'],
+            'email' => ['nullable', 'email', 'max:150'],
             'vehicle_type_id' => ['required', 'exists:vehicle_types,id'],
             'current_mileage' => ['nullable', 'integer', 'min:0'],
             'next_service_mileage' => ['nullable', 'integer', 'min:0'],
@@ -152,6 +153,7 @@ class VehicleRegistrationController extends Controller
                 $customer->update([
                     'customer_name' => $validated['customer_name'],
                     'phone' => $validated['phone'],
+                    'email' => $validated['email'] ?? $customer->email,
                     'customer_type' => $validated['customer_type'] ?? $customer->customer_type,
                     'company_name' => $validated['company_name'] ?? $customer->company_name,
                     'address' => $validated['address'] ?? $customer->address,
@@ -162,6 +164,7 @@ class VehicleRegistrationController extends Controller
                 if ($customer) {
                     $customer->update([
                         'customer_name' => $validated['customer_name'],
+                        'email' => $validated['email'] ?? $customer->email,
                         'customer_type' => $validated['customer_type'] ?? $customer->customer_type,
                         'company_name' => $validated['company_name'] ?? $customer->company_name,
                         'address' => $validated['address'] ?? $customer->address,
@@ -170,6 +173,7 @@ class VehicleRegistrationController extends Controller
                     $customer = Customer::create([
                         'customer_name' => $validated['customer_name'],
                         'phone' => $validated['phone'],
+                        'email' => $validated['email'] ?? null,
                         'customer_type' => $validated['customer_type'] ?? 'individual',
                         'company_name' => $validated['company_name'] ?? null,
                         'address' => $validated['address'] ?? null,

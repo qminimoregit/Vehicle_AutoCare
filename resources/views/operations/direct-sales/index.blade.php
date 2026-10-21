@@ -23,9 +23,23 @@
         // UI State
         isSubmitting: false,
         mobileCartOpen: false,
+        showSuccessModal: false,
+        completedSale: null,
 
         init() {
             window.__posCartHasItems = () => this.cart && this.cart.length > 0;
+        },
+
+        resetSale() {
+            this.cart = [];
+            this.amountPaid = '';
+            this.discount = 0;
+            this.tax = 0;
+            this.customerName = '';
+            this.customerPhone = '';
+            this.notes = '';
+            this.showSuccessModal = false;
+            this.completedSale = null;
         },
 
         formatQty(val) {
@@ -197,7 +211,9 @@
                 let data = await response.json();
 
                 if (response.ok && data.success) {
-                    window.location.href = data.redirect_url;
+                    this.completedSale = data;
+                    this.showSuccessModal = true;
+                    this.isSubmitting = false;
                 } else {
                     alert(data.message || 'Checkout failed. Please check stock and try again.');
                     this.isSubmitting = false;
@@ -256,8 +272,8 @@
                         >
                             <!-- Top: Image + Info -->
                             <div>
-                                <!-- 1. Product Image (Contain, Lazy Loaded, Placeholder) -->
-                                <div class="w-full h-28 sm:h-32 bg-slate-50 rounded-lg border border-gray-100 flex items-center justify-center p-2 overflow-hidden relative">
+                                <!-- 1. Product Image (Aspect fixed, Contain, Fallback graphic) -->
+                                <div class="w-full h-32 bg-slate-50 rounded-lg border border-gray-100 flex items-center justify-center p-2 overflow-hidden relative">
                                     <template x-if="product.image_url">
                                         <img 
                                             :src="product.image_url" 
@@ -267,16 +283,15 @@
                                         />
                                     </template>
                                     <template x-if="!product.image_url">
-                                        <div class="flex flex-col items-center justify-center text-gray-300">
-                                            <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                        <div class="flex flex-col items-center justify-center text-slate-300">
+                                            <svg class="w-9 h-9 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.25" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                                             </svg>
-                                            <span class="text-[10px] text-gray-400 mt-0.5 font-medium">No Image</span>
                                         </div>
                                     </template>
                                 </div>
 
-                                <!-- 2. Product Name (Always clearly visible) -->
+                                <!-- 2. Product Name (Always clearly visible with consistent height) -->
                                 <h4 
                                     class="text-sm font-bold text-gray-900 leading-snug line-clamp-2 mt-2.5 min-h-[2.5rem]" 
                                     x-text="product.name || product.product_name"
@@ -289,28 +304,28 @@
                                     <span 
                                         class="px-2 py-0.5 rounded-full font-bold whitespace-nowrap text-[10px]"
                                         :class="product.available_stock > 0 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'"
-                                        x-text="product.available_stock > 0 ? (product.formatted_stock || formatQty(product.available_stock)) + ' in Stock' : 'Out of stock'"
+                                        x-text="product.available_stock > 0 ? 'Available: ' + (product.formatted_stock || formatQty(product.available_stock)) : 'Out of stock'"
                                     ></span>
                                 </div>
                             </div>
 
                             <!-- Bottom: 5. Selling Price & 6. Add Button -->
                             <div class="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between gap-2">
-                                <div>
+                                <div class="min-w-0">
                                     <span class="text-[10px] text-gray-400 block font-medium uppercase">Price</span>
-                                    <span class="text-sm font-black text-[#0B1849]" x-text="'LKR ' + parseFloat(product.selling_price).toFixed(2)"></span>
+                                    <span class="text-sm font-black text-[#0B1849] whitespace-nowrap" x-text="'LKR ' + parseFloat(product.selling_price).toFixed(2)"></span>
                                 </div>
 
                                 <button 
                                     type="button" 
                                     @click="addToCart(product)"
                                     :disabled="product.available_stock <= 0"
-                                    class="inline-flex items-center px-3 py-1.5 bg-[#0B1849] hover:bg-[#15286e] text-white text-xs font-bold rounded-lg shadow-xs transition disabled:opacity-40 min-h-[36px] cursor-pointer"
+                                    class="inline-flex items-center justify-center px-3 py-1.5 bg-[#0B1849] hover:bg-[#15286e] text-white text-xs font-bold rounded-lg shadow-xs transition disabled:opacity-40 min-h-[36px] cursor-pointer shrink-0"
                                 >
                                     <svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                                     </svg>
-                                    + Add
+                                    Add
                                 </button>
                             </div>
                         </div>
@@ -327,7 +342,7 @@
         </div>
 
         <!-- RIGHT COLUMN (DESKTOP) / CART & PAYMENT PANEL (lg:col-span-5) -->
-        <div class="lg:col-span-5 space-y-4">
+        <div id="pos-cart-panel" class="lg:col-span-5 space-y-4">
             <div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
                 <!-- Cart Header -->
                 <div class="px-5 py-3.5 border-b border-gray-100 bg-[#0B1849] text-white flex items-center justify-between">
@@ -374,26 +389,26 @@
                         <div class="pt-2 first:pt-0 flex items-center justify-between text-xs">
                             <div class="flex-1 pr-2">
                                 <span class="font-bold text-gray-900 block truncate" x-text="item.name"></span>
-                                <span class="text-[11px] text-gray-500" x-text="'LKR ' + item.unit_price.toFixed(2) + ' each'"></span>
+                                <span class="text-[11px] text-gray-500 whitespace-nowrap" x-text="'LKR ' + item.unit_price.toFixed(2) + ' each'"></span>
                             </div>
 
                             <div class="flex items-center space-x-2">
                                 <!-- Quantity modifier buttons -->
-                                <div class="flex items-center border border-gray-200 rounded-md overflow-hidden">
+                                <div class="flex items-center border border-gray-200 rounded-md overflow-hidden bg-white">
                                     <button 
                                         type="button" 
                                         @click="decreaseQty(index)" 
-                                        class="px-2 py-1 text-gray-600 hover:bg-gray-100 font-bold min-h-[30px] min-w-[26px]"
+                                        class="px-2 py-1 text-gray-600 hover:bg-gray-100 font-bold min-h-[30px] min-w-[26px] cursor-pointer"
                                     >-</button>
                                     <span class="px-2 text-xs font-bold text-gray-900" x-text="formatQty(item.quantity)"></span>
                                     <button 
                                         type="button" 
                                         @click="increaseQty(index)" 
-                                        class="px-2 py-1 text-gray-600 hover:bg-gray-100 font-bold min-h-[30px] min-w-[26px]"
+                                        class="px-2 py-1 text-gray-600 hover:bg-gray-100 font-bold min-h-[30px] min-w-[26px] cursor-pointer"
                                     >+</button>
                                 </div>
 
-                                <span class="w-20 text-right font-black text-gray-900" x-text="'LKR ' + item.line_total.toFixed(2)"></span>
+                                <span class="w-24 text-right font-black text-gray-900 whitespace-nowrap" x-text="'LKR ' + item.line_total.toFixed(2)"></span>
 
                                 <button 
                                     type="button" 
@@ -425,7 +440,7 @@
                     <div class="space-y-1.5 text-xs text-gray-600">
                         <div class="flex justify-between">
                             <span>Subtotal:</span>
-                            <span class="font-bold text-gray-900" x-text="'LKR ' + subtotal.toFixed(2)"></span>
+                            <span class="font-bold text-gray-900 whitespace-nowrap" x-text="'LKR ' + subtotal.toFixed(2)"></span>
                         </div>
                         <div class="flex items-center justify-between">
                             <span>Discount (LKR):</span>
@@ -439,51 +454,70 @@
                         </div>
                         <div class="pt-2 border-t border-gray-200 flex justify-between text-base font-black text-[#0B1849]">
                             <span>Grand Total:</span>
-                            <span x-text="'LKR ' + grandTotal.toFixed(2)"></span>
+                            <span class="whitespace-nowrap" x-text="'LKR ' + grandTotal.toFixed(2)"></span>
                         </div>
                     </div>
 
-                    <!-- Payment Method Picker -->
+                    <!-- Payment Method Picker: Cash, Card, Transfer, Cheque, Credit -->
                     <div class="pt-2 border-t border-gray-200 space-y-2">
                         <label class="block text-[11px] font-bold uppercase tracking-wider text-gray-700">
                             Payment Method
                         </label>
-                        <div class="grid grid-cols-4 gap-1.5 text-xs">
+                        <div class="grid grid-cols-2 sm:grid-cols-5 gap-1.5 text-xs">
                             <button 
                                 type="button" 
                                 @click="paymentMethod = 'cash'; recalculatePayment();"
-                                class="py-2 text-center rounded-lg border font-bold transition cursor-pointer"
+                                class="py-2 px-1 text-center rounded-lg border font-bold transition cursor-pointer"
                                 :class="paymentMethod === 'cash' ? 'bg-[#0B1849] text-white border-[#0B1849]' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'"
                             >Cash</button>
                             <button 
                                 type="button" 
                                 @click="paymentMethod = 'card'; recalculatePayment();"
-                                class="py-2 text-center rounded-lg border font-bold transition cursor-pointer"
+                                class="py-2 px-1 text-center rounded-lg border font-bold transition cursor-pointer"
                                 :class="paymentMethod === 'card' ? 'bg-[#0B1849] text-white border-[#0B1849]' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'"
                             >Card</button>
                             <button 
                                 type="button" 
                                 @click="paymentMethod = 'bank_transfer'; recalculatePayment();"
-                                class="py-2 text-center rounded-lg border font-bold transition cursor-pointer"
+                                class="py-2 px-1 text-center rounded-lg border font-bold transition cursor-pointer"
                                 :class="paymentMethod === 'bank_transfer' ? 'bg-[#0B1849] text-white border-[#0B1849]' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'"
                             >Transfer</button>
                             <button 
                                 type="button" 
+                                @click="paymentMethod = 'cheque'; recalculatePayment();"
+                                class="py-2 px-1 text-center rounded-lg border font-bold transition cursor-pointer"
+                                :class="paymentMethod === 'cheque' ? 'bg-[#0B1849] text-white border-[#0B1849]' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'"
+                            >Cheque</button>
+                            <button 
+                                type="button" 
                                 @click="paymentMethod = 'credit'; amountPaid = 0;"
-                                class="py-2 text-center rounded-lg border font-bold transition cursor-pointer"
+                                class="py-2 px-1 text-center rounded-lg border font-bold transition cursor-pointer"
                                 :class="paymentMethod === 'credit' ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'"
                             >Credit</button>
                         </div>
                     </div>
 
-                    <!-- Amount Paid & Change (When Cash / Card / Transfer) -->
+                    <!-- Cheque Reference Input (When Cheque) -->
+                    <div x-show="paymentMethod === 'cheque'" class="pt-1">
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-gray-600 mb-1">
+                            Cheque / Bank Reference
+                        </label>
+                        <input 
+                            type="text" 
+                            x-model="notes" 
+                            placeholder="e.g. CHQ-928103 / Commercial Bank" 
+                            class="block w-full py-2 px-3 text-xs border border-gray-300 rounded-lg bg-white"
+                        >
+                    </div>
+
+                    <!-- Amount Paid & Change (When Cash / Card / Transfer / Cheque) -->
                     <div x-show="paymentMethod !== 'credit'" class="space-y-2 pt-1">
                         <div class="flex items-center justify-between text-xs">
                             <label class="font-bold uppercase tracking-wider text-gray-700">Amount Paid (LKR):</label>
                             <button 
                                 type="button" 
                                 @click="setExactPayment()"
-                                class="text-[11px] font-semibold text-[#0B1849] hover:underline"
+                                class="text-[11px] font-semibold text-[#0B1849] hover:underline cursor-pointer"
                             >
                                 Exact Amount
                             </button>
@@ -496,7 +530,7 @@
                         >
                         <div class="flex justify-between items-center text-xs font-bold pt-1" :class="changeAmount >= 0 ? 'text-emerald-700' : 'text-red-600'">
                             <span>Change / Balance:</span>
-                            <span class="text-sm font-black" x-text="'LKR ' + changeAmount.toFixed(2)"></span>
+                            <span class="text-sm font-black whitespace-nowrap" x-text="'LKR ' + changeAmount.toFixed(2)"></span>
                         </div>
                     </div>
 
@@ -528,6 +562,97 @@
                         </button>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile Sticky Cart Summary Banner (lg:hidden) -->
+    <div 
+        x-show="cart.length > 0 && !showSuccessModal" 
+        class="lg:hidden fixed bottom-4 inset-x-4 z-30 bg-[#0B1849] text-white p-3.5 rounded-2xl shadow-2xl flex items-center justify-between border border-white/20 animate-fade-in"
+        style="display: none;"
+    >
+        <div>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-blue-200 block">Sales Cart</span>
+            <span class="text-sm font-black whitespace-nowrap" x-text="cart.length + ' item(s) • LKR ' + grandTotal.toFixed(2)"></span>
+        </div>
+        <button 
+            type="button"
+            @click="document.getElementById('pos-cart-panel').scrollIntoView({ behavior: 'smooth' })"
+            class="inline-flex items-center px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black rounded-xl shadow-xs transition cursor-pointer"
+        >
+            Checkout &rarr;
+        </button>
+    </div>
+
+    <!-- Sale Completed Success Modal -->
+    <div 
+        x-show="showSuccessModal" 
+        class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
+        style="display: none;"
+    >
+        <div 
+            @click.outside="resetSale()"
+            class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 text-center space-y-5 border border-gray-200"
+        >
+            <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+                <svg class="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+            </div>
+
+            <div>
+                <h3 class="text-xl font-black text-gray-900">Sale Completed!</h3>
+                <p class="text-xs text-gray-500 mt-1" x-text="completedSale?.message || 'Transaction successfully processed and inventory deducted.'"></p>
+            </div>
+
+            <div class="bg-slate-50 rounded-xl p-3.5 border border-gray-100 text-xs space-y-1.5 text-gray-700">
+                <div class="flex justify-between font-bold">
+                    <span>Invoice / Sale:</span>
+                    <span class="text-[#0B1849]" x-text="'#' + (completedSale?.sale_id || '')"></span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Payment Method:</span>
+                    <span class="uppercase font-semibold" x-text="paymentMethod"></span>
+                </div>
+                <div class="flex justify-between font-bold text-sm text-gray-900 pt-1 border-t border-gray-200">
+                    <span>Total Paid:</span>
+                    <span class="whitespace-nowrap" x-text="'LKR ' + (amountPaid ? parseFloat(amountPaid).toFixed(2) : grandTotal.toFixed(2))"></span>
+                </div>
+                <template x-if="changeAmount > 0">
+                    <div class="flex justify-between text-emerald-700 font-bold">
+                        <span>Change Returned:</span>
+                        <span class="whitespace-nowrap" x-text="'LKR ' + changeAmount.toFixed(2)"></span>
+                    </div>
+                </template>
+            </div>
+
+            <div class="space-y-2 pt-1">
+                <button 
+                    type="button" 
+                    @click="window.open(completedSale?.thermal_url || completedSale?.receipt_url, '_blank')"
+                    class="w-full inline-flex items-center justify-center px-4 py-3 bg-[#0B1849] hover:bg-[#15286e] text-white font-bold text-sm rounded-xl shadow-xs transition cursor-pointer"
+                >
+                    <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                    </svg>
+                    Print 80mm Receipt
+                </button>
+
+                <a 
+                    :href="completedSale?.redirect_url" 
+                    class="w-full inline-flex items-center justify-center px-4 py-2.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-bold text-xs rounded-xl shadow-xs transition"
+                >
+                    View Full Invoice
+                </a>
+
+                <button 
+                    type="button" 
+                    @click="resetSale()"
+                    class="w-full inline-flex items-center justify-center px-4 py-2 text-xs font-semibold text-gray-500 hover:text-gray-800 cursor-pointer"
+                >
+                    + Start Next Sale
+                </button>
             </div>
         </div>
     </div>

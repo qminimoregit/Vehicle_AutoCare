@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Billing;
 
 use App\Http\Controllers\Controller;
+use App\Mail\PaymentReceiptMail;
 use App\Models\ActivityLog;
 use App\Models\CompanySetting;
 use App\Models\Invoice;
@@ -14,6 +15,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\View\View;
 
 class PaymentController extends Controller
@@ -248,6 +250,83 @@ class PaymentController extends Controller
         $amountInWords = NumberToWordsHelper::spell($payment->amount, 'LKR');
 
         return view('billing.payments.receipt', compact('payment', 'company', 'amountInWords'));
+    }
+
+    /**
+     * Display printable 80mm compact thermal Payment Receipt.
+     */
+    public function thermalReceipt(Request $request, Payment $payment): View
+    {
+        $user = $request->user();
+        if (! $user || (! $user->isAdmin() && ! $user->hasPermission('view_invoices') && ! $user->hasPermission('record_payments'))) {
+            abort(403, 'Unauthorized access to payment receipt.');
+        }
+
+        $payment->load([
+            'invoice.customer',
+            'invoice.jobCard.vehicle',
+            'invoice.jobCard.vehicleType',
+            'invoice.branch',
+            'creator',
+            'customer',
+        ]);
+
+        if ($payment->invoice && $payment->invoice->branch_id && ! $user->canAccessBranch($payment->invoice->branch_id)) {
+            abort(403, 'Unauthorized access to this branch.');
+        }
+
+        $company = CompanySetting::getSettings();
+
+        return view('billing.payments.thermal', compact('payment', 'company'));
+    }
+
+    /**
+     * Send payment receipt PDF via email to customer.
+     */
+    public function sendEmail(Request $request, Payment $payment): RedirectResponse
+    {
+        $user = $request->user();
+        if (! $user || (! $user->isAdmin() && ! $user->hasPermission('record_payments'))) {
+            abort(403, 'Unauthorized to email receipts.');
+        }
+
+        $email = $payment->customer?->email ?? ($payment->invoice?->customer?->email ?? null);
+
+        if (empty($email)) {
+            return back()->with('warning', 'No email address registered for this customer.');
+        }
+
+        $payment->load([
+            'invoice.customer',
+            'invoice.jobCard.vehicle',
+            'invoice.branch',
+            'creator',
+            'customer',
+        ]);
+
+        $company = CompanySetting::getSettings();
+
+        try {
+            Mail::to($email)->send(new PaymentReceiptMail($payment, $company));
+
+            ActivityLog::log(
+                action: 'payment_receipt_emailed',
+                description: "Emailed Payment Receipt {$payment->payment_number} to {$email}.",
+                module: 'Sales & Billing',
+                userId: $user->id
+            );
+
+            return back()->with('success', "Payment receipt emailed successfully to {$email}.");
+        } catch (Exception $e) {
+            ActivityLog::log(
+                action: 'payment_receipt_email_failed',
+                description: "Failed to email Payment Receipt {$payment->payment_number} to {$email}: {$e->getMessage()}",
+                module: 'Sales & Billing',
+                userId: $user->id
+            );
+
+            return back()->with('error', "Failed to send email: {$e->getMessage()}");
+        }
     }
 
     /**

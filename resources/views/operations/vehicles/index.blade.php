@@ -8,6 +8,7 @@
         vehicleNumber: '{{ old('vehicle_number', $initialSearch) }}',
         customerName: '{{ old('customer_name') }}',
         phone: '{{ old('phone') }}',
+        email: '{{ old('email') }}',
         vehicleTypeId: '{{ old('vehicle_type_id') }}',
         currentMileage: '{{ old('current_mileage') }}',
         nextServiceMileage: '{{ old('next_service_mileage') }}',
@@ -63,6 +64,7 @@
 
                     this.customerName = data.customer.customer_name || '';
                     this.phone = data.customer.phone || '';
+                    this.email = data.customer.email || '';
                     this.customerType = data.customer.customer_type || 'individual';
                     this.companyName = data.customer.company_name || '';
                     this.address = data.customer.address || '';
@@ -72,6 +74,7 @@
                     this.searchMessage = 'Existing vehicle found. Information automatically loaded.';
                 } else {
                     this.vehicleExists = false;
+                    this.email = '';
                     this.ongoingJobs = [];
                     this.serviceHistory = [];
                     this.searchMessage = data.message || 'This is a new vehicle. Enter the details to start its first job.';
@@ -236,7 +239,7 @@
             </div>
 
             <!-- Customer & Vehicle Main Fields Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
                 <!-- Customer Name -->
                 <div>
                     <label for="customer_name" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
@@ -271,6 +274,24 @@
                         required
                     >
                     @error('phone')
+                        <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <!-- Email Address (Optional) -->
+                <div>
+                    <label for="email" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                        Email Address <span class="text-gray-400 font-normal lowercase">(optional)</span>
+                    </label>
+                    <input 
+                        type="email" 
+                        name="email" 
+                        id="email"
+                        x-model="email"
+                        placeholder="e.g. customer@example.com"
+                        class="block w-full py-2.5 px-3.5 text-sm text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] bg-white min-h-[44px]"
+                    >
+                    @error('email')
                         <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
                     @enderror
                 </div>

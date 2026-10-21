@@ -109,7 +109,7 @@ class DirectSaleController extends Controller
             'phone' => ['nullable', 'string', 'max:50'],
             'discount_amount' => ['nullable', 'numeric', 'min:0'],
             'tax_amount' => ['nullable', 'numeric', 'min:0'],
-            'payment_method' => ['required', 'in:cash,card,bank_transfer,credit'],
+            'payment_method' => ['required', 'in:cash,card,bank_transfer,cheque,credit'],
             'amount_paid' => ['required', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
@@ -317,7 +317,8 @@ class DirectSaleController extends Controller
                     'sale_id' => $result['direct_sale']->id,
                     'invoice_id' => $result['invoice']->id,
                     'redirect_url' => route('operations.invoices.show', $result['invoice']),
-                    'receipt_url' => route('operations.invoices.print', $result['invoice']),
+                    'receipt_url' => route('operations.invoices.thermal', $result['invoice']),
+                    'thermal_url' => route('operations.invoices.thermal', $result['invoice']),
                 ]);
             }
 

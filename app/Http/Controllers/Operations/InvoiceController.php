@@ -13,6 +13,7 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\Vehicle;
+use App\Mail\InvoiceMail;
 use App\Services\BranchContext;
 use App\Services\Inventory\StockService;
 use App\Services\NumberToWordsHelper;
@@ -22,6 +23,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\View\View;
 
 class InvoiceController extends Controller
@@ -346,6 +348,77 @@ class InvoiceController extends Controller
         $amountInWords = NumberToWordsHelper::spell($invoice->grand_total, 'LKR');
 
         return view('operations.invoices.print', compact('invoice', 'company', 'amountInWords'));
+    }
+
+    /**
+     * 80mm compact thermal receipt view.
+     */
+    public function thermalReceipt(Invoice $invoice): View
+    {
+        $invoice->load([
+            'customer',
+            'jobCard.vehicle',
+            'jobCard.vehicleType',
+            'quotation',
+            'branch',
+            'items',
+            'payments.creator',
+            'creator',
+        ]);
+
+        $company = CompanySetting::getSettings();
+
+        return view('operations.invoices.thermal', compact('invoice', 'company'));
+    }
+
+    /**
+     * Send invoice PDF via email to customer.
+     */
+    public function sendEmail(Request $request, Invoice $invoice): RedirectResponse
+    {
+        $user = $request->user();
+        if (! $user->isAdmin() && ! $user->hasPermission('view_invoices')) {
+            abort(403, 'Unauthorized to email invoices.');
+        }
+
+        $email = $invoice->customer?->email ?? ($invoice->customer_snapshot['email'] ?? null);
+
+        if (empty($email)) {
+            return back()->with('warning', 'No email address registered for this customer.');
+        }
+
+        $invoice->load([
+            'customer',
+            'jobCard.vehicle',
+            'jobCard.vehicleType',
+            'branch',
+            'items',
+            'payments',
+        ]);
+
+        $company = CompanySetting::getSettings();
+
+        try {
+            Mail::to($email)->send(new InvoiceMail($invoice, $company));
+
+            ActivityLog::log(
+                action: 'invoice_emailed',
+                description: "Emailed Invoice #{$invoice->invoice_number} to {$email}.",
+                module: 'Sales & Invoices',
+                userId: $user->id
+            );
+
+            return back()->with('success', "Invoice emailed successfully to {$email}.");
+        } catch (Exception $e) {
+            ActivityLog::log(
+                action: 'invoice_email_failed',
+                description: "Failed to email Invoice #{$invoice->invoice_number} to {$email}: {$e->getMessage()}",
+                module: 'Sales & Invoices',
+                userId: $user->id
+            );
+
+            return back()->with('error', "Failed to send email: {$e->getMessage()}");
+        }
     }
 
     /**

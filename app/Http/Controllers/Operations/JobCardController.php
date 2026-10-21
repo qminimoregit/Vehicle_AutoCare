@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Operations;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\CompanySetting;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
@@ -353,8 +354,11 @@ class JobCardController extends Controller
             'customer_notes' => ['nullable', 'string'],
         ]);
 
+        $oldTechId = $jobCard->assigned_to;
+        $newTechId = array_key_exists('assigned_to', $validated) ? $validated['assigned_to'] : $jobCard->assigned_to;
+
         $updateData = [
-            'assigned_to' => $validated['assigned_to'] ?? $jobCard->assigned_to,
+            'assigned_to' => $newTechId,
             'current_mileage' => $validated['current_mileage'] ?? $jobCard->current_mileage,
             'next_service_mileage' => $validated['next_service_mileage'] ?? $jobCard->next_service_mileage,
             'service_notes' => $validated['service_notes'] ?? $jobCard->service_notes,
@@ -364,6 +368,18 @@ class JobCardController extends Controller
         // Do not allow staff to rewrite financial discount if already invoiced
         if (! $jobCard->invoice_id && array_key_exists('discount_amount', $validated)) {
             $updateData['discount_amount'] = $validated['discount_amount'] !== null ? (float) $validated['discount_amount'] : 0.0;
+        }
+
+        // Log technician assignment / reassignment
+        if ($newTechId != $oldTechId) {
+            $oldTechName = $jobCard->assignedTechnician?->name ?? 'Unassigned';
+            $newTech = $newTechId ? User::find($newTechId) : null;
+            $newTechName = $newTech?->name ?? 'Unassigned';
+            ActivityLog::log(
+                action: 'reassigned_technician',
+                description: "Reassigned technician for Job #{$jobCard->job_number} from {$oldTechName} to {$newTechName}.",
+                module: 'Job Cards'
+            );
         }
 
         $jobCard->update($updateData);
@@ -401,6 +417,12 @@ class JobCardController extends Controller
                 'started_at' => now(),
             ]);
 
+            ActivityLog::log(
+                action: 'started_work',
+                description: "Started work on Job #{$jobCard->job_number} by " . Auth::user()->name . ".",
+                module: 'Job Cards'
+            );
+
             return back()->with('success', "Service started for Job #{$jobCard->job_number}.");
         }
 
@@ -416,6 +438,12 @@ class JobCardController extends Controller
                 'completed_at' => now(),
             ]);
 
+            ActivityLog::log(
+                action: 'completed_job',
+                description: "Completed Job #{$jobCard->job_number} by " . Auth::user()->name . ".",
+                module: 'Job Cards'
+            );
+
             return back()->with('success', "Job #{$jobCard->job_number} marked as Completed. Ready for billing.");
         }
 
@@ -423,10 +451,44 @@ class JobCardController extends Controller
             if (! in_array($jobCard->status, ['completed', 'delivered'])) {
                 return back()->with('error', 'Only completed jobs can be delivered.');
             }
+
+            // Check payment policy
+            $invoice = $jobCard->invoice;
+            $customer = $jobCard->customer;
+            $isFullyPaid = $invoice && ((float) $invoice->balance_amount <= 0.0001 || $invoice->status === 'paid');
+
+            // Check company credit account
+            $creditAccount = $customer?->creditAccount()->where('status', 'active')->first();
+            $isCompanyCreditAllowed = $creditAccount && ! $creditAccount->isSuspended() && ! $creditAccount->isClosed() && ! $creditAccount->wouldExceedLimit(0);
+
+            $overrideReason = trim((string) $request->input('delivery_override_reason', ''));
+
+            if (! $isFullyPaid && ! $isCompanyCreditAllowed) {
+                // If unpaid or partial, require admin override
+                $user = Auth::user();
+                if (! $user->isAdmin()) {
+                    return back()->with('error', 'Full payment or approved company credit is required before vehicle delivery. Admin override required for exceptions.');
+                }
+                if ($overrideReason === '') {
+                    return back()->with('error', 'An admin override reason is required to release an unpaid or partially paid vehicle.');
+                }
+            }
+
             $jobCard->update([
                 'status' => 'delivered',
                 'delivered_at' => now(),
             ]);
+
+            $logDesc = "Vehicle {$jobCard->vehicle?->vehicle_number} delivered for Job #{$jobCard->job_number} by " . Auth::user()->name . ".";
+            if ($overrideReason !== '') {
+                $logDesc .= " Delivery Exception Override: {$overrideReason} (Approved by Admin: " . Auth::user()->name . ")";
+            }
+
+            ActivityLog::log(
+                action: 'delivered_vehicle',
+                description: $logDesc,
+                module: 'Job Cards'
+            );
 
             return back()->with('success', "Vehicle handed over to customer. Job #{$jobCard->job_number} delivered.");
         }
