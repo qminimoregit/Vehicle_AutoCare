@@ -212,8 +212,10 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/invoices', [InvoiceController::class, 'store'])->name('invoices.store');
         Route::get('/invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
         Route::get('/invoices/{invoice}/print', [InvoiceController::class, 'print'])->name('invoices.print');
+        Route::get('/invoices/{invoice}/thermal', [InvoiceController::class, 'thermalReceipt'])->name('invoices.thermal');
         Route::get('/invoices/{invoice}/pdf', [InvoiceController::class, 'downloadPdf'])->name('invoices.pdf');
         Route::post('/invoices/{invoice}/payment', [InvoiceController::class, 'addPayment'])->name('invoices.payment');
+        Route::post('/invoices/{invoice}/email', [InvoiceController::class, 'sendEmail'])->name('invoices.email');
     });
 
     // Sales & Billing Module
@@ -241,13 +243,17 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
         Route::get('/invoices/{invoice}/pdf', [InvoiceController::class, 'downloadPdf'])->name('invoices.pdf');
         Route::get('/invoices/{invoice}/print', [InvoiceController::class, 'print'])->name('invoices.print');
+        Route::get('/invoices/{invoice}/thermal', [InvoiceController::class, 'thermalReceipt'])->name('invoices.thermal');
         Route::post('/invoices/{invoice}/payment', [InvoiceController::class, 'addPayment'])->name('invoices.payment');
+        Route::post('/invoices/{invoice}/email', [InvoiceController::class, 'sendEmail'])->name('invoices.email');
 
         // Invoice Payments Management
         Route::get('/payments', [PaymentController::class, 'index'])->name('payments.index');
         Route::post('/invoices/{invoice}/payments', [PaymentController::class, 'store'])->name('payments.store');
         Route::get('/payments/{payment}/receipt', [PaymentController::class, 'receipt'])->name('payments.receipt');
         Route::get('/payments/{payment}/print', [PaymentController::class, 'receipt'])->name('payments.print');
+        Route::get('/payments/{payment}/thermal', [PaymentController::class, 'thermalReceipt'])->name('payments.thermal');
+        Route::post('/payments/{payment}/email', [PaymentController::class, 'sendEmail'])->name('payments.email');
         Route::post('/payments/{payment}/reverse', [PaymentController::class, 'reverse'])->name('payments.reverse');
 
         // Stage 6: Avoid Direct Sale (Admin Only)
