@@ -45,6 +45,10 @@ class JobIssueController extends Controller
      */
     public function recordApproval(Request $request, JobIssue $issue): RedirectResponse
     {
+        if (! $request->has('customer_decision') && $request->has('status')) {
+            $request->merge(['customer_decision' => $request->input('status')]);
+        }
+
         $validated = $request->validate([
             'customer_decision' => ['required', 'in:approved,declined,deferred'],
             'approval_method' => ['required_if:customer_decision,approved', 'nullable', 'in:verbal,phone,written,whatsapp'],

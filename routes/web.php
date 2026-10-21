@@ -24,6 +24,7 @@ use App\Http\Controllers\MasterData\ServiceController;
 use App\Http\Controllers\MasterData\ServicePaymentController;
 use App\Http\Controllers\MasterData\VehicleTypeController;
 use App\Http\Controllers\Operations\AppointmentController;
+use App\Http\Controllers\Operations\CustomerController;
 use App\Http\Controllers\Operations\DirectSaleController;
 use App\Http\Controllers\Operations\InvoiceController;
 use App\Http\Controllers\Operations\JobCardController;
@@ -161,6 +162,11 @@ Route::middleware(['auth', 'active'])->group(function () {
 
     // Operations Module (Stage 3)
     Route::prefix('operations')->name('operations.')->group(function () {
+        // Customers
+        Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
+        Route::get('/customers/create', [CustomerController::class, 'create'])->name('customers.create');
+        Route::post('/customers', [CustomerController::class, 'store'])->name('customers.store');
+
         // Vehicle Registration
         Route::get('/vehicles', [VehicleRegistrationController::class, 'index'])->name('vehicles.index');
         Route::get('/vehicles/search', [VehicleRegistrationController::class, 'search'])->name('vehicles.search');
@@ -169,6 +175,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         // Job Cards
         Route::get('/job-cards', [JobCardController::class, 'index'])->name('job-cards.index');
         Route::get('/job-cards/{jobCard}', [JobCardController::class, 'show'])->name('job-cards.show');
+        Route::get('/job-cards/{jobCard}/print', [JobCardController::class, 'print'])->name('job-cards.print');
+        Route::get('/job-cards/{jobCard}/pdf', [JobCardController::class, 'downloadPdf'])->name('job-cards.pdf');
         Route::put('/job-cards/{jobCard}', [JobCardController::class, 'update'])->name('job-cards.update');
         Route::patch('/job-cards/{jobCard}/status', [JobCardController::class, 'updateStatus'])->name('job-cards.status');
         Route::post('/job-cards/{jobCard}/cancel', [JobCardController::class, 'cancel'])->name('job-cards.cancel');

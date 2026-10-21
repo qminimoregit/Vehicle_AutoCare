@@ -4,91 +4,15 @@
 
 @section('content')
 <div 
-    x-data="{
-        // Modals
-        showAddServiceModal: false,
-        showAddProductModal: false,
-        showCancelModal: false,
-        showEditModal: false,
-        showAddIssueModal: false,
-        showApprovalModal: false,
-
-        // Issue Approval state
-        selectedIssueId: null,
-        selectedIssueDescription: '',
-        approvalDecision: 'approved',
-        approvalMethod: 'verbal',
-        approvalContact: '{{ $jobCard->customer?->phone ?? '' }}',
-        approvalRemarks: '',
-
-        openApprovalModal(issue) {
-            this.selectedIssueId = issue.id;
-            this.selectedIssueDescription = issue.description;
-            this.approvalDecision = 'approved';
-            this.approvalMethod = 'verbal';
-            this.approvalContact = '{{ $jobCard->customer?->phone ?? '' }}';
-            this.approvalRemarks = '';
-            this.showApprovalModal = true;
-        },
-
-        // Service selection state
-        selectedServiceId: '',
-        servicePrice: null,
-        serviceCost: null,
-        serviceConfigured: false,
-        serviceStatusMessage: '',
-        customPrice: '',
-        serviceQty: 1,
-        technicianName: '{{ $jobCard->assignedTechnician?->name ?? '' }}',
-
-        // Product selection state
-        selectedProductId: '',
-        productAvailableStock: 0,
-        productSellingPrice: 0,
-        productQty: 1,
-
-        async onServiceChange() {
-            if (!this.selectedServiceId) {
-                this.servicePrice = null;
-                this.serviceConfigured = false;
-                this.serviceStatusMessage = '';
-                return;
-            }
-
-            try {
-                let url = '{{ route('operations.job-cards.service-price', [$jobCard, ':serviceId']) }}'.replace(':serviceId', this.selectedServiceId);
-                let res = await fetch(url);
-                let data = await res.json();
-
-                this.serviceConfigured = data.configured;
-                if (data.configured) {
-                    this.servicePrice = data.price;
-                    this.customPrice = data.price;
-                    this.serviceStatusMessage = '';
-                } else {
-                    this.servicePrice = null;
-                    this.customPrice = '';
-                    this.serviceStatusMessage = data.message || 'Price not configured for this vehicle type.';
-                }
-            } catch (err) {
-                console.error(err);
-                this.serviceStatusMessage = 'Error fetching service price.';
-            }
-        },
-
-        onProductChange(event) {
-            let select = event.target;
-            let opt = select.options[select.selectedIndex];
-            if (opt && opt.value) {
-                this.productAvailableStock = parseFloat(opt.dataset.stock) || 0;
-                this.productSellingPrice = parseFloat(opt.dataset.price) || 0;
-                this.productQty = 1;
-            } else {
-                this.productAvailableStock = 0;
-                this.productSellingPrice = 0;
-            }
-        }
-    }"
+    x-data="jobCardController({{ json_encode([
+        'printBaseUrl' => route('operations.job-cards.print', $jobCard),
+        'customerPhone' => $jobCard->customer?->phone ?? '',
+        'technicianName' => $jobCard->assignedTechnician?->name ?? '',
+        'selectedServices' => session('newly_added_service_id') ? [(int) session('newly_added_service_id')] : [],
+        'selectedProducts' => session('newly_added_product_id') ? [(int) session('newly_added_product_id')] : [],
+        'servicePriceUrl' => route('operations.job-cards.service-price', [$jobCard, '__SERVICE_ID__']),
+        'totalItems' => $jobCard->services->count() + $jobCard->products->count(),
+    ]) }})"
     class="max-w-6xl mx-auto space-y-6"
 >
     <!-- Top Action Bar -->
@@ -259,6 +183,40 @@
                 @endif
             @endif
 
+            <!-- Print Full Job Card Button -->
+            <a 
+                href="{{ route('operations.job-cards.print', $jobCard) }}" 
+                target="_blank"
+                class="inline-flex items-center px-3 py-2.5 bg-white border border-gray-300 text-gray-700 font-semibold text-xs rounded-lg hover:bg-gray-50 shadow-xs transition min-h-[44px]"
+                title="Print Full Job Card"
+            >
+                <svg class="w-4 h-4 mr-1 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                Print Full Job Card
+            </a>
+
+            <!-- Print Selected Items Button -->
+            <button 
+                type="button" 
+                @click="printSelectedItems()" 
+                :disabled="totalItemsCount === 0"
+                :class="totalItemsCount === 0 ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'cursor-pointer hover:bg-gray-50 bg-white'"
+                class="inline-flex items-center px-3 py-2.5 border border-gray-300 text-gray-700 font-semibold text-xs rounded-lg shadow-xs transition min-h-[44px]"
+                :title="totalItemsCount === 0 ? 'No services or products available to select on this job card' : 'Print only checked services or products'"
+            >
+                <svg class="w-4 h-4 mr-1 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+                Print Selected Items
+                <span 
+                    x-show="selectedServices.length + selectedProducts.length > 0" 
+                    x-text="selectedServices.length + selectedProducts.length" 
+                    class="ml-1.5 px-1.5 py-0.2 bg-indigo-100 text-indigo-800 rounded-full text-[10px] font-extrabold"
+                    style="display: none;"
+                ></span>
+            </button>
+
             <!-- Edit Details Button -->
             @if($jobCard->status !== 'cancelled')
                 <button 
@@ -372,10 +330,34 @@
                         <button 
                             type="button" 
                             @click="showAddServiceModal = true" 
-                            class="inline-flex items-center px-3 py-1.5 bg-[#0B1849] hover:bg-[#15286e] text-white text-xs font-semibold rounded-md shadow-xs transition min-h-[36px]"
+                            class="inline-flex items-center px-3 py-1.5 bg-[#0B1849] hover:bg-[#15286e] text-white text-xs font-semibold rounded-md shadow-xs transition min-h-[36px] cursor-pointer"
                         >
                             <svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                            Add Service
+                        </button>
+                    @elseif($jobCard->status === 'completed')
+                        <button 
+                            type="button" 
+                            @click="alert('This Job Card is completed. To perform additional services, record an issue and click \'Add Additional Work\'.')" 
+                            class="inline-flex items-center px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-500 text-xs font-semibold rounded-md shadow-xs transition min-h-[36px] cursor-pointer"
+                            title="Job completed. Use Additional Work for extra services."
+                        >
+                            <svg class="w-3.5 h-3.5 mr-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                            Add Service
+                        </button>
+                    @else
+                        <button 
+                            type="button" 
+                            @click="alert('Services cannot be added because this Job Card is {{ $jobCard->status }}.')" 
+                            class="inline-flex items-center px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-500 text-xs font-semibold rounded-md shadow-xs transition min-h-[36px] cursor-pointer"
+                            title="Services locked for status {{ $jobCard->status }}"
+                        >
+                            <svg class="w-3.5 h-3.5 mr-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                             </svg>
                             Add Service
                         </button>
@@ -386,6 +368,15 @@
                     <table class="min-w-full divide-y divide-gray-100 text-left text-xs sm:text-sm">
                         <thead class="bg-gray-50/50 text-gray-500 font-bold uppercase text-[10px] tracking-wider">
                             <tr>
+                                <th class="px-3 py-2.5 w-8 text-center">
+                                    <input 
+                                        type="checkbox" 
+                                        @change="selectedServices = $event.target.checked ? [{{ $jobCard->services->pluck('id')->implode(',') }}] : []"
+                                        :checked="selectedServices.length === {{ $jobCard->services->count() }} && {{ $jobCard->services->count() }} > 0"
+                                        class="rounded border-gray-300 text-[#0B1849] focus:ring-[#0B1849] cursor-pointer"
+                                        title="Select/Deselect all services"
+                                    >
+                                </th>
                                 <th class="px-4 py-2.5">Service</th>
                                 <th class="px-4 py-2.5 text-right">Price</th>
                                 <th class="px-4 py-2.5 text-right">Qty</th>
@@ -397,7 +388,16 @@
                         </thead>
                         <tbody class="divide-y divide-gray-50 text-gray-800">
                             @forelse($jobCard->services as $srv)
-                                <tr class="hover:bg-slate-50/50">
+                                <tr class="hover:bg-slate-50/50" :class="selectedServices.includes({{ $srv->id }}) ? 'bg-indigo-50/30' : ''">
+                                    <td class="px-3 py-3 text-center">
+                                        <input 
+                                            type="checkbox" 
+                                            value="{{ $srv->id }}" 
+                                            x-model.number="selectedServices"
+                                            class="rounded border-gray-300 text-[#0B1849] focus:ring-[#0B1849] cursor-pointer"
+                                            title="Select service for printing"
+                                        >
+                                    </td>
                                     <td class="px-4 py-3">
                                         <div class="flex items-center">
                                             <span class="font-semibold text-gray-900">{{ $srv->service_name }}</span>
@@ -441,7 +441,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="5" class="px-4 py-8 text-center text-gray-400 text-xs">
+                                    <td colspan="6" class="px-4 py-8 text-center text-gray-400 text-xs">
                                         No services added to this job card yet.
                                     </td>
                                 </tr>
@@ -473,10 +473,34 @@
                         <button 
                             type="button" 
                             @click="showAddProductModal = true" 
-                            class="inline-flex items-center px-3 py-1.5 bg-[#0B1849] hover:bg-[#15286e] text-white text-xs font-semibold rounded-md shadow-xs transition min-h-[36px]"
+                            class="inline-flex items-center px-3 py-1.5 bg-[#0B1849] hover:bg-[#15286e] text-white text-xs font-semibold rounded-md shadow-xs transition min-h-[36px] cursor-pointer"
                         >
                             <svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                            Issue Product
+                        </button>
+                    @elseif($jobCard->status === 'completed')
+                        <button 
+                            type="button" 
+                            @click="alert('This Job Card is completed. To issue additional parts, record an issue and click \'Add Additional Work\'.')" 
+                            class="inline-flex items-center px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-500 text-xs font-semibold rounded-md shadow-xs transition min-h-[36px] cursor-pointer"
+                            title="Job completed. Use Additional Work for extra parts."
+                        >
+                            <svg class="w-3.5 h-3.5 mr-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                            Issue Product
+                        </button>
+                    @else
+                        <button 
+                            type="button" 
+                            @click="alert('Products cannot be issued because this Job Card is {{ $jobCard->status }}.')" 
+                            class="inline-flex items-center px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-500 text-xs font-semibold rounded-md shadow-xs transition min-h-[36px] cursor-pointer"
+                            title="Product issuance locked for status {{ $jobCard->status }}"
+                        >
+                            <svg class="w-3.5 h-3.5 mr-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                             </svg>
                             Issue Product
                         </button>
@@ -487,6 +511,15 @@
                     <table class="min-w-full divide-y divide-gray-100 text-left text-xs sm:text-sm">
                         <thead class="bg-gray-50/50 text-gray-500 font-bold uppercase text-[10px] tracking-wider">
                             <tr>
+                                <th class="px-3 py-2.5 w-8 text-center">
+                                    <input 
+                                        type="checkbox" 
+                                        @change="selectedProducts = $event.target.checked ? [{{ $jobCard->products->pluck('id')->implode(',') }}] : []"
+                                        :checked="selectedProducts.length === {{ $jobCard->products->count() }} && {{ $jobCard->products->count() }} > 0"
+                                        class="rounded border-gray-300 text-[#0B1849] focus:ring-[#0B1849] cursor-pointer"
+                                        title="Select/Deselect all products"
+                                    >
+                                </th>
                                 <th class="px-4 py-2.5">Product</th>
                                 <th class="px-4 py-2.5 text-right">Price</th>
                                 <th class="px-4 py-2.5 text-right">Qty</th>
@@ -498,7 +531,16 @@
                         </thead>
                         <tbody class="divide-y divide-gray-50 text-gray-800">
                             @forelse($jobCard->products as $prod)
-                                <tr class="hover:bg-slate-50/50">
+                                <tr class="hover:bg-slate-50/50" :class="selectedProducts.includes({{ $prod->id }}) ? 'bg-indigo-50/30' : ''">
+                                    <td class="px-3 py-3 text-center">
+                                        <input 
+                                            type="checkbox" 
+                                            value="{{ $prod->id }}" 
+                                            x-model.number="selectedProducts"
+                                            class="rounded border-gray-300 text-[#0B1849] focus:ring-[#0B1849] cursor-pointer"
+                                            title="Select product for printing"
+                                        >
+                                    </td>
                                     <td class="px-4 py-3">
                                         <div class="flex items-center">
                                             <span class="font-semibold text-gray-900">{{ $prod->product_name }}</span>
@@ -542,7 +584,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="5" class="px-4 py-8 text-center text-gray-400 text-xs">
+                                    <td colspan="6" class="px-4 py-8 text-center text-gray-400 text-xs">
                                         No parts or products issued to this job card yet.
                                     </td>
                                 </tr>
@@ -634,7 +676,7 @@
                                 {{ $issue->estimated_cost ? 'LKR ' . number_format($issue->estimated_cost, 2) : '—' }}
                             </td>
                             <td class="px-4 py-3 text-center whitespace-nowrap">
-                                @if($issue->status === 'notified')
+                                @if(in_array($issue->status, ['pending_approval', 'notified']))
                                     <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800">Pending Approval</span>
                                 @elseif($issue->status === 'approved')
                                     <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">Approved</span>
@@ -644,6 +686,8 @@
                                     <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800">Fixed</span>
                                 @elseif($issue->status === 'deferred')
                                     <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800">Deferred</span>
+                                @else
+                                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-gray-100 text-gray-800">{{ ucfirst(str_replace('_', ' ', $issue->status)) }}</span>
                                 @endif
                             </td>
                             <td class="px-4 py-3 text-xs text-gray-600 max-w-xs">
@@ -660,7 +704,7 @@
                                 @endif
                             </td>
                             <td class="px-4 py-3 text-right whitespace-nowrap">
-                                @if($issue->status === 'notified')
+                                @if(in_array($issue->status, ['pending_approval', 'notified']))
                                     <div class="inline-flex items-center space-x-1.5">
                                         <button 
                                             type="button" 
@@ -672,7 +716,7 @@
                                         <form action="{{ route('operations.job-issues.approval', $issue) }}" method="POST" class="inline">
                                             @csrf
                                             @method('PATCH')
-                                            <input type="hidden" name="status" value="declined">
+                                            <input type="hidden" name="customer_decision" value="declined">
                                             <button 
                                                 type="submit" 
                                                 onclick="return confirm('Record customer decision as Declined?');"
@@ -917,6 +961,22 @@
                 <form action="{{ route('operations.job-cards.products.add', $jobCard) }}" method="POST" class="space-y-4">
                     @csrf
                     <div>
+                        <label for="prod_search" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                            Search Product <span class="text-gray-400 font-normal">(by Name or SKU)</span>
+                        </label>
+                        <div class="relative mb-2">
+                            <input 
+                                type="text" 
+                                id="prod_search"
+                                x-model="productSearch" 
+                                placeholder="Type to filter products by name or SKU..."
+                                class="block w-full py-2 pl-8 pr-3 text-xs text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white min-h-[38px]"
+                            >
+                            <svg class="w-4 h-4 text-gray-400 absolute left-2.5 top-2.5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </div>
+
                         <label for="product_id" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
                             Select Product <span class="text-red-500">*</span>
                         </label>
@@ -934,8 +994,12 @@
                                     value="{{ $prod->id }}" 
                                     data-stock="{{ $prod->available_stock }}"
                                     data-price="{{ $prod->selling_price }}"
+                                    data-name="{{ strtolower($prod->product_name) }}"
+                                    data-sku="{{ strtolower($prod->sku ?? '') }}"
+                                    :hidden="!isProductVisible('{{ strtolower(addslashes($prod->product_name)) }}', '{{ strtolower(addslashes($prod->sku ?? '')) }}')"
+                                    :disabled="!isProductVisible('{{ strtolower(addslashes($prod->product_name)) }}', '{{ strtolower(addslashes($prod->sku ?? '')) }}')"
                                 >
-                                    {{ $prod->product_name }} (Stock: @quantity($prod->available_stock) | LKR {{ number_format($prod->selling_price, 2) }})
+                                    {{ $prod->product_name }} @if($prod->sku)[{{ $prod->sku }}]@endif (Stock: @quantity($prod->available_stock) | LKR {{ number_format($prod->selling_price, 2) }})
                                 </option>
                             @endforeach
                         </select>
@@ -1089,6 +1153,18 @@
                     @csrf
                     @method('PUT')
 
+                    <!-- Customer & Vehicle Info Overview -->
+                    <div class="p-3 bg-slate-50 border border-gray-200 rounded-lg text-xs space-y-1">
+                        <div class="flex justify-between">
+                            <span class="text-gray-500 font-medium">Customer:</span>
+                            <span class="font-bold text-gray-900">{{ $jobCard->customer->customer_name }} ({{ $jobCard->customer->phone }})</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500 font-medium">Vehicle:</span>
+                            <span class="font-bold text-gray-900">{{ $jobCard->vehicle->vehicle_number }} &bull; {{ $jobCard->vehicleType->name }}</span>
+                        </div>
+                    </div>
+
                     <div>
                         <label for="assigned_to" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
                             Assign Technician
@@ -1134,18 +1210,46 @@
                         </div>
                     </div>
 
+                    @if(!$jobCard->invoice_id)
+                        <div>
+                            <label for="edit_discount" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                                Discount Amount (LKR)
+                            </label>
+                            <input 
+                                type="number" 
+                                step="0.01" 
+                                name="discount_amount" 
+                                id="edit_discount" 
+                                value="{{ $jobCard->discount_amount }}"
+                                class="block w-full py-2.5 px-3 text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white min-h-[44px]"
+                            >
+                        </div>
+                    @else
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">
+                                Discount Amount (LKR) — Locked
+                            </label>
+                            <input 
+                                type="text" 
+                                value="LKR {{ number_format($jobCard->discount_amount, 2) }} (Locked: Invoiced)" 
+                                disabled 
+                                class="block w-full py-2 px-3 text-sm text-gray-500 border border-gray-200 rounded-lg bg-gray-50 cursor-not-allowed"
+                            >
+                            <p class="text-[11px] text-gray-500 mt-1">Financial discount cannot be altered after invoice issuance.</p>
+                        </div>
+                    @endif
+
                     <div>
-                        <label for="edit_discount" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-                            Discount Amount (LKR)
+                        <label for="edit_customer_notes" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                            Customer Notes / Requests
                         </label>
-                        <input 
-                            type="number" 
-                            step="0.01" 
-                            name="discount_amount" 
-                            id="edit_discount" 
-                            value="{{ $jobCard->discount_amount }}"
-                            class="block w-full py-2.5 px-3 text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white min-h-[44px]"
-                        >
+                        <textarea 
+                            name="customer_notes" 
+                            id="edit_customer_notes" 
+                            rows="2"
+                            placeholder="Customer specific requests or observations"
+                            class="block w-full py-2 px-3 text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white"
+                        >{{ $jobCard->customer_notes }}</textarea>
                     </div>
 
                     <div>
@@ -1156,6 +1260,7 @@
                             name="service_notes" 
                             id="edit_service_notes" 
                             rows="2"
+                            placeholder="Technical notes or observations by technician"
                             class="block w-full py-2 px-3 text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white"
                         >{{ $jobCard->service_notes }}</textarea>
                     </div>
@@ -1308,7 +1413,7 @@
                             Customer Decision <span class="text-red-500">*</span>
                         </label>
                         <select 
-                            name="status" 
+                            name="customer_decision" 
                             id="approval_decision" 
                             x-model="approvalDecision"
                             class="block w-full py-2.5 px-3 text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white min-h-[44px]"
@@ -1335,6 +1440,7 @@
                                 <option value="verbal">Verbal</option>
                                 <option value="phone">Phone Call</option>
                                 <option value="written">Written / Message</option>
+                                <option value="whatsapp">WhatsApp</option>
                             </select>
                         </div>
                         <div>
@@ -1400,4 +1506,122 @@
         </div>
     </div>
 </div>
+
+<script>
+    window.jobCardController = function(config) {
+        return {
+            // Modals
+            showAddServiceModal: false,
+            showAddProductModal: false,
+            showCancelModal: false,
+            showEditModal: false,
+            showAddIssueModal: false,
+            showApprovalModal: false,
+
+            // Issue Approval state
+            selectedIssueId: null,
+            selectedIssueDescription: '',
+            approvalDecision: 'approved',
+            approvalMethod: 'verbal',
+            approvalContact: config.customerPhone || '',
+            approvalRemarks: '',
+
+            openApprovalModal(issue) {
+                this.selectedIssueId = issue.id;
+                this.selectedIssueDescription = issue.description;
+                this.approvalDecision = 'approved';
+                this.approvalMethod = 'verbal';
+                this.approvalContact = config.customerPhone || '';
+                this.approvalRemarks = '';
+                this.showApprovalModal = true;
+            },
+
+            // Service selection state
+            selectedServiceId: '',
+            servicePrice: null,
+            serviceCost: null,
+            serviceConfigured: false,
+            serviceStatusMessage: '',
+            customPrice: '',
+            serviceQty: 1,
+            technicianName: config.technicianName || '',
+
+            // Product selection state
+            productSearch: '',
+            selectedProductId: '',
+            productAvailableStock: 0,
+            productSellingPrice: 0,
+            productQty: 1,
+
+            isProductVisible(name, sku) {
+                if (!this.productSearch.trim()) return true;
+                const q = this.productSearch.toLowerCase().trim();
+                return name.includes(q) || sku.includes(q);
+            },
+
+            async onServiceChange() {
+                if (!this.selectedServiceId) {
+                    this.servicePrice = null;
+                    this.serviceConfigured = false;
+                    this.serviceStatusMessage = '';
+                    return;
+                }
+
+                try {
+                    let url = config.servicePriceUrl.replace('__SERVICE_ID__', this.selectedServiceId);
+                    let res = await fetch(url);
+                    let data = await res.json();
+
+                    this.serviceConfigured = data.configured;
+                    if (data.configured) {
+                        this.servicePrice = data.price;
+                        this.customPrice = data.price;
+                        this.serviceStatusMessage = '';
+                    } else {
+                        this.servicePrice = null;
+                        this.customPrice = '';
+                        this.serviceStatusMessage = data.message || 'Price not configured for this vehicle type.';
+                    }
+                } catch (err) {
+                    console.error(err);
+                    this.serviceStatusMessage = 'Error fetching service price.';
+                }
+            },
+
+            onProductChange(event) {
+                let select = event.target;
+                let opt = select.options[select.selectedIndex];
+                if (opt && opt.value) {
+                    this.productAvailableStock = parseFloat(opt.dataset.stock) || 0;
+                    this.productSellingPrice = parseFloat(opt.dataset.price) || 0;
+                    this.productQty = 1;
+                } else {
+                    this.productAvailableStock = 0;
+                    this.productSellingPrice = 0;
+                }
+            },
+
+            // Print selection state
+            selectedServices: config.selectedServices || [],
+            selectedProducts: config.selectedProducts || [],
+            totalItemsCount: config.totalItems || 0,
+
+            printSelectedItems() {
+                if (this.totalItemsCount === 0) {
+                    alert('This Job Card has no saved services or products to select for printing.');
+                    return;
+                }
+                if (this.selectedServices.length === 0 && this.selectedProducts.length === 0) {
+                    alert('Please select at least one service or product to print.');
+                    return;
+                }
+                const params = new URLSearchParams();
+                params.append('selected', '1');
+                this.selectedServices.forEach(id => params.append('services[]', id));
+                this.selectedProducts.forEach(id => params.append('products[]', id));
+                window.open(config.printBaseUrl + '?' + params.toString(), '_blank');
+            }
+        };
+    };
+</script>
 @endsection

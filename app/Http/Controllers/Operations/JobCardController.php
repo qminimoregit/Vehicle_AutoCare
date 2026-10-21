@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Operations;
 
 use App\Http\Controllers\Controller;
+use App\Models\CompanySetting;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\JobCard;
@@ -12,8 +13,10 @@ use App\Models\Product;
 use App\Models\Service;
 use App\Models\ServiceVehiclePrice;
 use App\Models\User;
+use App\Services\BranchContext;
 use App\Services\Inventory\StockService;
 use App\Services\QuantityFormatter;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -179,7 +182,7 @@ class JobCardController extends Controller
         $lineTotal = round($unitPrice * $qty, 2);
         $isAdditional = ($jobCard->status === 'additional_work') || ($jobCard->invoice_id !== null);
 
-        $jobCard->services()->create([
+        $serviceItem = $jobCard->services()->create([
             'service_id' => $service->id,
             'service_code' => $service->code,
             'service_name' => $service->name,
@@ -195,7 +198,8 @@ class JobCardController extends Controller
 
         $jobCard->recalculateTotals();
 
-        return back()->with('success', "Service '{$service->name}' added to Job Card.");
+        return back()->with('success', "Service '{$service->name}' added to Job Card.")
+            ->with('newly_added_service_id', $serviceItem->id);
     }
 
     /**
@@ -251,8 +255,9 @@ class JobCardController extends Controller
         $lineTotal = round($unitPrice * $quantity, 2);
         $isAdditional = ($jobCard->status === 'additional_work') || ($jobCard->invoice_id !== null);
 
+        $productItem = null;
         try {
-            DB::transaction(function () use ($jobCard, $product, $quantity, $unitPrice, $lineTotal, $validated, $isAdditional) {
+            DB::transaction(function () use ($jobCard, $product, $quantity, $unitPrice, $lineTotal, $validated, $isAdditional, &$productItem) {
                 // Deduct stock using FIFO atomically
                 $issueResult = $this->stockService->issueStockFifo(
                     $product,
@@ -264,7 +269,7 @@ class JobCardController extends Controller
 
                 $unitCost = $quantity > 0 ? round($issueResult['total_cost'] / $quantity, 4) : 0.0;
 
-                $jobCard->products()->create([
+                $productItem = $jobCard->products()->create([
                     'product_id' => $product->id,
                     'product_sku' => $product->sku,
                     'product_name' => $product->product_name,
@@ -284,7 +289,8 @@ class JobCardController extends Controller
 
             $fmtQty = QuantityFormatter::format($quantity);
 
-            return back()->with('success', "Product '{$product->product_name}' (Qty: {$fmtQty}) issued to Job Card.");
+            return back()->with('success', "Product '{$product->product_name}' (Qty: {$fmtQty}) issued to Job Card.")
+                ->with('newly_added_product_id', $productItem?->id);
         } catch (Exception $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -347,14 +353,20 @@ class JobCardController extends Controller
             'customer_notes' => ['nullable', 'string'],
         ]);
 
-        $jobCard->update([
+        $updateData = [
             'assigned_to' => $validated['assigned_to'] ?? $jobCard->assigned_to,
             'current_mileage' => $validated['current_mileage'] ?? $jobCard->current_mileage,
             'next_service_mileage' => $validated['next_service_mileage'] ?? $jobCard->next_service_mileage,
-            'discount_amount' => $validated['discount_amount'] ?? $jobCard->discount_amount,
             'service_notes' => $validated['service_notes'] ?? $jobCard->service_notes,
             'customer_notes' => $validated['customer_notes'] ?? $jobCard->customer_notes,
-        ]);
+        ];
+
+        // Do not allow staff to rewrite financial discount if already invoiced
+        if (! $jobCard->invoice_id && array_key_exists('discount_amount', $validated)) {
+            $updateData['discount_amount'] = $validated['discount_amount'] !== null ? (float) $validated['discount_amount'] : 0.0;
+        }
+
+        $jobCard->update($updateData);
 
         // Keep vehicle mileage up-to-date
         if (! empty($validated['current_mileage']) && $validated['current_mileage'] > $jobCard->vehicle->current_mileage) {
@@ -743,5 +755,176 @@ class JobCardController extends Controller
 
         return redirect()->route('operations.job-cards.show', $newJob)
             ->with('success', "Follow-up Job Card #{$newJob->job_number} created for {$jobCard->vehicle->vehicle_number}.");
+    }
+
+    /**
+     * Printable view of Job Card (Full or Selected Items).
+     * Pure read-only operation: no inventory movement, no invoice generation, no status change.
+     */
+    public function print(Request $request, JobCard $jobCard): View|RedirectResponse
+    {
+        $user = Auth::user();
+
+        // 1. Branch authorization check
+        if ($jobCard->branch_id && ! $user->isAdmin()) {
+            $accessible = BranchContext::getAccessibleBranches($user)->pluck('id')->toArray();
+            if (! in_array($jobCard->branch_id, $accessible)) {
+                abort(403, 'Unauthorized to view or print records from another branch.');
+            }
+        }
+
+        // 2. Cancelled job authorization check
+        if ($jobCard->status === 'cancelled') {
+            if (! $user->isAdmin() && ! $user->hasPermission('cancel_jobs')) {
+                abort(403, 'Unauthorized to view or print cancelled job cards.');
+            }
+        }
+
+        // 3. Determine if printing selected items
+        $isSelective = $request->boolean('selected') || $request->has('services') || $request->has('products');
+        $selectedServiceIds = $request->input('services', []);
+        $selectedProductIds = $request->input('products', []);
+
+        if (is_string($selectedServiceIds)) {
+            $selectedServiceIds = array_filter(array_map('trim', explode(',', $selectedServiceIds)));
+        }
+        if (is_string($selectedProductIds)) {
+            $selectedProductIds = array_filter(array_map('trim', explode(',', $selectedProductIds)));
+        }
+
+        if ($isSelective && empty($selectedServiceIds) && empty($selectedProductIds)) {
+            return back()->with('error', 'Please select at least one service or product to print.');
+        }
+
+        // 4. Load relationships safely
+        $jobCard->load([
+            'customer',
+            'vehicle.vehicleType',
+            'vehicleType',
+            'assignedTechnician',
+            'creator',
+            'branch',
+            'issues' => fn ($q) => $q->where('status', 'approved'),
+            'invoice.payments',
+        ]);
+
+        $services = $jobCard->services;
+        $products = $jobCard->products;
+
+        if ($isSelective) {
+            $services = $services->whereIn('id', $selectedServiceIds);
+            $products = $products->whereIn('id', $selectedProductIds);
+
+            if ($services->isEmpty() && $products->isEmpty()) {
+                return back()->with('error', 'Please select at least one service or product to print.');
+            }
+        }
+
+        $company = CompanySetting::getSettings();
+
+        // Calculate totals for print view (never exposing FIFO costs)
+        $servicesTotal = (float) $services->sum('line_total');
+        $productsTotal = (float) $products->sum('line_total');
+        $grandTotal = $isSelective 
+            ? ($servicesTotal + $productsTotal) 
+            : (float) $jobCard->grand_total;
+
+        return view('operations.jobs.print', compact(
+            'jobCard',
+            'company',
+            'services',
+            'products',
+            'isSelective',
+            'servicesTotal',
+            'productsTotal',
+            'grandTotal',
+            'selectedServiceIds',
+            'selectedProductIds'
+        ));
+    }
+
+    /**
+     * Download Job Card as PDF (Full or Selected Items).
+     */
+    public function downloadPdf(Request $request, JobCard $jobCard)
+    {
+        $user = Auth::user();
+
+        // 1. Branch authorization check
+        if ($jobCard->branch_id && ! $user->isAdmin()) {
+            $accessible = BranchContext::getAccessibleBranches($user)->pluck('id')->toArray();
+            if (! in_array($jobCard->branch_id, $accessible)) {
+                abort(403, 'Unauthorized to view or download records from another branch.');
+            }
+        }
+
+        // 2. Cancelled job authorization check
+        if ($jobCard->status === 'cancelled') {
+            if (! $user->isAdmin() && ! $user->hasPermission('cancel_jobs')) {
+                abort(403, 'Unauthorized to view or download cancelled job cards.');
+            }
+        }
+
+        // 3. Determine if printing selected items
+        $isSelective = $request->boolean('selected') || $request->has('services') || $request->has('products');
+        $selectedServiceIds = $request->input('services', []);
+        $selectedProductIds = $request->input('products', []);
+
+        if (is_string($selectedServiceIds)) {
+            $selectedServiceIds = array_filter(array_map('trim', explode(',', $selectedServiceIds)));
+        }
+        if (is_string($selectedProductIds)) {
+            $selectedProductIds = array_filter(array_map('trim', explode(',', $selectedProductIds)));
+        }
+
+        if ($isSelective && empty($selectedServiceIds) && empty($selectedProductIds)) {
+            return back()->with('error', 'Please select at least one service or product to print.');
+        }
+
+        $jobCard->load([
+            'customer',
+            'vehicle.vehicleType',
+            'vehicleType',
+            'assignedTechnician',
+            'creator',
+            'branch',
+            'issues' => fn ($q) => $q->where('status', 'approved'),
+            'invoice.payments',
+        ]);
+
+        $services = $jobCard->services;
+        $products = $jobCard->products;
+
+        if ($isSelective) {
+            $services = $services->whereIn('id', $selectedServiceIds);
+            $products = $products->whereIn('id', $selectedProductIds);
+
+            if ($services->isEmpty() && $products->isEmpty()) {
+                return back()->with('error', 'Please select at least one service or product to print.');
+            }
+        }
+
+        $company = CompanySetting::getSettings();
+        $servicesTotal = (float) $services->sum('line_total');
+        $productsTotal = (float) $products->sum('line_total');
+        $grandTotal = $isSelective 
+            ? ($servicesTotal + $productsTotal) 
+            : (float) $jobCard->grand_total;
+
+        $pdf = Pdf::loadView('operations.jobs.pdf', compact(
+            'jobCard',
+            'company',
+            'services',
+            'products',
+            'isSelective',
+            'servicesTotal',
+            'productsTotal',
+            'grandTotal'
+        ));
+        $pdf->setPaper('a4', 'portrait');
+
+        $suffix = $isSelective ? '_Selected' : '_Full';
+
+        return $pdf->download("JobCard_{$jobCard->job_number}{$suffix}.pdf");
     }
 }
