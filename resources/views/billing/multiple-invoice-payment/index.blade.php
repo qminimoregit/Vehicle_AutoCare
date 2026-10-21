@@ -586,6 +586,7 @@
         </template>
     </div>
 </div>
+@endsection
 
 @push('scripts')
 <script>

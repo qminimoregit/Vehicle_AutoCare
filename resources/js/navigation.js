@@ -171,7 +171,24 @@ export async function navigateTo(targetUrl, pushState = true) {
         // 3. Clear any page-specific unsaved guards
         window.__posCartHasItems = null;
 
-        // 4. Cleanup old Alpine components in main
+        // 4. Remove any stray elements appended to document.body that do not belong to layout
+        Array.from(document.body.children).forEach(child => {
+            if (
+                child.id !== 'page-loading-bar' &&
+                !child.classList.contains('min-h-full') &&
+                child.tagName !== 'SCRIPT' &&
+                child.tagName !== 'STYLE' &&
+                child.tagName !== 'LINK'
+            ) {
+                try {
+                    child.remove();
+                } catch (e) {
+                    // Ignore removal error
+                }
+            }
+        });
+
+        // 5. Cleanup old Alpine components in main
         if (window.Alpine && typeof window.Alpine.destroyTree === 'function') {
             try {
                 window.Alpine.destroyTree(mainContent);
@@ -180,10 +197,10 @@ export async function navigateTo(targetUrl, pushState = true) {
             }
         }
 
-        // 5. Swap Main Content HTML
+        // 6. Swap Main Content HTML
         mainContent.innerHTML = newMainContent.innerHTML;
 
-        // 6. Execute newly delivered inline/page scripts
+        // 7. Execute newly delivered inline/page scripts
         const incomingScripts = newDoc.querySelectorAll('#main-content script, body > script:not([src*="vite"]):not([src*="app.js"])');
         incomingScripts.forEach(oldScript => {
             const newScript = document.createElement('script');
@@ -193,7 +210,7 @@ export async function navigateTo(targetUrl, pushState = true) {
             newScript.remove();
         });
 
-        // 7. Initialize Alpine on new content
+        // 8. Initialize Alpine on new content
         if (window.Alpine && typeof window.Alpine.initTree === 'function') {
             try {
                 window.Alpine.initTree(mainContent);
@@ -202,13 +219,18 @@ export async function navigateTo(targetUrl, pushState = true) {
             }
         }
 
-        // 8. Update browser history
+        // 9. Update browser history
         if (pushState) {
             history.pushState({ url: response.url || url.href }, '', response.url || url.href);
         }
 
-        // 9. Scroll smoothly to top
+        // 10. Scroll smoothly to top
         window.scrollTo({ top: 0, behavior: 'instant' });
+
+        // 11. Dispatch page change event for any page-specific components
+        window.dispatchEvent(new CustomEvent('page-navigated', {
+            detail: { url: response.url || url.href }
+        }));
 
     } catch (err) {
         if (err.name !== 'AbortError') {
@@ -221,10 +243,17 @@ export async function navigateTo(targetUrl, pushState = true) {
     }
 }
 
+let isNavigationInitialized = false;
+
 /**
  * Initialize link click interceptor and popstate listener
  */
 export function initNavigation() {
+    if (isNavigationInitialized) {
+        return;
+    }
+    isNavigationInitialized = true;
+
     document.addEventListener('click', (e) => {
         // Find closest link
         const link = e.target.closest('a');
