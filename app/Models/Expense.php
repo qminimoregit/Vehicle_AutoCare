@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Expense extends Model
 {
@@ -18,6 +19,12 @@ class Expense extends Model
 
     public const STATUS_VOIDED = 'voided';
 
+    public const PAYMENT_STATUS_PAID = 'paid';
+
+    public const PAYMENT_STATUS_PARTIALLY_PAID = 'partially_paid';
+
+    public const PAYMENT_STATUS_UNPAID = 'unpaid';
+
     protected $fillable = [
         'expense_number',
         'branch_id',
@@ -29,6 +36,9 @@ class Expense extends Model
         'related_month',
         'description',
         'amount',
+        'paid_amount',
+        'balance_amount',
+        'payment_status',
         'payment_method',
         'payment_date',
         'payment_reference',
@@ -44,6 +54,8 @@ class Expense extends Model
     {
         return [
             'amount' => 'decimal:2',
+            'paid_amount' => 'decimal:2',
+            'balance_amount' => 'decimal:2',
             'expense_date' => 'date',
             'payment_date' => 'date',
             'voided_at' => 'datetime',
@@ -130,4 +142,54 @@ class Expense extends Model
     {
         return $this->belongsTo(Branch::class, 'branch_id');
     }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(ExpensePayment::class, 'expense_id')->orderBy('payment_date', 'asc')->orderBy('id', 'asc');
+    }
+
+    public function isPaid(): bool
+    {
+        return $this->payment_status === self::PAYMENT_STATUS_PAID || (float) $this->balance_amount <= 0.001;
+    }
+
+    public function isPartiallyPaid(): bool
+    {
+        return $this->payment_status === self::PAYMENT_STATUS_PARTIALLY_PAID;
+    }
+
+    public function isUnpaid(): bool
+    {
+        return $this->payment_status === self::PAYMENT_STATUS_UNPAID;
+    }
+
+    public function hasOutstandingBalance(): bool
+    {
+        return (float) $this->balance_amount > 0.001 && $this->isActive();
+    }
+
+    /**
+     * Recalculate and persist paid amount, balance amount, and payment status based on recorded payments.
+     */
+    public function recalculatePaymentStatus(): void
+    {
+        $totalPaid = (float) $this->payments()->sum('amount');
+        $totalAmount = (float) $this->amount;
+        $balance = max(0.00, round($totalAmount - $totalPaid, 2));
+
+        if ($balance <= 0.001) {
+            $status = self::PAYMENT_STATUS_PAID;
+        } elseif ($totalPaid > 0) {
+            $status = self::PAYMENT_STATUS_PARTIALLY_PAID;
+        } else {
+            $status = self::PAYMENT_STATUS_UNPAID;
+        }
+
+        $this->updateQuietly([
+            'paid_amount' => $totalPaid,
+            'balance_amount' => $balance,
+            'payment_status' => $status,
+        ]);
+    }
 }
+

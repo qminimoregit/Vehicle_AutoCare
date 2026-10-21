@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Reports;
 
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
+use App\Models\Expense;
+use App\Models\ExpensePayment;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Services\BranchContext;
@@ -149,11 +151,52 @@ class MoneyBookController extends Controller
         $creditSalesCreated = (float) $creditSales->sum('balance_amount');
         $totalLiquidInflow = round($cashReceived + $cardReceived + $bankTransferReceived, 2); // Excludes uncleared cheques per rule
 
+        // Expense Payments Outflows (Only actual payments made, unpaid expenses are excluded)
+        $expensePaymentQuery = ExpensePayment::with(['expense.category', 'branch', 'creator'])
+            ->whereHas('expense', fn ($q) => $q->where('status', Expense::STATUS_ACTIVE))
+            ->whereDate('payment_date', '>=', $dateFrom)
+            ->whereDate('payment_date', '<=', $dateTo);
+
+        if ($branchId && $branchId !== 'all') {
+            $expensePaymentQuery->where('branch_id', $branchId);
+        }
+
+        if ($methodFilter !== 'all') {
+            $expensePaymentQuery->where('payment_method', $methodFilter);
+        }
+
+        $expensePayments = $expensePaymentQuery->orderBy('payment_date', 'desc')->get();
+
+        $expenseCashOutflow = 0.0;
+        $expenseBankOutflow = 0.0;
+        $expenseCardOutflow = 0.0;
+        $expenseChequeOutflow = 0.0;
+
+        foreach ($expensePayments as $ep) {
+            $eAmt = (float) $ep->amount;
+            $eMethod = strtolower($ep->payment_method ?? 'cash');
+            if (str_contains($eMethod, 'cash')) {
+                $expenseCashOutflow += $eAmt;
+            } elseif (str_contains($eMethod, 'card')) {
+                $expenseCardOutflow += $eAmt;
+            } elseif (str_contains($eMethod, 'cheque')) {
+                $expenseChequeOutflow += $eAmt;
+            } elseif (str_contains($eMethod, 'bank') || str_contains($eMethod, 'transfer')) {
+                $expenseBankOutflow += $eAmt;
+            } else {
+                $expenseCashOutflow += $eAmt;
+            }
+        }
+
+        $totalExpenseOutflow = round($expenseCashOutflow + $expenseBankOutflow + $expenseCardOutflow + $expenseChequeOutflow, 2);
+        $netCashBalance = round($cashReceived - $expenseCashOutflow, 2);
+
         $selectedBranch = ($branchId && $branchId !== 'all') ? Branch::find($branchId) : null;
 
         return view('reports.money-book.index', compact(
             'payments',
             'creditSales',
+            'expensePayments',
             'dateFrom',
             'dateTo',
             'period',
@@ -168,7 +211,11 @@ class MoneyBookController extends Controller
             'refundsReversals',
             'creditSalesCreated',
             'creditPaymentsCollected',
-            'totalLiquidInflow'
+            'totalLiquidInflow',
+            'expenseCashOutflow',
+            'expenseBankOutflow',
+            'totalExpenseOutflow',
+            'netCashBalance'
         ));
     }
 
@@ -213,11 +260,28 @@ class MoneyBookController extends Controller
         $bankTransferReceived = (float) $payments->where('status', '!=', 'reversed')->filter(fn ($p) => str_contains(strtolower($p->payment_method), 'bank') || str_contains(strtolower($p->payment_method), 'transfer'))->sum('amount');
         $creditSalesCreated = (float) $creditSales->sum('balance_amount');
 
+        // Expense Payments Outflows
+        $expensePaymentQuery = ExpensePayment::with(['expense.category'])
+            ->whereHas('expense', fn ($q) => $q->where('status', Expense::STATUS_ACTIVE))
+            ->whereDate('payment_date', '>=', $dateFrom)
+            ->whereDate('payment_date', '<=', $dateTo);
+
+        if ($branchId && $branchId !== 'all') {
+            $expensePaymentQuery->where('branch_id', $branchId);
+        }
+
+        $expensePayments = $expensePaymentQuery->get();
+        $expenseCashOutflow = (float) $expensePayments->filter(fn ($p) => str_contains(strtolower($p->payment_method), 'cash'))->sum('amount');
+        $expenseBankOutflow = (float) $expensePayments->filter(fn ($p) => str_contains(strtolower($p->payment_method), 'bank') || str_contains(strtolower($p->payment_method), 'card'))->sum('amount');
+        $totalExpenseOutflow = (float) $expensePayments->sum('amount');
+        $netCashBalance = round($cashReceived - $expenseCashOutflow, 2);
+
         $selectedBranch = ($branchId && $branchId !== 'all') ? Branch::find($branchId) : null;
 
         return view('reports.money-book.print', compact(
             'payments',
             'creditSales',
+            'expensePayments',
             'dateFrom',
             'dateTo',
             'selectedBranch',
@@ -225,7 +289,11 @@ class MoneyBookController extends Controller
             'cardReceived',
             'chequeReceived',
             'bankTransferReceived',
-            'creditSalesCreated'
+            'creditSalesCreated',
+            'expenseCashOutflow',
+            'expenseBankOutflow',
+            'totalExpenseOutflow',
+            'netCashBalance'
         ));
     }
 

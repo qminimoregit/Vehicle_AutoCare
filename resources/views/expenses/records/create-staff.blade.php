@@ -47,6 +47,27 @@
                 </div>
             </div>
 
+            <!-- Branch Selection -->
+            <div>
+                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                    Branch <span class="text-rose-500">*</span>
+                </label>
+                <select 
+                    name="branch_id" 
+                    required 
+                    class="block w-full px-3.5 py-2.5 text-sm text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] bg-white"
+                >
+                    @foreach($branches as $b)
+                        <option value="{{ $b->id }}" {{ (string)old('branch_id', $activeBranchId) === (string)$b->id ? 'selected' : '' }}>
+                            {{ $b->name }}
+                        </option>
+                    @endforeach
+                </select>
+                @error('branch_id')
+                    <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
+                @enderror
+            </div>
+
             <!-- Employee & Category Selection -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <!-- Employee -->

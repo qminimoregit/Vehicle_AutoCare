@@ -274,5 +274,63 @@
             </table>
         </div>
     </div>
+
+    <!-- Expense Payments & Outflows (Actual cash/bank spent) -->
+    <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
+        <div class="p-4 border-b border-gray-200 bg-gray-50/70 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+                <svg class="w-4 h-4 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                <h3 class="text-sm font-bold text-gray-900">Expense Payments & Outflows</h3>
+                <span class="text-xs text-gray-500">(Only settled expense payments; unpaid expenses excluded)</span>
+            </div>
+            <div class="text-xs font-bold text-rose-700">
+                Total Outflow: LKR {{ number_format($totalExpenseOutflow, 2) }}
+                <span class="font-normal text-gray-500 ml-1">(Cash: LKR {{ number_format($expenseCashOutflow, 2) }}, Bank: LKR {{ number_format($expenseBankOutflow, 2) }})</span>
+            </div>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                    <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold uppercase tracking-wider">
+                        <th class="py-2.5 px-4">Payment Date</th>
+                        <th class="py-2.5 px-4">Payment #</th>
+                        <th class="py-2.5 px-4">Expense # & Category</th>
+                        <th class="py-2.5 px-4">Method</th>
+                        <th class="py-2.5 px-4">Reference</th>
+                        <th class="py-2.5 px-4 text-right">Amount Paid</th>
+                        <th class="py-2.5 px-4">Branch</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 text-gray-700">
+                    @forelse($expensePayments as $ep)
+                        <tr class="hover:bg-slate-50 transition">
+                            <td class="py-2.5 px-4 text-gray-600">{{ $ep->payment_date?->format('d M Y') }}</td>
+                            <td class="py-2.5 px-4 font-mono font-bold text-[#0B1849]">{{ $ep->payment_number }}</td>
+                            <td class="py-2.5 px-4">
+                                <span class="font-semibold text-gray-900">{{ $ep->expense?->category?->name ?? 'Operating Cost' }}</span>
+                                <span class="block text-[11px] text-gray-400 font-mono">{{ $ep->expense?->expense_number }}</span>
+                            </td>
+                            <td class="py-2.5 px-4">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-800">
+                                    {{ ucwords(str_replace('_', ' ', $ep->payment_method)) }}
+                                </span>
+                            </td>
+                            <td class="py-2.5 px-4 text-gray-500 font-mono">{{ $ep->reference_number ?: '—' }}</td>
+                            <td class="py-2.5 px-4 text-right font-bold text-rose-700">LKR {{ number_format($ep->amount, 2) }}</td>
+                            <td class="py-2.5 px-4 text-gray-500">{{ $ep->branch?->name ?? 'Main Branch' }}</td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="7" class="py-6 text-center text-gray-500 text-xs">
+                                No expense payments or outflows recorded during this period.
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 @endsection

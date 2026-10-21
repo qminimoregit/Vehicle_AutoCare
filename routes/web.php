@@ -319,6 +319,7 @@ Route::middleware(['auth', 'active'])->group(function () {
 
         // Expense Records
         Route::get('/records', [ExpenseController::class, 'index'])->name('records.index');
+        Route::get('/records/create', [ExpenseController::class, 'createShop'])->name('records.create');
         Route::get('/export', [ExpenseController::class, 'export'])->name('records.export');
         Route::get('/staff/create', [ExpenseController::class, 'createStaff'])->name('staff.create');
         Route::post('/staff', [ExpenseController::class, 'storeStaff'])->name('staff.store');
@@ -328,6 +329,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/records/{expense}/edit', [ExpenseController::class, 'edit'])->name('records.edit');
         Route::put('/records/{expense}', [ExpenseController::class, 'update'])->name('records.update');
         Route::post('/records/{expense}/void', [ExpenseController::class, 'void'])->name('records.void');
+        Route::post('/records/{expense}/payments', [ExpenseController::class, 'storePayment'])->name('records.payments.store');
         Route::get('/records/{expense}/receipt', [ExpenseController::class, 'downloadReceipt'])->name('records.receipt');
     });
 
