@@ -293,7 +293,7 @@ class PaymentController extends Controller
         $email = $payment->customer?->email ?? ($payment->invoice?->customer?->email ?? null);
 
         if (empty($email)) {
-            return back()->with('warning', 'No email address registered for this customer.');
+            return back()->with('error', 'No email address registered for this customer.');
         }
 
         $payment->load([
@@ -389,66 +389,6 @@ class PaymentController extends Controller
             return back()->with('error', "Payment reversal failed: {$e->getMessage()}");
         }
     }
-
-    /**
-     * Display compact 80mm thermal payment receipt.
-     */
-    public function thermalReceipt(Request $request, Payment $payment): View
-    {
-        $user = $request->user();
-        if (! $user || (! $user->isAdmin() && ! $user->hasPermission('view_invoices') && ! $user->hasPermission('record_payments'))) {
-            abort(403, 'Unauthorized access to payment receipt.');
-        }
-
-        $payment->load([
-            'invoice.customer',
-            'invoice.jobCard.vehicle',
-            'invoice.jobCard.vehicleType',
-            'invoice.branch',
-            'creator',
-            'customer',
-        ]);
-
-        if ($payment->invoice && $payment->invoice->branch_id && ! $user->canAccessBranch($payment->invoice->branch_id)) {
-            abort(403, 'Unauthorized access to this branch.');
-        }
-
-        $company = CompanySetting::getSettings();
-
-        return view('billing.payments.thermal', compact('payment', 'company'));
-    }
-
-    /**
-     * Send payment receipt PDF via email to customer.
-     */
-    public function sendEmail(Request $request, Payment $payment): RedirectResponse
-    {
-        $payment->load(['customer', 'invoice.customer']);
-        $customer = $payment->customer ?? $payment->invoice?->customer;
-
-        if (! $customer || empty($customer->email)) {
-            return back()->with('error', 'No email address registered for this customer.');
-        }
-
-        try {
-            Mail::to($customer->email)->send(new PaymentReceiptMail($payment));
-
-            ActivityLog::log(
-                action: 'payment_receipt_emailed',
-                description: "Emailed Payment Receipt #{$payment->payment_number} to {$customer->email}.",
-                module: 'Sales & Billing'
-            );
-
-            return back()->with('success', "Payment receipt emailed successfully to {$customer->email}.");
-        } catch (\Throwable $e) {
-            ActivityLog::log(
-                action: 'payment_receipt_email_failed',
-                description: "Failed emailing payment receipt #{$payment->payment_number} to {$customer->email}: {$e->getMessage()}",
-                module: 'Sales & Billing'
-            );
-
-            return back()->with('error', "Could not send email: {$e->getMessage()}");
-        }
-    }
 }
+
 

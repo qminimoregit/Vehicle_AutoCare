@@ -247,7 +247,7 @@ class PosAndThermalPrintingWorkflowTest extends TestCase
             'discount_amount' => 500.00,
             'payment_method' => 'cheque',
             'reference_number' => 'CHQ-888123',
-            'paid_amount' => 18500.00,
+            'amount_paid' => 18500.00,
         ];
 
         $response = $this->actingAs($this->admin)->postJson(route('operations.direct-sales.store'), $payload);
@@ -428,7 +428,7 @@ class PosAndThermalPrintingWorkflowTest extends TestCase
         $this->assertEquals($tech2->id, $jobCard->assigned_to);
 
         // Check activity log
-        $log = ActivityLog::where('action', 'technician_reassigned')
+        $log = ActivityLog::where('action', 'reassigned_technician')
             ->where('description', 'like', "%{$jobCard->job_number}%")
             ->first();
         
@@ -464,6 +464,16 @@ class PosAndThermalPrintingWorkflowTest extends TestCase
             ->where('description', 'like', "%{$jobCard->job_number}%")
             ->first();
         $this->assertNotNull($startLog);
+
+        // Add service to job card before completion
+        $jobCard->services()->create([
+            'service_id' => $this->service->id,
+            'service_code' => 'SRV-TUNE',
+            'service_name' => 'Full Engine Tune Up',
+            'unit_price' => 5000.00,
+            'quantity' => 1,
+            'line_total' => 5000.00,
+        ]);
 
         // Complete job
         $this->actingAs($this->staff)->patch(route('operations.job-cards.status', $jobCard), [
