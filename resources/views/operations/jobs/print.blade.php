@@ -379,6 +379,13 @@
             <span class="meta-val">{{ $jobCard->vehicleType?->name ?? ($jobCard->vehicle?->vehicleType?->name ?? 'General') }}</span>
         </div>
 
+        @if($jobCard->vehicle?->make_model)
+            <div class="meta-row">
+                <span class="meta-label">Model:</span>
+                <span class="meta-val">{{ $jobCard->vehicle->make_model }}</span>
+            </div>
+        @endif
+
         @if($jobCard->current_mileage > 0)
             <div class="meta-row">
                 <span class="meta-label">Current Mileage:</span>

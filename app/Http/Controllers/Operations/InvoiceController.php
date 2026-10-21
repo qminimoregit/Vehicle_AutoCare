@@ -384,7 +384,7 @@ class InvoiceController extends Controller
         $email = $invoice->customer?->email ?? ($invoice->customer_snapshot['email'] ?? null);
 
         if (empty($email)) {
-            return back()->with('warning', 'No email address registered for this customer.');
+            return back()->with('error', 'No email address registered for this customer.');
         }
 
         $invoice->load([
@@ -512,3 +512,5 @@ class InvoiceController extends Controller
         }
     }
 }
+
+

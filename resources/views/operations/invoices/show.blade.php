@@ -3,9 +3,58 @@
 @section('title', 'Invoice #' . $invoice->invoice_number)
 
 @section('content')
+@php
+    $branchName = $invoice->branch?->name ?? 'AutoCare Service Center';
+    $vehiclePlate = $invoice->jobCard?->vehicle?->vehicle_number ?? ($invoice->vehicle?->vehicle_number ?? 'Vehicle');
+    $customerPhone = $invoice->customer?->phone ?? '';
+    $normPhone = \App\Services\PhoneNumberHelper::normalizeForWhatsApp($customerPhone) ?? '';
+
+    if ($invoice->amount_paid > 0) {
+        $lastPayment = $invoice->payments->where('status', '!=', 'reversed')->last();
+        $recentAmount = $lastPayment ? (float)$lastPayment->amount : (float)$invoice->amount_paid;
+        $waInvoiceMessage = "Hello,\n\n"
+            . "We have received your payment for vehicle {$vehiclePlate}.\n\n"
+            . "Invoice No: {$invoice->invoice_number}\n"
+            . "Payment Received: LKR " . number_format($recentAmount, 2) . "\n"
+            . "Total Paid: LKR " . number_format($invoice->amount_paid, 2) . "\n"
+            . "Remaining Balance: LKR " . number_format($invoice->balance_amount, 2) . "\n\n"
+            . "Thank you for choosing {$branchName}.";
+    } else {
+        $waInvoiceMessage = "Hello,\n\n"
+            . "Your invoice for vehicle {$vehiclePlate} has been prepared at {$branchName}.\n\n"
+            . "Invoice No: {$invoice->invoice_number}\n"
+            . "Total Amount: LKR " . number_format($invoice->grand_total, 2) . "\n"
+            . "Remaining Balance: LKR " . number_format($invoice->balance_amount, 2) . "\n\n"
+            . "Thank you for choosing {$branchName}.";
+    }
+@endphp
+
 <div 
     x-data="{ 
         showPaymentModal: {{ (request()->query('action') === 'pay' && $invoice->balance_amount > 0 && $invoice->status !== 'cancelled') ? 'true' : 'false' }},
+        showWhatsAppModal: false,
+        whatsappPhone: '{{ $normPhone }}',
+        whatsappText: {{ json_encode($waInvoiceMessage) }},
+        copiedWhatsApp: false,
+
+        copyWhatsAppText() {
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(this.whatsappText).then(() => {
+                    this.copiedWhatsApp = true;
+                    setTimeout(() => { this.copiedWhatsApp = false; }, 2000);
+                });
+            }
+        },
+
+        openWhatsApp() {
+            if (!this.whatsappPhone) {
+                alert('Please enter or verify the customer mobile phone number.');
+                return;
+            }
+            let url = 'https://wa.me/' + encodeURIComponent(this.whatsappPhone) + '?text=' + encodeURIComponent(this.whatsappText);
+            window.open(url, '_blank');
+        },
+
         paymentAmount: '{{ (float)$invoice->balance_amount }}',
         paymentMethod: 'cash',
         paymentDate: '{{ date('Y-m-d') }}',
@@ -87,37 +136,83 @@
             </p>
         </div>
 
-        <div class="flex items-center space-x-2.5 w-full sm:w-auto">
+        <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <a 
                 href="{{ route('operations.invoices.print', $invoice) }}" 
                 target="_blank"
-                class="inline-flex items-center justify-center px-3.5 py-2.5 bg-white border border-gray-300 text-gray-700 font-bold text-xs rounded-lg hover:bg-gray-50 shadow-xs transition min-h-[44px]"
+                class="inline-flex items-center justify-center px-3 py-2.5 bg-white border border-gray-300 text-gray-700 font-semibold text-xs rounded-lg hover:bg-gray-50 shadow-xs transition min-h-[44px]"
+                title="Print standard A4 Invoice"
             >
-                <svg class="w-4 h-4 mr-1.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg class="w-4 h-4 mr-1 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                 </svg>
-                Print
+                A4
+            </a>
+
+            <!-- 80mm Thermal Bill Button -->
+            <a 
+                href="{{ route('operations.invoices.thermal', $invoice) }}" 
+                target="_blank"
+                class="inline-flex items-center justify-center px-3 py-2.5 bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold text-xs rounded-lg hover:bg-indigo-100 shadow-xs transition min-h-[44px]"
+                title="Print 80mm Thermal Bill"
+            >
+                <svg class="w-4 h-4 mr-1 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                80mm Bill
             </a>
 
             <a 
                 href="{{ route('operations.invoices.pdf', $invoice) }}" 
-                class="inline-flex items-center justify-center px-3.5 py-2.5 bg-white border border-gray-300 text-gray-700 font-bold text-xs rounded-lg hover:bg-gray-50 shadow-xs transition min-h-[44px]"
+                class="inline-flex items-center justify-center px-3 py-2.5 bg-white border border-gray-300 text-gray-700 font-semibold text-xs rounded-lg hover:bg-gray-50 shadow-xs transition min-h-[44px]"
             >
-                <svg class="w-4 h-4 mr-1.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg class="w-4 h-4 mr-1 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
                 PDF
             </a>
 
-            <a 
-                href="#payment-history" 
-                class="inline-flex items-center justify-center px-3.5 py-2.5 bg-white border border-gray-300 text-gray-700 font-bold text-xs rounded-lg hover:bg-gray-50 shadow-xs transition min-h-[44px]"
+            <!-- Email Invoice Button -->
+            @if(!empty($invoice->customer?->email))
+                <form action="{{ route('operations.invoices.email', $invoice) }}" method="POST" onsubmit="return confirm('Send Invoice PDF to {{ $invoice->customer->email }}?');">
+                    @csrf
+                    <button 
+                        type="submit" 
+                        class="inline-flex items-center justify-center px-3 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 font-semibold text-xs rounded-lg shadow-xs transition min-h-[44px]"
+                        title="Email Invoice PDF to {{ $invoice->customer->email }}"
+                    >
+                        <svg class="w-4 h-4 mr-1 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        Email
+                    </button>
+                </form>
+            @else
+                <button 
+                    type="button" 
+                    @click="alert('No email address registered for this customer.')"
+                    class="inline-flex items-center justify-center px-3 py-2.5 bg-gray-50 text-gray-400 border border-gray-200 font-semibold text-xs rounded-lg transition min-h-[44px]"
+                    title="No email address registered for this customer."
+                >
+                    <svg class="w-4 h-4 mr-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    Email
+                </button>
+            @endif
+
+            <!-- Send WhatsApp Button -->
+            <button 
+                type="button" 
+                @click="showWhatsAppModal = true"
+                class="inline-flex items-center justify-center px-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-semibold text-xs rounded-lg shadow-xs transition min-h-[44px]"
+                title="Prepare manual WhatsApp message for customer"
             >
-                <svg class="w-4 h-4 mr-1.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <svg class="w-4 h-4 mr-1 text-emerald-600" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
                 </svg>
-                Payment History
-            </a>
+                WhatsApp
+            </button>
 
             @if($invoice->balance_amount > 0 && $invoice->status !== 'cancelled')
                 <button 
@@ -131,7 +226,7 @@
                     Record Payment
                 </button>
             @elseif($invoice->status !== 'cancelled' && $invoice->grand_total > 0)
-                <span class="inline-flex items-center justify-center px-4 py-2.5 bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold text-xs rounded-lg shadow-xs min-h-[44px]">
+                <span class="inline-flex items-center justify-center px-3.5 py-2.5 bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold text-xs rounded-lg shadow-xs min-h-[44px]">
                     <svg class="w-4 h-4 mr-1.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                     </svg>
@@ -386,13 +481,35 @@
                                             href="{{ route('billing.payments.receipt', $pay) }}" 
                                             target="_blank"
                                             class="inline-flex items-center px-2 py-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded text-[11px] font-semibold transition"
-                                            title="Print Payment Receipt"
+                                            title="Print Standard Payment Receipt"
                                         >
                                             <svg class="w-3 h-3 mr-1 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                                             </svg>
-                                            Receipt
+                                            A4
                                         </a>
+
+                                        <a 
+                                            href="{{ route('billing.payments.thermal', $pay) }}" 
+                                            target="_blank"
+                                            class="inline-flex items-center px-2 py-1 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 rounded text-[11px] font-bold transition"
+                                            title="Print 80mm Thermal Payment Receipt"
+                                        >
+                                            80mm
+                                        </a>
+
+                                        @if(!empty($invoice->customer?->email))
+                                            <form action="{{ route('billing.payments.email', $pay) }}" method="POST" class="inline" onsubmit="return confirm('Email payment receipt to {{ $invoice->customer->email }}?');">
+                                                @csrf
+                                                <button 
+                                                    type="submit" 
+                                                    class="inline-flex items-center px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded text-[11px] font-semibold transition cursor-pointer"
+                                                    title="Email Payment Receipt"
+                                                >
+                                                    Email
+                                                </button>
+                                            </form>
+                                        @endif
 
                                         @if(Auth::user() && Auth::user()->isAdmin() && $pay->status !== 'reversed')
                                             <button 
@@ -658,5 +775,99 @@
             </div>
         </div>
     @endif
+
+    <!-- MODAL: MANUAL WHATSAPP MESSAGE PREPARATION -->
+    <div 
+        x-show="showWhatsAppModal" 
+        class="fixed inset-0 z-50 overflow-y-auto"
+        style="display: none;"
+    >
+        <div class="flex items-center justify-center min-h-screen px-4 py-6">
+            <div class="fixed inset-0 bg-gray-900/50 backdrop-blur-xs transition-opacity" @click="showWhatsAppModal = false"></div>
+
+            <div class="relative bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-gray-200 space-y-4">
+                <div class="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <div class="flex items-center space-x-2">
+                        <span class="p-2 bg-emerald-100 text-emerald-800 rounded-lg">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+                            </svg>
+                        </span>
+                        <div>
+                            <h3 class="text-base font-bold text-gray-900">Manual WhatsApp Message</h3>
+                            <p class="text-xs text-gray-500">Invoice / Payment Notification</p>
+                        </div>
+                    </div>
+                    <button type="button" @click="showWhatsAppModal = false" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                            Customer Phone / WhatsApp Number
+                        </label>
+                        <div class="flex items-center space-x-2">
+                            <input 
+                                type="text" 
+                                x-model="whatsappPhone"
+                                placeholder="e.g. 94712345678"
+                                class="block w-full py-2.5 px-3 text-sm font-mono text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white min-h-[44px]"
+                            >
+                        </div>
+                        <p class="text-[11px] text-gray-500 mt-1">Sri Lankan numbers are automatically normalized to international format (e.g. 94712345678).</p>
+                    </div>
+
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+                                Message Preview
+                            </label>
+                            <button 
+                                type="button" 
+                                @click="copyWhatsAppText()"
+                                class="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition"
+                            >
+                                <span x-text="copiedWhatsApp ? 'Copied to Clipboard!' : 'Copy Text'"></span>
+                            </button>
+                        </div>
+                        <textarea 
+                            x-model="whatsappText"
+                            rows="7"
+                            class="block w-full py-2.5 px-3 text-xs font-mono text-gray-800 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-slate-50"
+                        ></textarea>
+                    </div>
+
+                    <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800">
+                        <p class="font-semibold">Workflow note:</p>
+                        <p class="mt-0.5">Clicking "Open in WhatsApp" will open WhatsApp Web or the app with this message prefilled. You will review and manually click Send in WhatsApp.</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end space-x-3 pt-3 border-t border-gray-100">
+                    <button 
+                        type="button" 
+                        @click="showWhatsAppModal = false"
+                        class="px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 rounded-lg transition min-h-[40px]"
+                    >
+                        Close
+                    </button>
+                    <button 
+                        type="button" 
+                        @click="openWhatsApp()"
+                        class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition flex items-center min-h-[44px]"
+                    >
+                        <svg class="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+                        </svg>
+                        Open in WhatsApp
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 @endsection

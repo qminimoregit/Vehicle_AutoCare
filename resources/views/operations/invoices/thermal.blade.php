@@ -300,7 +300,7 @@
         <div class="divider"></div>
 
         <div class="receipt-title">
-            {{ $invoice->invoice_type === 'direct_sale' ? 'SALES RECEIPT' : 'INVOICE / RECEIPT' }}
+            SALES RECEIPT / INVOICE
         </div>
 
         <div class="divider"></div>
@@ -383,7 +383,7 @@
                                 <div style="font-size: 9px; color: #444;">{{ $item->item_code }}</div>
                             @endif
                         </td>
-                        <td class="col-amt">{{ number_format($item->line_total, 2) }}</td>
+                        <td class="col-amt">{{ number_format($item->line_total ?? ($item->total ?? 0), 2) }}</td>
                     </tr>
                 @endforeach
             </tbody>
