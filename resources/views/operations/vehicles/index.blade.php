@@ -26,7 +26,74 @@
         searchMessage: '',
         ongoingJobs: [],
         serviceHistory: [],
+
+        // Company / Fleet Details
+        isCompanyCustomer: false,
+        hasCreditAccount: false,
+        availableCredit: 0,
         
+        // Vehicle Types with Carpet Configurations
+        vehicleTypes: {{ Js::from($vehicleTypes->mapWithKeys(fn($t) => [
+            (string)$t->id => [
+                'id' => $t->id,
+                'name' => $t->name,
+                'enable_carpets' => (bool)$t->enable_carpets,
+                'categories' => $t->carpetCategories->map(fn($c) => ['id' => $c->id, 'name' => $c->name])->values(),
+            ]
+        ])) }},
+
+        // Selected Carpet Details: { [categoryId]: quantity }
+        selectedCarpets: {},
+
+        hasCarpetSupport() {
+            return !!(this.vehicleTypeId && this.vehicleTypes[this.vehicleTypeId]?.enable_carpets);
+        },
+
+        currentCarpetCategories() {
+            if (!this.hasCarpetSupport()) return [];
+            return this.vehicleTypes[this.vehicleTypeId]?.categories || [];
+        },
+
+        isCarpetSelected(catId) {
+            return this.selectedCarpets.hasOwnProperty(catId) && this.selectedCarpets[catId] > 0;
+        },
+
+        toggleCarpet(catId) {
+            if (this.isCarpetSelected(catId)) {
+                let copy = Object.assign({}, this.selectedCarpets);
+                delete copy[catId];
+                this.selectedCarpets = copy;
+            } else {
+                let copy = Object.assign({}, this.selectedCarpets);
+                copy[catId] = 1;
+                this.selectedCarpets = copy;
+            }
+        },
+
+        setVehicleType(typeId) {
+            this.vehicleTypeId = String(typeId);
+            this.syncCarpetsForVehicleType();
+        },
+
+        syncCarpetsForVehicleType() {
+            if (!this.hasCarpetSupport()) {
+                this.selectedCarpets = {};
+                return;
+            }
+            const allowedIds = this.currentCarpetCategories().map(c => Number(c.id));
+            let copy = Object.assign({}, this.selectedCarpets);
+            let changed = false;
+            for (const catId of Object.keys(copy)) {
+                if (!allowedIds.includes(Number(catId))) {
+                    delete copy[catId];
+                    changed = true;
+                }
+            }
+            if (changed) {
+                this.selectedCarpets = copy;
+            }
+        },
+
         // Mileage shortcuts
         addMileage(km) {
             let current = parseInt(this.currentMileage) || 0;
@@ -68,16 +135,34 @@
                     this.customerType = data.customer.customer_type || 'individual';
                     this.companyName = data.customer.company_name || '';
                     this.address = data.customer.address || '';
+                    this.isCompanyCustomer = !!data.customer.is_company;
+                    this.hasCreditAccount = !!data.customer.has_credit_account;
+                    this.availableCredit = parseFloat(data.customer.available_credit) || 0;
 
                     this.ongoingJobs = data.ongoing_jobs || [];
                     this.serviceHistory = data.service_history || [];
-                    this.searchMessage = 'Existing vehicle found. Information automatically loaded.';
+                    this.searchMessage = data.message || 'Existing Vehicle Found – Customer Details Loaded';
+                    
+                    this.syncCarpetsForVehicleType();
                 } else {
                     this.vehicleExists = false;
+                    this.customerName = '';
+                    this.phone = '';
                     this.email = '';
+                    this.customerType = 'individual';
+                    this.companyName = '';
+                    this.address = '';
+                    this.makeModel = '';
+                    this.currentMileage = '';
+                    this.nextServiceMileage = '';
+                    this.customerNotes = '';
+                    this.isCompanyCustomer = false;
+                    this.hasCreditAccount = false;
+                    this.availableCredit = 0;
                     this.ongoingJobs = [];
                     this.serviceHistory = [];
-                    this.searchMessage = data.message || 'This is a new vehicle. Enter the details to start its first job.';
+                    this.selectedCarpets = {};
+                    this.searchMessage = data.message || 'New Vehicle – Enter Customer Details';
                 }
             } catch (err) {
                 console.error(err);
@@ -88,6 +173,7 @@
         },
 
         init() {
+            this.$watch('vehicleTypeId', () => this.syncCarpetsForVehicleType());
             if (this.vehicleNumber.trim().length >= 3) {
                 this.searchVehicle();
             }
@@ -144,7 +230,7 @@
                             id="vehicle_number"
                             x-model="vehicleNumber"
                             @keydown.enter.prevent="searchVehicle()"
-                            placeholder="e.g. CAA-1234 or WP CAA 1234"
+                            placeholder="e.g. CAA-1234, CAA 1234, caa1234"
                             class="block w-full pl-11 pr-4 py-3 text-base sm:text-lg font-bold uppercase text-gray-900 placeholder-gray-400 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] bg-white tracking-wider"
                             required
                         >
@@ -177,9 +263,9 @@
                 </div>
 
                 <!-- Feedback status message -->
-                <div x-show="searchPerformed" class="mt-3 text-xs sm:text-sm font-medium flex items-center" style="display: none;">
+                <div x-show="searchPerformed" class="mt-3 flex flex-wrap items-center gap-2" style="display: none;">
                     <template x-if="vehicleExists">
-                        <span class="inline-flex items-center text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
+                        <span class="inline-flex items-center text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-md border border-emerald-200 text-xs sm:text-sm font-bold">
                             <svg class="w-4 h-4 mr-1.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                             </svg>
@@ -187,11 +273,24 @@
                         </span>
                     </template>
                     <template x-if="!vehicleExists">
-                        <span class="inline-flex items-center text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200">
+                        <span class="inline-flex items-center text-blue-800 bg-blue-50 px-3 py-1.5 rounded-md border border-blue-200 text-xs sm:text-sm font-bold">
                             <svg class="w-4 h-4 mr-1.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             <span x-text="searchMessage"></span>
+                        </span>
+                    </template>
+
+                    <!-- Company Fleet Indicator if applicable -->
+                    <template x-if="vehicleExists && isCompanyCustomer">
+                        <span class="inline-flex items-center text-indigo-800 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-200 text-xs font-semibold">
+                            <svg class="w-3.5 h-3.5 mr-1 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                            </svg>
+                            Fleet Account: <strong class="ml-1" x-text="companyName || customerName"></strong>
+                            <template x-if="hasCreditAccount">
+                                <span class="ml-1.5 text-[11px] text-indigo-600 font-bold">(Credit Active)</span>
+                            </template>
                         </span>
                     </template>
                 </div>
@@ -303,7 +402,7 @@
                     <label class="block text-xs font-bold uppercase tracking-wider text-gray-700">
                         Vehicle Type <span class="text-red-500">*</span>
                     </label>
-                    <span class="text-xs text-gray-500">Service prices adjust according to vehicle type</span>
+                    <span class="text-xs text-gray-500">Service prices & carpet options adjust according to vehicle type</span>
                 </div>
 
                 <!-- Hidden Input for Form Submission -->
@@ -314,7 +413,7 @@
                     @foreach($vehicleTypes as $type)
                         <button 
                             type="button" 
-                            @click="vehicleTypeId = '{{ $type->id }}'"
+                            @click="setVehicleType('{{ $type->id }}')"
                             class="p-3 rounded-xl border text-center transition flex flex-col items-center justify-center space-y-2 cursor-pointer focus:outline-none min-h-[80px]"
                             :class="vehicleTypeId === '{{ $type->id }}' ? 'border-[#0B1849] bg-[#EEF1FA] text-[#0B1849] ring-2 ring-[#0B1849]/20 font-bold shadow-xs' : 'border-gray-200 bg-white hover:bg-slate-50 text-gray-700 hover:border-gray-300'"
                         >
@@ -328,6 +427,9 @@
                                 </div>
                             @endif
                             <span class="text-xs font-semibold block leading-tight">{{ $type->name }}</span>
+                            @if($type->enable_carpets)
+                                <span class="text-[10px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded font-normal">Carpets</span>
+                            @endif
                         </button>
                     @endforeach
                 </div>
@@ -336,18 +438,71 @@
                 <div class="block sm:hidden">
                     <select 
                         x-model="vehicleTypeId" 
+                        @change="syncCarpetsForVehicleType()"
                         class="block w-full py-3 px-3.5 text-base text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] bg-white min-h-[44px]"
                         required
                     >
                         <option value="">-- Select Vehicle Type --</option>
                         @foreach($vehicleTypes as $type)
-                            <option value="{{ $type->id }}">{{ $type->name }}</option>
+                            <option value="{{ $type->id }}">
+                                {{ $type->name }} {{ $type->enable_carpets ? '(Carpets Available)' : '' }}
+                            </option>
                         @endforeach
                     </select>
                 </div>
                 @error('vehicle_type_id')
                     <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
                 @enderror
+
+                <!-- 2B. CARPET DETAILS (OPTIONAL) - DIRECTLY BELOW VEHICLE TYPE -->
+                <div 
+                    x-show="hasCarpetSupport() && currentCarpetCategories().length > 0" 
+                    class="mt-4 bg-slate-50 border border-slate-200 rounded-xl p-4 sm:p-5 space-y-3 transition-all"
+                    style="display: none;"
+                >
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-2 h-2 rounded-full bg-[#0B1849]"></span>
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-[#0B1849]">
+                                CARPET DETAILS <span class="text-gray-400 font-normal lowercase">(optional)</span>
+                            </h4>
+                        </div>
+                        <span class="text-[11px] text-gray-500 font-medium">Tick received carpets and specify quantity</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-1">
+                        <template x-for="cat in currentCarpetCategories()" :key="cat.id">
+                            <div 
+                                class="flex items-center justify-between p-2.5 rounded-lg border transition-all"
+                                :class="isCarpetSelected(cat.id) ? 'bg-[#EEF1FA]/70 border-[#0B1849]/30 ring-1 ring-[#0B1849]/20' : 'bg-white border-gray-200 hover:border-gray-300'"
+                            >
+                                <label class="flex items-center space-x-2.5 cursor-pointer select-none text-xs font-bold text-gray-800 flex-1 mr-2">
+                                    <input 
+                                        type="checkbox" 
+                                        :checked="isCarpetSelected(cat.id)"
+                                        @change="toggleCarpet(cat.id)"
+                                        class="w-4 h-4 text-[#0B1849] rounded border-gray-300 focus:ring-[#0B1849] cursor-pointer"
+                                    >
+                                    <span x-text="cat.name"></span>
+                                </label>
+
+                                <!-- Quantity Input (Only displayed when category is selected) -->
+                                <div x-show="isCarpetSelected(cat.id)" class="flex items-center space-x-1.5 shrink-0" style="display: none;">
+                                    <span class="text-[11px] font-bold text-gray-600">Qty:</span>
+                                    <input 
+                                        type="number" 
+                                        min="1" 
+                                        step="1"
+                                        x-model.number="selectedCarpets[cat.id]"
+                                        :name="'carpets[' + cat.id + '][quantity]'"
+                                        class="w-16 py-1 px-2 text-xs font-black text-center text-gray-900 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-[#0B1849] min-h-[30px]"
+                                    >
+                                    <input type="hidden" :name="'carpets[' + cat.id + '][category_id]'" :value="cat.id">
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
             </div>
 
             <!-- 3. MILEAGE MANAGEMENT -->

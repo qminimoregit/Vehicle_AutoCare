@@ -51,7 +51,8 @@
         'selectedServices' => session('newly_added_service_id') ? [(int) session('newly_added_service_id')] : [],
         'selectedProducts' => session('newly_added_product_id') ? [(int) session('newly_added_product_id')] : [],
         'servicePriceUrl' => route('operations.job-cards.service-price', [$jobCard, '__SERVICE_ID__']),
-        'totalItems' => $jobCard->services->count() + $jobCard->products->count(),
+        'totalItems' => $jobCard->services->count() + $jobCard->products->count() + $jobCard->issues->count() + $jobCard->carpets->count(),
+        'hasCarpets' => $jobCard->carpets->isNotEmpty(),
     ]) }})"
     class="max-w-6xl mx-auto space-y-6"
 >
@@ -93,19 +94,35 @@
 
         <!-- Quick Status Transitions & Primary Actions (Organized by Status) -->
         <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <!-- 1. Print Job Card (Directly visible outside dropdown) -->
+            <a 
+                href="{{ route('operations.job-cards.print', $jobCard) }}" 
+                target="_blank"
+                class="inline-flex items-center justify-center px-3.5 py-2.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-bold text-xs sm:text-sm rounded-lg shadow-xs transition min-h-[44px]"
+                title="Print Job Card"
+            >
+                <svg class="w-4 h-4 mr-1.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                Print Job Card
+            </a>
+
+            <!-- 2. Print Selected Items (Directly visible outside dropdown) -->
+            <button 
+                type="button" 
+                @click="printSelectedItems()" 
+                :disabled="totalItemsCount === 0"
+                class="inline-flex items-center justify-center px-3.5 py-2.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-bold text-xs sm:text-sm rounded-lg shadow-xs transition min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                title="Print only selected services, products, or issues"
+            >
+                <svg class="w-4 h-4 mr-1.5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+                Print Selected Items
+            </button>
+
             @if($jobCard->status === 'pending')
-                <!-- BEFORE WORK: [Print Job] [Pay] [Start Work] -->
-                <a 
-                    href="{{ route('operations.job-cards.print', $jobCard) }}" 
-                    target="_blank"
-                    class="inline-flex items-center justify-center px-3.5 py-2.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-bold text-xs sm:text-sm rounded-lg shadow-xs transition min-h-[44px]"
-                    title="Print Job Card"
-                >
-                    <svg class="w-4 h-4 mr-1.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                    </svg>
-                    Print Job
-                </a>
+                <!-- BEFORE WORK: [Pay] [Print Bill (if advance paid)] [Start Work] -->
 
                 <!-- Pay Button (Advance Payment) -->
                 <button 
@@ -383,32 +400,6 @@
                         </svg>
                         {{ $jobCard->assigned_to ? 'Change Technician' : 'Assign Technician' }}
                     </button>
-
-                    <!-- Print Full Job Card -->
-                    <a 
-                        href="{{ route('operations.job-cards.print', $jobCard) }}" 
-                        target="_blank"
-                        class="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700 flex items-center"
-                    >
-                        <svg class="w-4 h-4 mr-2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                        </svg>
-                        Print Full Job Card (A4)
-                    </a>
-
-                    <!-- Print Selected Items -->
-                    <button 
-                        type="button" 
-                        @click="printSelectedItems(); openMenu = false" 
-                        :disabled="totalItemsCount === 0"
-                        class="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <svg class="w-4 h-4 mr-2 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                        </svg>
-                        Print Selected Items
-                    </button>
-
                     <!-- Edit Info -->
                     @if($jobCard->status !== 'cancelled')
                         <button 
@@ -522,6 +513,57 @@
                 @if($jobCard->service_notes)
                     <div><strong>Work Note:</strong> {{ $jobCard->service_notes }}</div>
                 @endif
+            </div>
+        @endif
+
+        <!-- CARPET DETAILS (COMPACT & OPTIONAL) -->
+        @if($jobCard->carpets->isNotEmpty())
+            <div class="px-5 py-3 bg-slate-50 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div class="flex items-center space-x-2">
+                    <span class="font-bold uppercase tracking-wider text-gray-700 text-[11px]">CARPET DETAILS:</span>
+                    <div class="flex flex-wrap items-center gap-2">
+                        @foreach($jobCard->carpets as $carpet)
+                            <span class="inline-flex items-center px-2.5 py-1 bg-white border border-gray-200 rounded-md font-semibold text-gray-800 shadow-2xs">
+                                {{ $carpet->category_name }}: <span class="ml-1 text-[#0B1849] font-black">{{ $carpet->quantity }}</span>
+                            </span>
+                        @endforeach
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-3">
+                    <label class="inline-flex items-center space-x-1.5 cursor-pointer text-gray-600 font-medium select-none" title="Include carpet details when printing selected items">
+                        <input 
+                            type="checkbox" 
+                            x-model="includeCarpetsInPrint"
+                            class="rounded border-gray-300 text-[#0B1849] focus:ring-[#0B1849] cursor-pointer w-3.5 h-3.5"
+                        >
+                        <span class="text-[11px]">Include in Print Selected</span>
+                    </label>
+
+                    @if(!in_array($jobCard->status, ['completed', 'delivered', 'cancelled']))
+                        <button 
+                            type="button" 
+                            @click="showEditCarpetsModal = true"
+                            class="text-xs text-[#0B1849] hover:underline font-bold inline-flex items-center cursor-pointer"
+                        >
+                            <svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                            Edit Carpets
+                        </button>
+                    @endif
+                </div>
+            </div>
+        @elseif($jobCard->vehicleType && $jobCard->vehicleType->enable_carpets && !in_array($jobCard->status, ['completed', 'delivered', 'cancelled']))
+            <div class="px-5 py-2.5 bg-slate-50/50 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                <span class="italic text-[11px]">No carpet details recorded for this visit.</span>
+                <button 
+                    type="button" 
+                    @click="showEditCarpetsModal = true"
+                    class="text-xs text-[#0B1849] hover:underline font-bold cursor-pointer"
+                >
+                    + Add Carpet Details
+                </button>
             </div>
         @endif
     </div>
@@ -867,6 +909,15 @@
             <table class="min-w-full divide-y divide-gray-100 text-left text-xs sm:text-sm">
                 <thead class="bg-gray-50/50 text-gray-500 font-bold uppercase text-[10px] tracking-wider">
                     <tr>
+                        <th class="px-3 py-2.5 w-8 text-center">
+                            <input 
+                                type="checkbox" 
+                                @change="selectedIssues = $event.target.checked ? [{{ $jobCard->issues->pluck('id')->implode(',') }}] : []"
+                                :checked="selectedIssues.length === {{ $jobCard->issues->count() }} && {{ $jobCard->issues->count() }} > 0"
+                                class="rounded border-gray-300 text-[#0B1849] focus:ring-[#0B1849] cursor-pointer"
+                                title="Select/Deselect all issues"
+                            >
+                        </th>
                         <th class="px-5 py-2.5">Issue Description</th>
                         <th class="px-4 py-2.5">Recommended Repair</th>
                         <th class="px-4 py-2.5 text-right">Estimated Cost</th>
@@ -877,7 +928,16 @@
                 </thead>
                 <tbody class="divide-y divide-gray-50 text-gray-800">
                     @forelse($jobCard->issues as $issue)
-                        <tr class="hover:bg-slate-50/60 transition">
+                        <tr class="hover:bg-slate-50/60 transition" :class="selectedIssues.includes({{ $issue->id }}) ? 'bg-indigo-50/30' : ''">
+                            <td class="px-3 py-3 text-center">
+                                <input 
+                                    type="checkbox" 
+                                    value="{{ $issue->id }}" 
+                                    x-model.number="selectedIssues"
+                                    class="rounded border-gray-300 text-[#0B1849] focus:ring-[#0B1849] cursor-pointer"
+                                    title="Select issue for printing"
+                                >
+                            </td>
                             <td class="px-5 py-3 font-medium text-gray-900">
                                 <div>{{ $issue->description }}</div>
                                 <div class="text-[11px] text-gray-400 mt-0.5">Recorded by {{ $issue->recordedByUser?->name ?? 'Staff' }} on {{ $issue->created_at->format('M d, Y') }}</div>
@@ -956,7 +1016,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="px-5 py-6 text-center text-xs sm:text-sm text-gray-400">
+                            <td colspan="7" class="px-5 py-6 text-center text-xs sm:text-sm text-gray-400">
                                 No additional vehicle issues recorded.
                             </td>
                         </tr>
@@ -2246,6 +2306,98 @@
             </div>
         </div>
     </div>
+    <!-- Edit Carpet Details Modal -->
+    @if($jobCard->vehicleType && $jobCard->vehicleType->enable_carpets && !in_array($jobCard->status, ['completed', 'delivered', 'cancelled']))
+        <div 
+            x-show="showEditCarpetsModal" 
+            class="fixed inset-0 z-50 overflow-y-auto bg-gray-900/50 backdrop-blur-xs flex items-center justify-center p-4"
+            x-cloak
+            style="display: none;"
+        >
+            <div 
+                @click.away="showEditCarpetsModal = false" 
+                class="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden"
+            >
+                <div class="px-6 py-4 bg-[#0B1849] text-white flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-bold uppercase tracking-wider">Edit Carpet Details</h3>
+                        <p class="text-xs text-gray-300 mt-0.5">Vehicle Type: {{ $jobCard->vehicleType->name }}</p>
+                    </div>
+                    <button type="button" @click="showEditCarpetsModal = false" class="text-gray-300 hover:text-white cursor-pointer">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <form action="{{ route('operations.job-cards.carpets.update', $jobCard) }}" method="POST" class="p-6 space-y-4">
+                    @csrf
+                    @method('PATCH')
+
+                    <p class="text-xs text-gray-500">
+                        Tick the applicable carpets and specify positive whole-number quantities. Unchecked categories will be removed.
+                    </p>
+
+                    <div class="space-y-3">
+                        @foreach($jobCard->vehicleType->carpetCategories as $cat)
+                            @php
+                                $existingCarpet = $jobCard->carpets->firstWhere('carpet_category_id', $cat->id);
+                                $isChecked = $existingCarpet !== null;
+                                $existingQty = $existingCarpet ? (int)$existingCarpet->quantity : 1;
+                            @endphp
+                            <div 
+                                x-data="{ checked: {{ $isChecked ? 'true' : 'false' }}, qty: {{ $existingQty }} }" 
+                                class="flex items-center justify-between p-3 rounded-lg border transition-all"
+                                :class="checked ? 'bg-[#EEF1FA]/70 border-[#0B1849]/30 ring-1 ring-[#0B1849]/20' : 'bg-gray-50 border-gray-200'"
+                            >
+                                <label class="flex items-center space-x-2.5 cursor-pointer select-none text-xs font-bold text-gray-800 flex-1 mr-2">
+                                    <input 
+                                        type="checkbox" 
+                                        x-model="checked"
+                                        class="w-4 h-4 text-[#0B1849] rounded border-gray-300 focus:ring-[#0B1849] cursor-pointer"
+                                    >
+                                    <span>{{ $cat->name }}</span>
+                                </label>
+
+                                <div x-show="checked" class="flex items-center space-x-1.5 shrink-0">
+                                    <span class="text-[11px] font-bold text-gray-600">Qty:</span>
+                                    <input 
+                                        type="number" 
+                                        min="1" 
+                                        step="1"
+                                        x-model.number="qty"
+                                        :name="checked ? 'carpets[{{ $cat->id }}][quantity]' : ''"
+                                        class="w-16 py-1 px-2 text-xs font-black text-center text-gray-900 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-[#0B1849] min-h-[30px]"
+                                    >
+                                    <input 
+                                        type="hidden" 
+                                        :name="checked ? 'carpets[{{ $cat->id }}][category_id]' : ''" 
+                                        value="{{ $cat->id }}"
+                                    >
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+
+                    <div class="flex items-center justify-end space-x-3 pt-3 border-t border-gray-100">
+                        <button 
+                            type="button" 
+                            @click="showEditCarpetsModal = false"
+                            class="px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 rounded-lg transition min-h-[40px] cursor-pointer"
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            type="submit" 
+                            class="px-5 py-2.5 bg-[#0B1849] hover:bg-[#15286e] text-white text-xs font-bold rounded-lg shadow-xs transition min-h-[44px] cursor-pointer"
+                        >
+                            Save Carpet Details
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endif
 </div>
 
 <script>
@@ -2261,6 +2413,7 @@
             showDeliveryOverrideModal: false,
             showWhatsAppModal: false,
             showPayModal: false,
+            showEditCarpetsModal: false,
 
             // Payment modal state
             paymentAmount: '{{ $balanceDue > 0 ? $balanceDue : "" }}',
@@ -2376,21 +2529,24 @@
             // Print selection state
             selectedServices: config.selectedServices || [],
             selectedProducts: config.selectedProducts || [],
+            selectedIssues: [],
+            includeCarpetsInPrint: config.hasCarpets || false,
             totalItemsCount: config.totalItems || 0,
 
             printSelectedItems() {
-                if (this.totalItemsCount === 0) {
-                    alert('This Job Card has no saved services or products to select for printing.');
-                    return;
-                }
-                if (this.selectedServices.length === 0 && this.selectedProducts.length === 0) {
-                    alert('Please select at least one service or product to print.');
+                const hasSelected = this.selectedServices.length > 0 || this.selectedProducts.length > 0 || this.selectedIssues.length > 0 || this.includeCarpetsInPrint;
+                if (!hasSelected) {
+                    alert('Please select at least one item or carpet section to print.');
                     return;
                 }
                 const params = new URLSearchParams();
                 params.append('selected', '1');
                 this.selectedServices.forEach(id => params.append('services[]', id));
                 this.selectedProducts.forEach(id => params.append('products[]', id));
+                this.selectedIssues.forEach(id => params.append('issues[]', id));
+                if (this.includeCarpetsInPrint) {
+                    params.append('carpets', '1');
+                }
                 window.open(config.printBaseUrl + '?' + params.toString(), '_blank');
             }
         };

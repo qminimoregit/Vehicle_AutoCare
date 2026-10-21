@@ -60,8 +60,19 @@
                                 <!-- 1. Vehicle Type -->
                                 <td class="px-6 py-4">
                                     <div class="text-sm font-bold text-gray-900">{{ $type->name }}</div>
+                                    <div class="mt-1 flex items-center gap-1.5 flex-wrap">
+                                        @if($type->enable_carpets)
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                                Carpets: Enabled ({{ $type->carpetCategories->count() }})
+                                            </span>
+                                        @else
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-500 border border-gray-200">
+                                                Carpets: Disabled
+                                            </span>
+                                        @endif
+                                    </div>
                                     @if($type->description)
-                                        <div class="text-xs text-gray-500 mt-0.5 line-clamp-1">{{ $type->description }}</div>
+                                        <div class="text-xs text-gray-500 mt-1 line-clamp-1">{{ $type->description }}</div>
                                     @endif
                                 </td>
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Operations;
 
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
+use App\Models\CarpetCategory;
 use App\Models\CompanySetting;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
@@ -94,7 +95,8 @@ class JobCardController extends Controller
         $jobCard->load([
             'vehicle',
             'customer.creditAccount',
-            'vehicleType',
+            'vehicleType.carpetCategories',
+            'carpets.carpetCategory',
             'assignedTechnician',
             'creator',
             'invoice.payments.creator',
@@ -399,6 +401,60 @@ class JobCardController extends Controller
         $jobCard->recalculateTotals();
 
         return back()->with('success', 'Job Card updated successfully.');
+    }
+
+    /**
+     * Update carpet categories and quantities for a job card.
+     */
+    public function updateCarpets(Request $request, JobCard $jobCard): RedirectResponse
+    {
+        if (in_array($jobCard->status, ['completed', 'delivered', 'cancelled'])) {
+            return back()->with('error', 'Cannot modify carpets on a finished or cancelled job.');
+        }
+
+        $validated = $request->validate([
+            'carpets' => ['nullable', 'array'],
+            'carpets.*.category_id' => ['required_with:carpets', 'exists:carpet_categories,id'],
+            'carpets.*.quantity' => ['required_with:carpets', 'integer', 'min:0'],
+        ]);
+
+        $vehicleType = $jobCard->vehicleType;
+        $allowedCatIds = $vehicleType ? $vehicleType->carpetCategories->pluck('id')->all() : [];
+
+        DB::transaction(function () use ($jobCard, $validated, $allowedCatIds) {
+            $submittedCategoryIds = [];
+            if (! empty($validated['carpets'])) {
+                foreach ($validated['carpets'] as $carpetItem) {
+                    $catId = (int) ($carpetItem['category_id'] ?? 0);
+                    $qty = (int) ($carpetItem['quantity'] ?? 0);
+                    if (in_array($catId, $allowedCatIds)) {
+                        $submittedCategoryIds[] = $catId;
+                        if ($qty > 0) {
+                            $cat = CarpetCategory::find($catId);
+                            $jobCard->carpets()->updateOrCreate(
+                                ['carpet_category_id' => $catId],
+                                [
+                                    'category_name' => $cat ? $cat->name : 'Carpet',
+                                    'quantity' => $qty,
+                                ]
+                            );
+                        } else {
+                            $jobCard->carpets()->where('carpet_category_id', $catId)->delete();
+                        }
+                    }
+                }
+            }
+
+            $jobCard->carpets()->whereNotIn('carpet_category_id', $submittedCategoryIds)->delete();
+
+            ActivityLog::log(
+                action: 'updated_carpets',
+                description: "Updated carpet details for Job #{$jobCard->job_number} by " . Auth::user()->name . ".",
+                module: 'Job Cards'
+            );
+        });
+
+        return back()->with('success', 'Carpet details updated successfully.');
     }
 
     /**
@@ -916,9 +972,11 @@ class JobCardController extends Controller
         }
 
         // 3. Determine if printing selected items
-        $isSelective = $request->boolean('selected') || $request->has('services') || $request->has('products');
+        $isSelective = $request->boolean('selected') || $request->has('services') || $request->has('products') || $request->has('issues') || $request->has('carpets');
         $selectedServiceIds = $request->input('services', []);
         $selectedProductIds = $request->input('products', []);
+        $selectedIssueIds = $request->input('issues', []);
+        $includeCarpets = $request->boolean('carpets');
 
         if (is_string($selectedServiceIds)) {
             $selectedServiceIds = array_filter(array_map('trim', explode(',', $selectedServiceIds)));
@@ -926,9 +984,12 @@ class JobCardController extends Controller
         if (is_string($selectedProductIds)) {
             $selectedProductIds = array_filter(array_map('trim', explode(',', $selectedProductIds)));
         }
+        if (is_string($selectedIssueIds)) {
+            $selectedIssueIds = array_filter(array_map('trim', explode(',', $selectedIssueIds)));
+        }
 
-        if ($isSelective && empty($selectedServiceIds) && empty($selectedProductIds)) {
-            return back()->with('error', 'Please select at least one service or product to print.');
+        if ($isSelective && empty($selectedServiceIds) && empty($selectedProductIds) && empty($selectedIssueIds) && ! $includeCarpets) {
+            return back()->with('error', 'Please select at least one item to print.');
         }
 
         // 4. Load relationships safely
@@ -939,19 +1000,26 @@ class JobCardController extends Controller
             'assignedTechnician',
             'creator',
             'branch',
-            'issues' => fn ($q) => $q->where('status', 'approved'),
+            'issues.recordedByUser',
             'invoice.payments',
+            'carpets',
         ]);
 
         $services = $jobCard->services;
         $products = $jobCard->products;
+        $issues = $jobCard->issues;
+        $carpets = $jobCard->carpets;
 
         if ($isSelective) {
             $services = $services->whereIn('id', $selectedServiceIds);
             $products = $products->whereIn('id', $selectedProductIds);
+            $issues = $issues->whereIn('id', $selectedIssueIds);
+            if (! $includeCarpets) {
+                $carpets = collect();
+            }
 
-            if ($services->isEmpty() && $products->isEmpty()) {
-                return back()->with('error', 'Please select at least one service or product to print.');
+            if ($services->isEmpty() && $products->isEmpty() && $issues->isEmpty() && $carpets->isEmpty()) {
+                return back()->with('error', 'Please select at least one item to print.');
             }
         }
 
@@ -969,12 +1037,16 @@ class JobCardController extends Controller
             'company',
             'services',
             'products',
+            'issues',
+            'carpets',
             'isSelective',
+            'includeCarpets',
             'servicesTotal',
             'productsTotal',
             'grandTotal',
             'selectedServiceIds',
-            'selectedProductIds'
+            'selectedProductIds',
+            'selectedIssueIds'
         ));
     }
 
@@ -1001,9 +1073,11 @@ class JobCardController extends Controller
         }
 
         // 3. Determine if printing selected items
-        $isSelective = $request->boolean('selected') || $request->has('services') || $request->has('products');
+        $isSelective = $request->boolean('selected') || $request->has('services') || $request->has('products') || $request->has('issues') || $request->has('carpets');
         $selectedServiceIds = $request->input('services', []);
         $selectedProductIds = $request->input('products', []);
+        $selectedIssueIds = $request->input('issues', []);
+        $includeCarpets = $request->boolean('carpets');
 
         if (is_string($selectedServiceIds)) {
             $selectedServiceIds = array_filter(array_map('trim', explode(',', $selectedServiceIds)));
@@ -1011,9 +1085,12 @@ class JobCardController extends Controller
         if (is_string($selectedProductIds)) {
             $selectedProductIds = array_filter(array_map('trim', explode(',', $selectedProductIds)));
         }
+        if (is_string($selectedIssueIds)) {
+            $selectedIssueIds = array_filter(array_map('trim', explode(',', $selectedIssueIds)));
+        }
 
-        if ($isSelective && empty($selectedServiceIds) && empty($selectedProductIds)) {
-            return back()->with('error', 'Please select at least one service or product to print.');
+        if ($isSelective && empty($selectedServiceIds) && empty($selectedProductIds) && empty($selectedIssueIds) && ! $includeCarpets) {
+            return back()->with('error', 'Please select at least one item to print.');
         }
 
         $jobCard->load([
@@ -1023,19 +1100,26 @@ class JobCardController extends Controller
             'assignedTechnician',
             'creator',
             'branch',
-            'issues' => fn ($q) => $q->where('status', 'approved'),
+            'issues.recordedByUser',
             'invoice.payments',
+            'carpets',
         ]);
 
         $services = $jobCard->services;
         $products = $jobCard->products;
+        $issues = $jobCard->issues;
+        $carpets = $jobCard->carpets;
 
         if ($isSelective) {
             $services = $services->whereIn('id', $selectedServiceIds);
             $products = $products->whereIn('id', $selectedProductIds);
+            $issues = $issues->whereIn('id', $selectedIssueIds);
+            if (! $includeCarpets) {
+                $carpets = collect();
+            }
 
-            if ($services->isEmpty() && $products->isEmpty()) {
-                return back()->with('error', 'Please select at least one service or product to print.');
+            if ($services->isEmpty() && $products->isEmpty() && $issues->isEmpty() && $carpets->isEmpty()) {
+                return back()->with('error', 'Please select at least one item to print.');
             }
         }
 
@@ -1051,10 +1135,16 @@ class JobCardController extends Controller
             'company',
             'services',
             'products',
+            'issues',
+            'carpets',
             'isSelective',
+            'includeCarpets',
             'servicesTotal',
             'productsTotal',
-            'grandTotal'
+            'grandTotal',
+            'selectedServiceIds',
+            'selectedProductIds',
+            'selectedIssueIds'
         ));
         $pdf->setPaper('a4', 'portrait');
 

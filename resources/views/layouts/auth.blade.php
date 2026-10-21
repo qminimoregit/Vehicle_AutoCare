@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <title>@yield('title', 'Sign In') | {{ config('app.name', 'AutoCare System') }}</title>
-    <meta name="description" content="Secure portal sign in for AutoCare System.">
+    <title>@yield('title', 'Sign In') | {{ config('app.name', 'Viran Auto Care') }}</title>
+    <meta name="description" content="Secure portal sign in for Viran Auto Care Center Management System.">
 
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="{{ asset('images/branding/autocare-favicon.ico') }}">

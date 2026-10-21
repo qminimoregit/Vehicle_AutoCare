@@ -164,7 +164,7 @@ class OperationsStage3Test extends TestCase
         $response->assertJson([
             'exists' => false,
             'normalized' => 'WPCAD9999',
-            'message' => 'This is a new vehicle. Enter the details to start its first job.',
+            'message' => 'New Vehicle – Enter Customer Details',
         ]);
     }
 

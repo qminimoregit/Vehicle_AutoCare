@@ -415,10 +415,15 @@ class DashboardAndJobCardPrintingTest extends TestCase
         $response->assertSee('Kamal Silva');
         $response->assertSee('Brake Service & Pad Replacement');
         $response->assertSee('Front Brake Pads (Genuine)');
-        $response->assertSee('LKR 23,300.00'); // Grand total
-        $response->assertSee('Work Order');
-        $response->assertSee('Not a Tax Invoice');
+        $response->assertSee('JOB CARD');
+        $response->assertSee('SERVICES');
+        $response->assertSee('PRODUCTS / PARTS');
         $response->assertSee('Back to Job Card');
+
+        // Verify obsolete hardcoded text is removed
+        $response->assertDontSee('Work Order • Not a Tax Invoice');
+        $response->assertDontSee('AutoCare Workshop Service');
+        $response->assertDontSee('Authorized Job Card • Quality Assured');
 
         // Crucial security requirement: FIFO purchase costs (8500.00) must NEVER be exposed
         $response->assertDontSee('8500.00');
@@ -443,16 +448,35 @@ class DashboardAndJobCardPrintingTest extends TestCase
         ]));
 
         $response->assertStatus(200);
-        $response->assertSee('Workshop Work Slip');
+        $response->assertSee('JOB CARD');
         $response->assertSee($service1->service_name);
         $response->assertSee($product2->product_name);
 
         // Excluded items must NOT appear in the selection document
         $response->assertDontSee($this->service2->name);
         $response->assertDontSee($this->product1->product_name);
+    }
 
-        // Sum of selected items: 3,500.00 + 2,800.00 = 6,300.00
-        $response->assertSee('LKR 6,300.00');
+    public function test_print_selected_items_includes_selected_vehicle_issue(): void
+    {
+        $issue = $this->jobCard->issues()->create([
+            'vehicle_id' => $this->vehicle->id,
+            'description' => 'Coolant leak near radiator hose',
+            'recommended_repair' => 'Replace top radiator hose and refill coolant',
+            'estimated_cost' => 4500.00,
+            'status' => 'pending_approval',
+            'recorded_by' => $this->staff->id,
+        ]);
+
+        $response = $this->actingAs($this->admin)->get(route('operations.job-cards.print', [
+            'jobCard' => $this->jobCard,
+            'selected' => '1',
+            'issues' => [$issue->id],
+        ]));
+
+        $response->assertStatus(200);
+        $response->assertSee('Coolant leak near radiator hose');
+        $response->assertSee('Replace top radiator hose and refill coolant');
     }
 
     public function test_print_selected_items_redirects_with_error_if_nothing_selected(): void
@@ -465,7 +489,7 @@ class DashboardAndJobCardPrintingTest extends TestCase
         ]));
 
         $response->assertRedirect();
-        $response->assertSessionHas('error', 'Please select at least one service or product to print.');
+        $response->assertSessionHas('error', 'Please select at least one item to print.');
     }
 
     public function test_newly_added_service_and_product_are_flashed_for_immediate_printing(): void

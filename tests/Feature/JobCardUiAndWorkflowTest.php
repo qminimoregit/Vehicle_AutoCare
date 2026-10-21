@@ -475,7 +475,7 @@ class JobCardUiAndWorkflowTest extends TestCase
         ]));
 
         $response->assertRedirect();
-        $response->assertSessionHas('error', 'Please select at least one service or product to print.');
+        $response->assertSessionHas('error', 'Please select at least one item to print.');
     }
 
     /**

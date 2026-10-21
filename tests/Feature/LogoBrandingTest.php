@@ -43,32 +43,32 @@ class LogoBrandingTest extends TestCase
 
     public function test_branding_asset_files_exist_in_public_directory(): void
     {
-        $this->assertFileExists(public_path('images/branding/autocare-logo-transparent.png'));
-        $this->assertFileExists(public_path('images/branding/autocare-icon.png'));
+        $this->assertFileExists(public_path('images/branding/viran_auto_care_logo.png'));
+        $this->assertFileExists(public_path('images/branding/logo.png'));
         $this->assertFileExists(public_path('images/branding/autocare-favicon.ico'));
         $this->assertFileExists(public_path('favicon.ico'));
     }
 
-    public function test_login_page_renders_transparent_branding_logo_and_favicon(): void
+    public function test_login_page_renders_branding_logo_and_viran_auto_care_text(): void
     {
         $response = $this->get(route('login'));
 
         $response->assertStatus(200);
-        $response->assertSee('images/branding/autocare-logo-transparent.png');
-        $response->assertSee('images/branding/autocare-favicon.ico');
-        $response->assertSee('AutoCare System Logo');
-        $response->assertSee('Center Management Portal');
+        $response->assertSee('images/branding/viran_auto_care_logo.png');
+        $response->assertSee('Viran Auto Care Logo');
+        $response->assertSee('VIRAN AUTO CARE');
+        $response->assertSee('Center Management');
     }
 
-    public function test_authenticated_topbar_renders_autocare_icon_in_light_container_and_links_to_dashboard(): void
+    public function test_authenticated_topbar_renders_company_logo_in_container_and_links_to_dashboard(): void
     {
         $response = $this->actingAs($this->user)->get(route('dashboard'));
 
         $response->assertStatus(200);
-        $response->assertSee('images/branding/autocare-icon.png');
-        $response->assertSee('images/branding/autocare-favicon.ico');
-        $response->assertSee('AutoCare System Icon');
-        $response->assertSee('Center Management');
+        $response->assertSee('images/branding/viran_auto_care_logo.png');
+        $response->assertSee('Viran Auto Care Logo');
+        $response->assertSee('VIRAN AUTO CARE');
+        $response->assertSee('CENTER MANAGEMENT');
         $response->assertSee(route('dashboard'));
     }
 }

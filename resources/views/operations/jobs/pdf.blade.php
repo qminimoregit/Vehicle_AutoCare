@@ -206,8 +206,6 @@
                 <div class="doc-sub">
                     @if($jobCard->invoice)
                         Invoice #{{ $jobCard->invoice->invoice_number }}
-                    @else
-                        Work Order &bull; Not a Tax Invoice
                     @endif
                 </div>
                 <div class="doc-meta">
@@ -309,6 +307,60 @@
         </table>
     @endif
 
+    @if(isset($issues) && $issues->count() > 0)
+        <div class="section-title">
+            Vehicle Issues & Recommendations
+        </div>
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th style="width: 25px;" class="text-center">#</th>
+                    <th>Issue Description</th>
+                    <th style="width: 220px;">Recommended Action</th>
+                    <th style="width: 90px;" class="text-center">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($issues as $idx => $issue)
+                    <tr>
+                        <td class="text-center">{{ $idx + 1 }}</td>
+                        <td>
+                            <strong>{{ $issue->description }}</strong>
+                        </td>
+                        <td>{{ $issue->recommended_repair ?: '—' }}</td>
+                        <td class="text-center">{{ ucfirst(str_replace('_', ' ', $issue->status)) }}</td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    @endif
+
+    @if(isset($carpets) && $carpets->isNotEmpty())
+        <div class="section-title">
+            Carpet Details
+        </div>
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th style="width: 25px;" class="text-center">#</th>
+                    <th>Carpet Item</th>
+                    <th style="width: 80px;" class="text-right">Quantity</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($carpets as $idx => $carpet)
+                    @if($carpet->quantity > 0)
+                        <tr>
+                            <td class="text-center">{{ $loop->iteration }}</td>
+                            <td><strong>{{ $carpet->category_name }}</strong></td>
+                            <td class="text-right"><strong>{{ (int) $carpet->quantity }}</strong></td>
+                        </tr>
+                    @endif
+                @endforeach
+            </tbody>
+        </table>
+    @endif
+
     <div style="width: 100%; margin-top: 10px;">
         <div class="totals-box">
             @if($services->count() > 0)
@@ -344,7 +396,7 @@
     </div>
 
     <div class="disclaimer">
-        <strong>Notice:</strong> This document is a formal Job Card & Work Order issued by {{ $company->company_name }}. Internal FIFO purchase costs are strictly confidential and omitted.
+        <strong>Notice:</strong> This document is a formal Job Card issued by {{ $company->company_name }}. Internal FIFO purchase costs are strictly confidential and omitted.
     </div>
 
     <table class="signatures">

@@ -73,10 +73,11 @@ class LoginPageRedesignTest extends TestCase
         $response->assertStatus(200);
 
         // Branding
-        $response->assertSee('images/branding/autocare-logo-transparent.png');
+        $response->assertSee('images/branding/viran_auto_care_logo.png');
+        $response->assertSee('VIRAN AUTO CARE');
         $response->assertSee('Welcome Back');
         $response->assertSee('Sign in to manage your auto care center.');
-        $response->assertSee('Center Management Portal');
+        $response->assertSee('Center Management');
 
         // Brand colors and layout classes
         $response->assertSee('#0B1849');
@@ -87,7 +88,7 @@ class LoginPageRedesignTest extends TestCase
         $response->assertSee('name="password"', false);
         $response->assertSee('name="remember"', false);
         $response->assertSee('showPassword', false);
-        $response->assertSee('Sign In to AutoCare');
+        $response->assertSee('Sign In to Viran Auto Care');
 
         // All 6 vehicle images referenced
         for ($i = 1; $i <= 6; $i++) {
@@ -98,9 +99,9 @@ class LoginPageRedesignTest extends TestCase
         $response->assertSee('Manage Your Auto Care Center');
         $response->assertSee('Professional Vehicle Services');
         $response->assertSee('Manage Every Job with Confidence');
-        $response->assertSee('Smart Workshop Management');
+        $response->assertSee('Smart Fleet &amp; Van Care', false);
+        $response->assertSee('Precision Mechanical Service');
         $response->assertSee('Customers, Vehicles &amp; Invoices', false);
-        $response->assertSee('Everything in One System');
 
         // Slider logic checks
         $response->assertSee('duration: 5000', false);

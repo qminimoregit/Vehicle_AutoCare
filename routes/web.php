@@ -92,6 +92,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::put('/vehicle-types/{vehicleType}', [VehicleTypeController::class, 'update'])->name('vehicle-types.update');
         Route::patch('/vehicle-types/{vehicleType}/toggle-status', [VehicleTypeController::class, 'toggleStatus'])->name('vehicle-types.toggle-status');
         Route::delete('/vehicle-types/{vehicleType}', [VehicleTypeController::class, 'destroy'])->name('vehicle-types.destroy');
+        Route::post('/vehicle-types/carpet-categories', [VehicleTypeController::class, 'storeCarpetCategory'])->name('vehicle-types.carpet-categories.store');
+        Route::delete('/vehicle-types/carpet-categories/{carpetCategory}', [VehicleTypeController::class, 'destroyCarpetCategory'])->name('vehicle-types.carpet-categories.destroy');
 
         // Manage Service Payment
         Route::get('/service-payments', [ServicePaymentController::class, 'index'])->name('service-payments.index');
@@ -178,6 +180,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/job-cards/{jobCard}/print', [JobCardController::class, 'print'])->name('job-cards.print');
         Route::get('/job-cards/{jobCard}/pdf', [JobCardController::class, 'downloadPdf'])->name('job-cards.pdf');
         Route::put('/job-cards/{jobCard}', [JobCardController::class, 'update'])->name('job-cards.update');
+        Route::patch('/job-cards/{jobCard}/carpets', [JobCardController::class, 'updateCarpets'])->name('job-cards.carpets.update');
         Route::patch('/job-cards/{jobCard}/status', [JobCardController::class, 'updateStatus'])->name('job-cards.status');
         Route::post('/job-cards/{jobCard}/cancel', [JobCardController::class, 'cancel'])->name('job-cards.cancel');
         Route::post('/job-cards/{jobCard}/generate-invoice', [JobCardController::class, 'generateInvoice'])->name('job-cards.generate-invoice');

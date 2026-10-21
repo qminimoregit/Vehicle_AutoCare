@@ -16,8 +16,8 @@ class AuthenticationTest extends TestCase
         $response = $this->get('/login');
 
         $response->assertStatus(200);
-        $response->assertSee('AutoCare System');
-        $response->assertSee('Sign In to AutoCare');
+        $response->assertSee('VIRAN AUTO CARE');
+        $response->assertSee('Sign In to Viran Auto Care');
     }
 
     public function test_unauthenticated_user_cannot_access_dashboard(): void

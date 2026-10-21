@@ -25,17 +25,18 @@
         </button>
 
         <!-- Brand Logo & Name -->
-        <a href="{{ route('dashboard') }}" class="flex items-center space-x-3 group" title="AutoCare System Dashboard">
+        <a href="{{ route('dashboard') }}" class="flex items-center space-x-3 group" title="Viran Auto Care Dashboard">
             <div class="w-10 h-10 rounded-xl bg-white p-1 flex items-center justify-center shadow-xs shrink-0 ring-1 ring-white/20 group-hover:scale-105 transition-transform duration-150">
                 <img 
-                    src="{{ asset('images/branding/autocare-icon.png') }}" 
-                    alt="AutoCare System Icon" 
+                    src="{{ asset('images/branding/viran_auto_care_logo.png') }}" 
+                    alt="Viran Auto Care Logo" 
                     class="w-8 h-8 object-contain"
+                    onerror="this.onerror=null; this.src='{{ asset('storage/company/viran_auto_care_logo.png') }}';"
                 >
             </div>
             <div>
-                <span class="text-base sm:text-lg font-bold tracking-tight text-white block leading-none">AutoCare System</span>
-                <span class="text-[9px] sm:text-[10px] tracking-widest text-slate-300 font-medium uppercase mt-0.5 block">Center Management</span>
+                <span class="text-base sm:text-lg font-bold tracking-tight text-white block leading-none font-sans uppercase">VIRAN AUTO CARE</span>
+                <span class="text-[9px] sm:text-[10px] tracking-widest text-slate-300 font-medium uppercase mt-0.5 block">CENTER MANAGEMENT</span>
             </div>
         </a>
     </div>

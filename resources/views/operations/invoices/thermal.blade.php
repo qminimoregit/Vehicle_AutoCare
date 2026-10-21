@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Receipt_{{ $invoice->invoice_number }}</title>
+    <title>Bill_{{ $invoice->invoice_number }}</title>
     <style>
         * {
             box-sizing: border-box;
@@ -72,6 +72,7 @@
             padding: 12px 10px;
             box-shadow: 0 2px 6px rgba(0,0,0,0.1);
             color: #000000;
+            position: relative;
         }
 
         .text-center { text-align: center; }
@@ -83,54 +84,44 @@
 
         .company-header {
             text-align: center;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
 
         .logo-img {
-            max-height: 42px;
+            max-height: 52px;
             max-width: 160px;
-            margin: 0 auto 6px auto;
+            margin: 0 auto 4px auto;
             display: block;
             object-fit: contain;
-            filter: grayscale(100%) contrast(150%);
         }
 
         .company-name {
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 900;
-            letter-spacing: -0.3px;
+            letter-spacing: -0.2px;
             line-height: 1.2;
+            text-transform: uppercase;
         }
 
-        .branch-name {
-            font-size: 11px;
-            font-weight: 700;
-            margin-top: 2px;
-        }
-
-        .company-meta {
+        .branch-meta {
             font-size: 10px;
             color: #111111;
             margin-top: 2px;
-            line-height: 1.3;
+            line-height: 1.25;
         }
 
         .divider {
             border-top: 1px dashed #000000;
-            margin: 8px 0;
-        }
-
-        .double-divider {
-            border-top: 2px solid #000000;
-            margin: 8px 0;
+            margin: 7px 0;
         }
 
         .receipt-title {
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 900;
             text-align: center;
             letter-spacing: 0.5px;
             padding: 2px 0;
+            text-transform: uppercase;
         }
 
         .meta-row {
@@ -142,12 +133,15 @@
 
         .meta-label {
             font-weight: 600;
-            color: #222;
+            color: #111;
+            width: 32%;
         }
 
         .meta-val {
             font-weight: 700;
             text-align: right;
+            width: 68%;
+            word-break: break-word;
         }
 
         /* Items Table */
@@ -155,7 +149,7 @@
             width: 100%;
             border-collapse: collapse;
             font-size: 10.5px;
-            margin: 6px 0;
+            margin: 5px 0;
         }
 
         .items-table th {
@@ -173,13 +167,13 @@
         }
 
         .col-qty {
-            width: 14%;
+            width: 15%;
             text-align: left;
             font-weight: 700;
         }
 
         .col-desc {
-            width: 54%;
+            width: 53%;
             word-break: break-word;
             padding-right: 4px;
         }
@@ -195,14 +189,14 @@
             width: 100%;
             border-collapse: collapse;
             font-size: 11px;
-            margin-top: 4px;
+            margin-top: 3px;
         }
 
         .totals-table td {
             padding: 2px 0;
         }
 
-        .totals-table .grand-total-row td {
+        .totals-table .total-highlight td {
             font-size: 13px;
             font-weight: 900;
             padding: 4px 0;
@@ -213,18 +207,18 @@
         .status-badge {
             display: inline-block;
             font-weight: 900;
-            font-size: 11px;
+            font-size: 10.5px;
             padding: 2px 6px;
             border: 1px solid #000000;
-            margin-top: 4px;
+            margin-top: 5px;
             text-transform: uppercase;
         }
 
         .footer-note {
             text-align: center;
-            font-size: 10px;
+            font-size: 10.5px;
             margin-top: 10px;
-            line-height: 1.4;
+            line-height: 1.35;
         }
 
         .barcode-area {
@@ -281,96 +275,75 @@
     <!-- 80mm Thermal Receipt -->
     <div class="thermal-receipt">
         
-        <!-- Header: Company & Branch -->
+        <!-- Header: Centered Logo & Company Details -->
         <div class="company-header">
             @if(!empty($company->logo) && file_exists(public_path('storage/' . $company->logo)))
-                <img src="{{ asset('storage/' . $company->logo) }}" alt="Logo" class="logo-img">
+                <img src="{{ asset('storage/' . $company->logo) }}" alt="{{ $company->company_name ?? 'Logo' }}" class="logo-img">
             @endif
-            <div class="company-name">{{ $company->company_name ?? 'AutoCare Service Center' }}</div>
-            <div class="branch-name">{{ $invoice->branch?->name ?? 'Main Service Branch' }}</div>
-            <div class="company-meta">
-                {{ $invoice->branch?->address ?? ($company->address ?? 'Colombo, Sri Lanka') }}
-            </div>
-            <div class="company-meta">
-                Tel: {{ $invoice->branch?->phone ?? ($company->phone ?? '011-2345678') }}
-                @if(!empty($company->email)) | {{ $company->email }} @endif
-            </div>
+            <div class="company-name">{{ strtoupper($invoice->branch?->name ?? ($company->company_name ?? 'VIRAN AUTO CARE MATTEGODA')) }}</div>
+            @if($invoice->branch?->address || $company->address)
+                <div class="branch-meta">{{ $invoice->branch?->address ?? $company->address }}</div>
+            @endif
+            @if($invoice->branch?->phone || $company->phone)
+                <div class="branch-meta">Tel: {{ $invoice->branch?->phone ?? $company->phone }}</div>
+            @endif
         </div>
 
         <div class="divider"></div>
 
         <div class="receipt-title">
-            SALES RECEIPT / INVOICE
+            SALES BILL
         </div>
 
         <div class="divider"></div>
 
         <!-- Meta Information -->
         <div class="meta-row">
-            <span class="meta-label">Invoice No:</span>
-            <span class="meta-val">{{ $invoice->invoice_number }}</span>
+            <span class="meta-label">Bill No:</span>
+            <span class="meta-val font-black">{{ $invoice->invoice_number }}</span>
         </div>
 
-        @if($invoice->reference)
-            <div class="meta-row">
-                <span class="meta-label">Ref / Sale No:</span>
-                <span class="meta-val">{{ $invoice->reference }}</span>
-            </div>
-        @endif
-
-        @if($invoice->jobCard)
-            <div class="meta-row">
-                <span class="meta-label">Job Card No:</span>
-                <span class="meta-val">{{ $invoice->jobCard->job_number }}</span>
-            </div>
-        @endif
+        <div class="meta-row">
+            <span class="meta-label">Date:</span>
+            <span class="meta-val">{{ $invoice->created_at ? $invoice->created_at->format('d/m/Y') : now()->format('d/m/Y') }}</span>
+        </div>
 
         <div class="meta-row">
-            <span class="meta-label">Date & Time:</span>
-            <span class="meta-val">{{ $invoice->created_at ? $invoice->created_at->format('Y-m-d H:i') : now()->format('Y-m-d H:i') }}</span>
+            <span class="meta-label">Time:</span>
+            <span class="meta-val">{{ $invoice->created_at ? $invoice->created_at->format('h:i A') : now()->format('h:i A') }}</span>
         </div>
 
         <div class="meta-row">
             <span class="meta-label">Cashier:</span>
-            <span class="meta-val">{{ $invoice->creator?->name ?? Auth::user()?->name ?? 'Staff' }}</span>
-        </div>
-
-        <!-- Customer & Vehicle -->
-        <div class="divider"></div>
-
-        <div class="meta-row">
-            <span class="meta-label">Customer:</span>
-            <span class="meta-val">{{ $invoice->customer?->customer_name ?? ($invoice->customer_snapshot['customer_name'] ?? 'Walk-in Customer') }}</span>
+            <span class="meta-val">{{ $invoice->creator?->name ?? (Auth::user()?->name ?? 'Admin User') }}</span>
         </div>
 
         @php
-            $custPhone = $invoice->customer?->phone ?? ($invoice->customer_snapshot['phone'] ?? null);
-            $vehNumber = $invoice->jobCard?->vehicle?->vehicle_number ?? ($invoice->customer_snapshot['vehicle_number'] ?? null);
+            $vehNumber = $invoice->jobCard?->vehicle?->vehicle_number ?? ($invoice->vehicle?->vehicle_number ?? ($invoice->customer_snapshot['vehicle_number'] ?? null));
+            $custName = $invoice->customer?->customer_name ?? ($invoice->customer_snapshot['customer_name'] ?? 'Customer Name');
         @endphp
-
-        @if($custPhone)
-            <div class="meta-row">
-                <span class="meta-label">Phone:</span>
-                <span class="meta-val">{{ $custPhone }}</span>
-            </div>
-        @endif
 
         @if($vehNumber)
             <div class="meta-row">
-                <span class="meta-label">Vehicle No:</span>
-                <span class="meta-val uppercase font-black">{{ $vehNumber }}</span>
+                <span class="meta-label">Vehicle:</span>
+                <span class="meta-val font-black uppercase" style="font-size: 12px;">{{ $vehNumber }}</span>
             </div>
         @endif
 
+        <div class="meta-row">
+            <span class="meta-label">Customer:</span>
+            <span class="meta-val font-bold">{{ $custName }}</span>
+        </div>
+
         <div class="divider"></div>
 
-        <!-- Line Items Table -->
+        <!-- Items Table -->
         <table class="items-table">
             <thead>
                 <tr>
-                    <th class="col-qty">QTY</th>
-                    <th class="col-desc">DESCRIPTION</th>
-                    <th class="col-amt">AMOUNT</th>
+                    <th class="col-qty">Qty</th>
+                    <th class="col-desc">Description</th>
+                    <th class="col-amt">Amount</th>
                 </tr>
             </thead>
             <tbody>
@@ -379,9 +352,6 @@
                         <td class="col-qty">{{ (float)$item->quantity == (int)$item->quantity ? (int)$item->quantity : number_format($item->quantity, 2) }}</td>
                         <td class="col-desc">
                             {{ $item->item_name }}
-                            @if(!empty($item->item_code) && $item->item_code !== 'SERVICE')
-                                <div style="font-size: 9px; color: #444;">{{ $item->item_code }}</div>
-                            @endif
                         </td>
                         <td class="col-amt">{{ number_format($item->line_total ?? ($item->total ?? 0), 2) }}</td>
                     </tr>
@@ -409,7 +379,7 @@
                     <td class="text-right font-bold">+{{ number_format($invoice->tax_amount, 2) }}</td>
                 </tr>
             @endif
-            <tr class="grand-total-row">
+            <tr class="total-highlight">
                 <td>TOTAL:</td>
                 <td class="text-right">LKR {{ number_format($invoice->grand_total, 2) }}</td>
             </tr>
@@ -418,12 +388,12 @@
                 <td class="text-right font-bold" style="padding-top: 4px;">{{ number_format($invoice->amount_paid, 2) }}</td>
             </tr>
             <tr>
-                <td class="font-bold">BALANCE:</td>
-                <td class="text-right font-bold">LKR {{ number_format($invoice->balance_amount, 2) }}</td>
+                <td class="font-black">BALANCE:</td>
+                <td class="text-right font-black">LKR {{ number_format($invoice->balance_amount, 2) }}</td>
             </tr>
         </table>
 
-        <!-- Status & Payment Method -->
+        <!-- Status -->
         <div class="text-center" style="margin-top: 6px;">
             @php
                 $statusLabel = 'PARTIALLY PAID';
@@ -432,23 +402,23 @@
                 } elseif ($invoice->status === 'cancelled') {
                     $statusLabel = 'CANCELLED';
                 } elseif ($invoice->amount_paid <= 0) {
-                    $statusLabel = 'UNPAID / ISSUED';
+                    $customerCredit = $invoice->customer?->creditAccount;
+                    if ($customerCredit && $customerCredit->isActive()) {
+                        $statusLabel = 'APPROVED COMPANY CREDIT';
+                    } else {
+                        $statusLabel = 'UNPAID';
+                    }
                 }
             @endphp
-            <div class="status-badge">{{ $statusLabel }}</div>
-            @if(!empty($invoice->payment_method))
-                <div style="font-size: 10px; margin-top: 3px; font-weight: 700;">
-                    Payment: {{ strtoupper(str_replace('_', ' ', $invoice->payment_method)) }}
-                </div>
-            @endif
+            <div class="status-badge">Status: {{ $statusLabel }}</div>
         </div>
 
         <div class="divider"></div>
 
-        <!-- Thank you & Footer -->
+        <!-- Footer -->
         <div class="footer-note">
             <div class="font-bold">Thank you for choosing us!</div>
-            <div>Please retain this bill for your warranty & service records.</div>
+            <div class="font-bold uppercase" style="margin-top: 2px;">{{ strtoupper($company->company_name ?? 'VIRAN AUTO CARE') }}</div>
         </div>
 
         <div class="barcode-area">

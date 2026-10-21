@@ -136,6 +136,11 @@ class JobCard extends Model
         return $this->hasMany(JobIssue::class, 'job_card_id')->latest();
     }
 
+    public function carpets()
+    {
+        return $this->hasMany(JobCardCarpet::class);
+    }
+
     public function appointment()
     {
         return $this->belongsTo(Appointment::class, 'appointment_id');

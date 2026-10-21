@@ -304,7 +304,7 @@ class PosAndThermalPrintingWorkflowTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertSee('80mm auto');
-        $response->assertSee('SALES RECEIPT');
+        $response->assertSee('SALES BILL');
         $response->assertSee('INV-202610-TEST80');
         $response->assertSee('Synthetic Motor Oil 4L');
         $response->assertSee('18,000.00');

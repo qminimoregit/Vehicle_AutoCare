@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <title>@yield('title', 'Dashboard') | {{ config('app.name', 'AutoCare System') }}</title>
+    <title>@yield('title', 'Dashboard') | {{ config('app.name', 'Viran Auto Care') }}</title>
     <meta name="description" content="Professional Auto Care Center Management System - Streamlined operations, service records, and fleet management.">
 
     <!-- Favicon -->

@@ -5,52 +5,52 @@
 @push('preload')
     <link rel="preload" as="image" href="{{ asset('images/login/vehicle-01.webp') }}" type="image/webp">
     <link rel="preload" as="image" href="{{ asset('images/login/vehicle-02.webp') }}" type="image/webp">
-    <link rel="preload" as="image" href="{{ asset('images/branding/autocare-logo-transparent.png') }}">
+    <link rel="preload" as="image" href="{{ asset('images/branding/viran_auto_care_logo.png') }}">
 @endpush
 
 @php
     $slides = [
         [
             'image' => asset('images/login/vehicle-01.webp'),
-            'alt' => 'Modern luxury car at an auto care service center',
-            'tag' => 'Center Operations',
+            'alt' => 'Modern luxury sports car at auto care service center',
+            'tag' => 'Car Care & Performance',
             'title' => 'Manage Your Auto Care Center',
             'desc' => 'Complete operational control, scheduling, and job card tracking in one unified interface.'
         ],
         [
             'image' => asset('images/login/vehicle-02.webp'),
-            'alt' => 'Professional car wash and exterior cleaning',
-            'tag' => 'Express Detailing',
+            'alt' => 'Premium luxury SUV in detailing and service bay',
+            'tag' => 'SUV & Luxury Detailing',
             'title' => 'Professional Vehicle Services',
             'desc' => 'Deliver superior auto detailing, inspections, and customer service with precision.'
         ],
         [
             'image' => asset('images/login/vehicle-03.webp'),
-            'alt' => 'Mechanic servicing a vehicle engine',
-            'tag' => 'Technician Workflow',
+            'alt' => 'Rugged 4x4 Jeep Wrangler in workshop service bay',
+            'tag' => '4x4 & Jeep Maintenance',
             'title' => 'Manage Every Job with Confidence',
             'desc' => 'Track technician assignments, issue spare parts, and verify repair stages in real time.'
         ],
         [
             'image' => asset('images/login/vehicle-04.webp'),
-            'alt' => 'Premium vehicle interior detailing',
-            'tag' => 'Workshop Intelligence',
-            'title' => 'Smart Workshop Management',
+            'alt' => 'Modern passenger and commercial van in service center',
+            'tag' => 'Van & Fleet Maintenance',
+            'title' => 'Smart Fleet & Van Care',
             'desc' => 'Streamlined appointment booking, bay management, and automated client notifications.'
         ],
         [
             'image' => asset('images/login/vehicle-05.webp'),
-            'alt' => 'Technician performing automotive diagnostics',
-            'tag' => 'Unified History',
-            'title' => 'Customers, Vehicles & Invoices',
-            'desc' => 'Instant invoice creation, multi-method payment collection, and complete service histories.'
+            'alt' => '4x4 double cab pickup truck on workshop service lift',
+            'tag' => 'Pickup & Truck Care',
+            'title' => 'Precision Mechanical Service',
+            'desc' => 'Full chassis, suspension, tire care, and preventive maintenance with live job updates.'
         ],
         [
             'image' => asset('images/login/vehicle-06.webp'),
-            'alt' => 'Beautifully cleaned luxury SUV in a professional garage',
-            'tag' => 'Multi-Branch System',
-            'title' => 'Everything in One System',
-            'desc' => 'Robust multi-branch controls, real-time financial reporting, and inventory management.'
+            'alt' => 'Technician performing computerized diagnostics on 4-wheel vehicle',
+            'tag' => 'Workshop Diagnostics',
+            'title' => 'Customers, Vehicles & Invoices',
+            'desc' => 'Instant invoice creation, multi-method payment collection, and complete service histories.'
         ],
     ];
 @endphp
@@ -65,14 +65,20 @@
         
         <!-- Top Section: Brand Logo -->
         <div>
-            <a href="{{ url('/') }}" class="inline-block transition-transform hover:scale-[1.01] focus:outline-hidden" title="AutoCare System">
-                <img 
-                    src="{{ asset('images/branding/autocare-logo-transparent.png') }}" 
-                    alt="AutoCare System Logo" 
-                    class="h-10 sm:h-12 w-auto object-contain"
-                >
+            <a href="{{ url('/') }}" class="inline-flex items-center space-x-3.5 group focus:outline-hidden" title="Viran Auto Care">
+                <div class="w-13 h-13 rounded-2xl bg-white border border-slate-200/90 shadow-xs p-1.5 flex items-center justify-center shrink-0 group-hover:shadow-md transition">
+                    <img 
+                        src="{{ asset('images/branding/viran_auto_care_logo.png') }}" 
+                        alt="Viran Auto Care Logo" 
+                        class="w-full h-full object-contain"
+                        onerror="this.onerror=null; this.src='{{ asset('storage/company/viran_auto_care_logo.png') }}';"
+                    >
+                </div>
+                <div>
+                    <span class="text-xl sm:text-2xl font-extrabold tracking-tight text-[#0B1849] block leading-none">VIRAN AUTO CARE</span>
+                    <span class="text-[10px] sm:text-[11px] tracking-widest uppercase text-slate-400 font-semibold mt-1 block">Center Management</span>
+                </div>
             </a>
-            <p class="mt-2 text-xs tracking-wider uppercase text-gray-400 font-semibold">Center Management Portal</p>
         </div>
 
         <!-- Center Section: Welcome & Login Form -->
@@ -218,7 +224,7 @@
                         type="submit" 
                         class="w-full flex justify-center items-center py-3.5 px-5 rounded-xl font-semibold text-sm text-white bg-[#0B1849] hover:bg-[#13256b] active:bg-[#071033] shadow-md shadow-[#0B1849]/15 hover:shadow-lg hover:shadow-[#0B1849]/25 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-[#0B1849] transition duration-200 cursor-pointer"
                     >
-                        <span>Sign In to AutoCare</span>
+                        <span>Sign In to Viran Auto Care</span>
                         <svg class="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                         </svg>
@@ -229,7 +235,7 @@
 
         <!-- Bottom Footer -->
         <div class="pt-6 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between text-xs text-gray-400 gap-2">
-            <span>&copy; {{ date('Y') }} AutoCare System. All rights reserved.</span>
+            <span>&copy; {{ date('Y') }} Viran Auto Care. All rights reserved.</span>
             <span class="inline-flex items-center text-gray-400 font-medium">
                 <svg class="w-3.5 h-3.5 mr-1 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
                     <path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
@@ -245,6 +251,8 @@
     <div 
         x-data="vehicleSlider()"
         x-init="initSlider()"
+        @mouseenter="stopAutoplay()"
+        @mouseleave="startAutoplay()"
         class="hidden lg:flex lg:w-[55%] xl:w-[58%] 2xl:w-[60%] relative h-full bg-slate-950 overflow-hidden select-none"
         @keydown.right.window="next()"
         @keydown.left.window="prev()"

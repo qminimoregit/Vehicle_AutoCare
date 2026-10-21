@@ -6,16 +6,18 @@
 <div class="min-h-screen bg-slate-900 text-gray-800 antialiased flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-linear-to-b from-[#0B1849] via-[#0e1d58] to-[#081236]">
     <div class="sm:mx-auto sm:w-full sm:max-w-md text-center px-4">
         <!-- Logo -->
-        <a href="{{ route('login') }}" class="inline-block transition-transform hover:scale-[1.02] focus:outline-hidden" title="AutoCare System">
+        <a href="{{ route('login') }}" class="inline-block transition-transform hover:scale-[1.02] focus:outline-hidden" title="Viran Auto Care">
             <div class="inline-flex items-center justify-center bg-white px-6 py-4 rounded-2xl shadow-xl shadow-black/25 border border-white/20 w-full max-w-[280px] sm:max-w-[320px] mx-auto">
                 <img 
-                    src="{{ asset('images/branding/autocare-logo-transparent.png') }}" 
-                    alt="AutoCare System Logo" 
+                    src="{{ asset('images/branding/viran_auto_care_logo.png') }}" 
+                    alt="Viran Auto Care Logo" 
                     class="w-full h-auto object-contain max-h-20"
+                    onerror="this.onerror=null; this.src='{{ asset('storage/company/viran_auto_care_logo.png') }}';"
                 >
             </div>
         </a>
-        <p class="mt-3 text-xs tracking-widest uppercase text-slate-300 font-semibold">Center Management Portal</p>
+        <h2 class="mt-4 text-xl font-bold tracking-tight text-white uppercase">VIRAN AUTO CARE</h2>
+        <p class="mt-1 text-xs tracking-widest uppercase text-slate-300 font-semibold">Center Management Portal</p>
     </div>
 
     <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4">
@@ -85,7 +87,7 @@
         </div>
 
         <div class="mt-6 text-center text-xs text-slate-400">
-            &copy; {{ date('Y') }} AutoCare System. All rights reserved.
+            &copy; {{ date('Y') }} Viran Auto Care. All rights reserved.
         </div>
     </div>
 </div>
