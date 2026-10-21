@@ -11,6 +11,7 @@ class Payment extends Model
 
     protected $fillable = [
         'invoice_id',
+        'job_card_id',
         'customer_id',
         'payment_receipt_id',
         'payment_number',
@@ -19,6 +20,7 @@ class Payment extends Model
         'payment_method',
         'reference_number',
         'notes',
+        'is_advance',
         'status',
         'reversed_at',
         'reversal_reason',
@@ -29,28 +31,43 @@ class Payment extends Model
         'payment_date' => 'date',
         'reversed_at' => 'datetime',
         'amount' => 'decimal:2',
+        'is_advance' => 'boolean',
     ];
 
     public static function generatePaymentNumber(): string
     {
         $prefix = 'PAY-'.date('Ym').'-';
-        $last = self::where('payment_number', 'LIKE', $prefix.'%')
-            ->orderBy('id', 'desc')
-            ->first();
+        $payments = self::where('payment_number', 'LIKE', $prefix.'%')->pluck('payment_number');
+        $maxSeq = 0;
+        $regex = '/^PAY-'.date('Ym').'-(\d+)$/';
 
-        if ($last) {
-            $lastSeq = (int) substr($last->payment_number, strlen($prefix));
-            $newSeq = str_pad((string) ($lastSeq + 1), 4, '0', STR_PAD_LEFT);
-        } else {
-            $newSeq = '0001';
+        foreach ($payments as $num) {
+            if (preg_match($regex, $num, $matches)) {
+                $val = (int) $matches[1];
+                if ($val > $maxSeq) {
+                    $maxSeq = $val;
+                }
+            }
         }
 
-        return $prefix.$newSeq;
+        $nextSeq = $maxSeq + 1;
+        $candidate = $prefix.str_pad((string) $nextSeq, 4, '0', STR_PAD_LEFT);
+        while (self::where('payment_number', $candidate)->exists()) {
+            $nextSeq++;
+            $candidate = $prefix.str_pad((string) $nextSeq, 4, '0', STR_PAD_LEFT);
+        }
+
+        return $candidate;
     }
 
     public function invoice()
     {
         return $this->belongsTo(Invoice::class);
+    }
+
+    public function jobCard()
+    {
+        return $this->belongsTo(JobCard::class);
     }
 
     public function customer()
@@ -75,6 +92,6 @@ class Payment extends Model
 
     public function getBranchAttribute()
     {
-        return $this->invoice?->branch;
+        return $this->invoice?->branch ?? $this->jobCard?->branch;
     }
 }

@@ -181,6 +181,9 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::patch('/job-cards/{jobCard}/status', [JobCardController::class, 'updateStatus'])->name('job-cards.status');
         Route::post('/job-cards/{jobCard}/cancel', [JobCardController::class, 'cancel'])->name('job-cards.cancel');
         Route::post('/job-cards/{jobCard}/generate-invoice', [JobCardController::class, 'generateInvoice'])->name('job-cards.generate-invoice');
+        Route::post('/job-cards/{jobCard}/payments', [JobCardController::class, 'recordPayment'])->name('job-cards.payments.store');
+        Route::get('/job-cards/{jobCard}/print-bill', [JobCardController::class, 'printBill'])->name('job-cards.print-bill');
+        Route::get('/job-cards/{jobCard}/advance-receipt', [JobCardController::class, 'advanceReceipt'])->name('job-cards.advance-receipt');
 
         // Vehicle Issues & Customer Approvals
         Route::post('/job-cards/{jobCard}/issues', [JobIssueController::class, 'store'])->name('job-cards.issues.store');

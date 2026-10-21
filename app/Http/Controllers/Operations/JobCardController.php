@@ -10,12 +10,14 @@ use App\Models\InvoiceItem;
 use App\Models\JobCard;
 use App\Models\JobCardProduct;
 use App\Models\JobCardService;
+use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\ServiceVehiclePrice;
 use App\Models\User;
 use App\Services\BranchContext;
 use App\Services\Inventory\StockService;
+use App\Services\InvoiceNumberService;
 use App\Services\QuantityFormatter;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Exception;
@@ -24,6 +26,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 
 class JobCardController extends Controller
@@ -90,16 +93,17 @@ class JobCardController extends Controller
     {
         $jobCard->load([
             'vehicle',
-            'customer',
+            'customer.creditAccount',
             'vehicleType',
             'assignedTechnician',
             'creator',
-            'invoice',
+            'invoice.payments.creator',
             'supplementaryInvoices',
             'services.service',
             'products.product',
             'issues.approvedByUser',
             'issues.recordedByUser',
+            'payments.creator',
         ]);
 
         $availableServices = Service::active()->orderBy('name')->get();
@@ -555,15 +559,33 @@ class JobCardController extends Controller
     /**
      * Generate an official Invoice from a Completed Job Card.
      */
+    /**
+     * Generate an official Invoice from a Completed Job Card.
+     * Applies recorded advances, prevents duplicate invoices, and uses concurrency-safe numbering.
+     */
     public function generateInvoice(JobCard $jobCard): RedirectResponse
     {
         if ($jobCard->status === 'cancelled') {
             return back()->with('error', 'Cannot generate invoice for a cancelled job.');
         }
 
-        // If invoice already exists, redirect to it
+        // 1. If invoice already exists on the job card, redirect to it
         if ($jobCard->invoice_id && $jobCard->invoice) {
             return redirect()->route('operations.invoices.show', $jobCard->invoice);
+        }
+
+        // 2. Check for any existing non-cancelled invoices referencing this job_card_id
+        $existingInvoice = Invoice::where('job_card_id', $jobCard->id)
+            ->where('status', '!=', 'cancelled')
+            ->first();
+
+        if ($existingInvoice) {
+            if ($jobCard->invoice_id !== $existingInvoice->id) {
+                $jobCard->update(['invoice_id' => $existingInvoice->id]);
+            }
+
+            return redirect()->route('operations.invoices.show', $existingInvoice)
+                ->with('info', "Invoice #{$existingInvoice->invoice_number} is already linked to Job #{$jobCard->job_number}.");
         }
 
         // Credit Limit Validation (Stage 7)
@@ -575,79 +597,130 @@ class JobCardController extends Controller
             }
         }
 
-        return DB::transaction(function () use ($jobCard) {
-            $invoiceNumber = Invoice::generateInvoiceNumber();
+        try {
+            return DB::transaction(function () use ($jobCard) {
+                // Lock the job card row to prevent concurrent race conditions
+                $lockedJobCard = JobCard::where('id', $jobCard->id)->lockForUpdate()->firstOrFail();
 
-            $customerSnapshot = [
-                'customer_name' => $jobCard->customer->customer_name,
-                'phone' => $jobCard->customer->phone,
-                'vehicle_number' => $jobCard->vehicle->vehicle_number,
-                'vehicle_type' => $jobCard->vehicleType->name,
-                'current_mileage' => $jobCard->current_mileage,
-                'next_service_mileage' => $jobCard->next_service_mileage,
-            ];
+                if ($lockedJobCard->invoice_id && $lockedJobCard->invoice) {
+                    return redirect()->route('operations.invoices.show', $lockedJobCard->invoice);
+                }
 
-            $invoice = Invoice::create([
-                'invoice_number' => $invoiceNumber,
-                'branch_id' => $jobCard->branch_id,
-                'invoice_date' => now()->toDateString(),
-                'due_date' => now()->toDateString(),
-                'customer_id' => $jobCard->customer_id,
-                'job_card_id' => $jobCard->id,
-                'invoice_type' => 'job_card',
-                'subject' => "Service Invoice for {$jobCard->vehicle->vehicle_number} (Job #{$jobCard->job_number})",
-                'reference' => $jobCard->job_number,
-                'subtotal' => $jobCard->service_total + $jobCard->product_total,
-                'discount_amount' => $jobCard->discount_amount,
-                'tax_amount' => $jobCard->tax_amount,
-                'grand_total' => $jobCard->grand_total,
-                'amount_paid' => 0,
-                'balance_amount' => $jobCard->grand_total,
-                'status' => 'issued',
-                'customer_snapshot' => $customerSnapshot,
-                'created_by' => Auth::id(),
+                $existingUnderLock = Invoice::where('job_card_id', $lockedJobCard->id)
+                    ->where('status', '!=', 'cancelled')
+                    ->first();
+
+                if ($existingUnderLock) {
+                    $lockedJobCard->update(['invoice_id' => $existingUnderLock->id]);
+                    return redirect()->route('operations.invoices.show', $existingUnderLock);
+                }
+
+                // Query unallocated recorded advances for this job card
+                $advances = Payment::where('job_card_id', $lockedJobCard->id)
+                    ->whereNull('invoice_id')
+                    ->where('status', 'completed')
+                    ->get();
+
+                $totalAdvances = (float) $advances->sum('amount');
+                $grandTotal = (float) $lockedJobCard->grand_total;
+                $appliedAdvance = min($grandTotal, $totalAdvances);
+                $balanceAmount = max(0, round($grandTotal - $appliedAdvance, 2));
+
+                $status = ($balanceAmount <= 0.0001)
+                    ? 'paid'
+                    : ($appliedAdvance > 0 ? 'partially_paid' : 'issued');
+
+                $invoiceNumber = InvoiceNumberService::generateNextInvoiceNumber();
+
+                $customerSnapshot = [
+                    'customer_name' => $lockedJobCard->customer->customer_name,
+                    'phone' => $lockedJobCard->customer->phone,
+                    'vehicle_number' => $lockedJobCard->vehicle->vehicle_number,
+                    'vehicle_type' => $lockedJobCard->vehicleType->name,
+                    'current_mileage' => $lockedJobCard->current_mileage,
+                    'next_service_mileage' => $lockedJobCard->next_service_mileage,
+                ];
+
+                $invoice = Invoice::create([
+                    'invoice_number' => $invoiceNumber,
+                    'branch_id' => $lockedJobCard->branch_id,
+                    'invoice_date' => now()->toDateString(),
+                    'due_date' => now()->toDateString(),
+                    'customer_id' => $lockedJobCard->customer_id,
+                    'job_card_id' => $lockedJobCard->id,
+                    'invoice_type' => 'job_card',
+                    'subject' => "Service Invoice for {$lockedJobCard->vehicle->vehicle_number} (Job #{$lockedJobCard->job_number})",
+                    'reference' => $lockedJobCard->job_number,
+                    'subtotal' => $lockedJobCard->service_total + $lockedJobCard->product_total,
+                    'discount_amount' => $lockedJobCard->discount_amount,
+                    'tax_amount' => $lockedJobCard->tax_amount,
+                    'grand_total' => $grandTotal,
+                    'amount_paid' => $appliedAdvance,
+                    'balance_amount' => $balanceAmount,
+                    'status' => $status,
+                    'customer_snapshot' => $customerSnapshot,
+                    'created_by' => Auth::id(),
+                ]);
+
+                // Add services as invoice items
+                foreach ($lockedJobCard->services as $serviceItem) {
+                    InvoiceItem::create([
+                        'invoice_id' => $invoice->id,
+                        'item_type' => 'service',
+                        'item_id' => $serviceItem->service_id,
+                        'item_code' => $serviceItem->service_code,
+                        'item_name' => $serviceItem->service_name,
+                        'quantity' => $serviceItem->quantity,
+                        'unit_price' => $serviceItem->unit_price,
+                        'line_total' => $serviceItem->line_total,
+                        'notes' => $serviceItem->notes,
+                    ]);
+                }
+
+                // Add products as invoice items
+                foreach ($lockedJobCard->products as $productItem) {
+                    InvoiceItem::create([
+                        'invoice_id' => $invoice->id,
+                        'item_type' => 'product',
+                        'item_id' => $productItem->product_id,
+                        'item_code' => $productItem->product_sku,
+                        'item_name' => $productItem->product_name,
+                        'quantity' => $productItem->quantity,
+                        'unit_price' => $productItem->unit_price,
+                        'unit_cost' => $productItem->unit_cost,
+                        'line_total' => $productItem->line_total,
+                        'notes' => $productItem->notes,
+                    ]);
+                }
+
+                // Allocate/link recorded advances to this final invoice
+                Payment::where('job_card_id', $lockedJobCard->id)
+                    ->whereNull('invoice_id')
+                    ->update([
+                        'invoice_id' => $invoice->id,
+                    ]);
+
+                // Link invoice to job card and items
+                $lockedJobCard->update(['invoice_id' => $invoice->id]);
+                $lockedJobCard->services()->update(['invoice_id' => $invoice->id]);
+                $lockedJobCard->products()->update(['invoice_id' => $invoice->id]);
+                $lockedJobCard->issues()->where('status', 'approved')->update(['status' => 'fixed']);
+
+                $successMsg = "Invoice #{$invoice->invoice_number} generated for Job #{$lockedJobCard->job_number}.";
+                if ($appliedAdvance > 0) {
+                    $successMsg .= ' LKR '.number_format($appliedAdvance, 2).' advance payment applied.';
+                }
+
+                return redirect()->route('operations.invoices.show', $invoice)
+                    ->with('success', $successMsg);
+            });
+        } catch (\Throwable $e) {
+            Log::error("Failed to generate invoice for Job Card #{$jobCard->id}: ".$e->getMessage(), [
+                'exception' => $e,
             ]);
 
-            // Add services as invoice items
-            foreach ($jobCard->services as $serviceItem) {
-                InvoiceItem::create([
-                    'invoice_id' => $invoice->id,
-                    'item_type' => 'service',
-                    'item_id' => $serviceItem->service_id,
-                    'item_code' => $serviceItem->service_code,
-                    'item_name' => $serviceItem->service_name,
-                    'quantity' => $serviceItem->quantity,
-                    'unit_price' => $serviceItem->unit_price,
-                    'line_total' => $serviceItem->line_total,
-                    'notes' => $serviceItem->notes,
-                ]);
-            }
-
-            // Add products as invoice items
-            foreach ($jobCard->products as $productItem) {
-                InvoiceItem::create([
-                    'invoice_id' => $invoice->id,
-                    'item_type' => 'product',
-                    'item_id' => $productItem->product_id,
-                    'item_code' => $productItem->product_sku,
-                    'item_name' => $productItem->product_name,
-                    'quantity' => $productItem->quantity,
-                    'unit_price' => $productItem->unit_price,
-                    'unit_cost' => $productItem->unit_cost,
-                    'line_total' => $productItem->line_total,
-                    'notes' => $productItem->notes,
-                ]);
-            }
-
-            // Link invoice to job card and items
-            $jobCard->update(['invoice_id' => $invoice->id]);
-            $jobCard->services()->update(['invoice_id' => $invoice->id]);
-            $jobCard->products()->update(['invoice_id' => $invoice->id]);
-            $jobCard->issues()->where('status', 'approved')->update(['status' => 'fixed']);
-
-            return redirect()->route('operations.invoices.show', $invoice)
-                ->with('success', "Invoice #{$invoice->invoice_number} generated for Job #{$jobCard->job_number}.");
-        });
+            return back()->with('error', 'Unable to generate invoice at this time: '.$e->getMessage());
+        }
     }
 
     /**
@@ -988,5 +1061,189 @@ class JobCardController extends Controller
         $suffix = $isSelective ? '_Selected' : '_Full';
 
         return $pdf->download("JobCard_{$jobCard->job_number}{$suffix}.pdf");
+    }
+
+    /**
+     * Record a payment (advance, partial, or final) directly from Job Card.
+     */
+    public function recordPayment(Request $request, JobCard $jobCard): RedirectResponse
+    {
+        $user = $request->user();
+
+        if (! $user->isAdmin() && ! $user->hasPermission('record_payments')) {
+            abort(403, 'Unauthorized to record payments.');
+        }
+
+        if ($jobCard->branch_id && ! $user->canAccessBranch($jobCard->branch_id)) {
+            abort(403, 'Unauthorized access to this branch.');
+        }
+
+        if ($jobCard->status === 'cancelled') {
+            return back()->with('error', 'Cannot record payments for cancelled jobs.');
+        }
+
+        $validated = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'payment_method' => ['required', 'in:cash,card,bank_transfer,cheque,credit'],
+            'payment_date' => ['required', 'date', 'before_or_equal:today'],
+            'reference_number' => ['nullable', 'string', 'max:100'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $amount = round((float) $validated['amount'], 2);
+        $method = $validated['payment_method'];
+
+        // Handle Approved Company Credit
+        if ($method === 'credit') {
+            $customer = $jobCard->customer;
+            $creditAccount = $customer?->creditAccount()->where('status', 'active')->first();
+
+            if (! $creditAccount) {
+                return back()->with('error', 'Customer does not have an active approved credit account.');
+            }
+
+            if ($creditAccount->wouldExceedLimit($amount) && ! $user->isAdmin()) {
+                return back()->with('error', 'Company credit limit exceeded. Available credit: LKR '.number_format($creditAccount->available_credit, 2).'. Admin override required.');
+            }
+
+            ActivityLog::log(
+                action: 'company_credit_arranged',
+                description: 'Approved Company Credit of LKR '.number_format($amount, 2)." verified for Job #{$jobCard->job_number} (Customer: ".($customer->company_name ?? $customer->customer_name).').',
+                module: 'Operations',
+                userId: $user->id
+            );
+
+            return back()->with('success', 'Approved Company Credit arrangement verified for LKR '.number_format($amount, 2).'. Final billing will post to company monthly statement upon invoice generation.');
+        }
+
+        try {
+            $payment = DB::transaction(function () use ($jobCard, $validated, $amount, $user) {
+                $lockedJobCard = JobCard::where('id', $jobCard->id)->lockForUpdate()->firstOrFail();
+                $paymentNumber = Payment::generatePaymentNumber();
+
+                if ($lockedJobCard->invoice_id && $lockedJobCard->invoice) {
+                    // Payment against already issued final invoice
+                    $invoice = Invoice::where('id', $lockedJobCard->invoice_id)->lockForUpdate()->firstOrFail();
+                    $currentBalance = round((float) $invoice->balance_amount, 2);
+
+                    if ($currentBalance <= 0.0001) {
+                        throw new Exception("Invoice #{$invoice->invoice_number} is already paid in full.");
+                    }
+
+                    if ($amount > $currentBalance) {
+                        throw new Exception('Payment amount (LKR '.number_format($amount, 2).') cannot exceed invoice remaining balance of LKR '.number_format($currentBalance, 2).'.');
+                    }
+
+                    $payment = Payment::create([
+                        'invoice_id' => $invoice->id,
+                        'job_card_id' => $lockedJobCard->id,
+                        'customer_id' => $lockedJobCard->customer_id,
+                        'payment_number' => $paymentNumber,
+                        'payment_date' => $validated['payment_date'],
+                        'amount' => $amount,
+                        'payment_method' => $validated['payment_method'],
+                        'reference_number' => $validated['reference_number'] ?? null,
+                        'notes' => $validated['notes'] ?? null,
+                        'is_advance' => false,
+                        'status' => 'completed',
+                        'created_by' => $user->id,
+                    ]);
+
+                    // Recalculate invoice totals
+                    $totalPaid = (float) Payment::where('invoice_id', $invoice->id)->where('status', 'completed')->sum('amount');
+                    $totalPaid = round($totalPaid, 2);
+                    $grandTotal = round((float) $invoice->grand_total, 2);
+                    $newBalance = max(0, round($grandTotal - $totalPaid, 2));
+
+                    $newStatus = ($newBalance <= 0.0001 || $totalPaid >= $grandTotal)
+                        ? 'paid'
+                        : ($totalPaid > 0 ? 'partially_paid' : 'issued');
+
+                    $invoice->update([
+                        'amount_paid' => $totalPaid,
+                        'balance_amount' => $newBalance,
+                        'status' => $newStatus,
+                    ]);
+                } else {
+                    // Advance payment before final invoice is generated
+                    $payment = Payment::create([
+                        'invoice_id' => null,
+                        'job_card_id' => $lockedJobCard->id,
+                        'customer_id' => $lockedJobCard->customer_id,
+                        'payment_number' => $paymentNumber,
+                        'payment_date' => $validated['payment_date'],
+                        'amount' => $amount,
+                        'payment_method' => $validated['payment_method'],
+                        'reference_number' => $validated['reference_number'] ?? null,
+                        'notes' => $validated['notes'] ?? null,
+                        'is_advance' => true,
+                        'status' => 'completed',
+                        'created_by' => $user->id,
+                    ]);
+                }
+
+                ActivityLog::log(
+                    action: 'payment_recorded',
+                    description: "Recorded {$validated['payment_method']} payment #{$payment->payment_number} of LKR ".number_format($amount, 2)." for Job Card #{$lockedJobCard->job_number}.",
+                    module: 'Operations',
+                    userId: $user->id
+                );
+
+                return $payment;
+            });
+
+            return back()->with('success', 'Payment of LKR '.number_format($amount, 2)." recorded successfully (Receipt #{$payment->payment_number}).")
+                ->with('recent_payment_id', $payment->id);
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * Print Bill from Job Card:
+     * If final invoice exists: 80mm thermal invoice bill.
+     * If advance received: 80mm thermal advance payment receipt.
+     */
+    public function printBill(JobCard $jobCard)
+    {
+        if ($jobCard->invoice_id && $jobCard->invoice) {
+            return redirect()->route('operations.invoices.thermal', $jobCard->invoice_id);
+        }
+
+        $hasPayments = $jobCard->payments()->where('status', 'completed')->exists();
+        if ($hasPayments) {
+            return redirect()->route('operations.job-cards.advance-receipt', $jobCard);
+        }
+
+        return back()->with('error', 'No payments or invoice generated yet to print.');
+    }
+
+    /**
+     * Render 80mm thermal Advance Payment Receipt.
+     */
+    public function advanceReceipt(JobCard $jobCard): View
+    {
+        $jobCard->load([
+            'customer',
+            'vehicle',
+            'vehicleType',
+            'branch',
+            'payments' => function ($q) {
+                $q->where('status', 'completed')->orderBy('payment_date', 'asc');
+            },
+        ]);
+
+        $company = CompanySetting::getSettings();
+        $totalAdvance = (float) $jobCard->payments()->where('status', 'completed')->sum('amount');
+        $estimatedTotal = (float) $jobCard->grand_total;
+        $estimatedBalance = max(0, round($estimatedTotal - $totalAdvance, 2));
+
+        return view('operations.jobs.advance-receipt', compact(
+            'jobCard',
+            'company',
+            'totalAdvance',
+            'estimatedTotal',
+            'estimatedBalance'
+        ));
     }
 }

@@ -173,15 +173,19 @@
                             </td>
                             <td class="py-3 px-4 font-mono">
                                 @if($p->invoice)
-                                    <a href="{{ route('billing.invoices.show', $p->invoice) }}" class="text-blue-600 hover:underline">
+                                    <a href="{{ route('operations.invoices.show', $p->invoice) }}" class="text-blue-600 hover:underline">
                                         {{ $p->invoice->invoice_number }}
+                                    </a>
+                                @elseif($p->jobCard)
+                                    <a href="{{ route('operations.job-cards.show', $p->jobCard) }}" class="text-indigo-600 hover:underline font-semibold" title="Advance payment for Job Card">
+                                        {{ $p->jobCard->job_number }} <span class="text-xs text-amber-600 font-bold">(Advance)</span>
                                     </a>
                                 @else
                                     <span class="text-gray-400">Multiple / Split</span>
                                 @endif
                             </td>
                             <td class="py-3 px-4 font-medium text-gray-900">
-                                {{ $p->invoice?->customer?->display_name ?? ($p->customer?->display_name ?? 'Guest') }}
+                                {{ $p->invoice?->customer?->display_name ?? ($p->jobCard?->customer?->display_name ?? ($p->customer?->display_name ?? 'Guest')) }}
                             </td>
                             <td class="py-3 px-4">
                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold {{ $isCash ? 'bg-emerald-50 text-emerald-800' : ($isCard ? 'bg-blue-50 text-blue-800' : ($isBank ? 'bg-indigo-50 text-indigo-800' : 'bg-amber-50 text-amber-800')) }}">

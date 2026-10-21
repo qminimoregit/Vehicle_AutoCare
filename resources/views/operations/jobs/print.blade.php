@@ -298,7 +298,7 @@
     <!-- No-Print Toolbar -->
     <div class="no-print-bar">
         <a href="{{ route('operations.job-cards.show', $jobCard) }}" class="btn btn-secondary">
-            &larr; Back
+            &larr; Back to Job Card
         </a>
         <div style="display: flex; gap: 6px;">
             <a 
@@ -335,7 +335,10 @@
         <div class="divider"></div>
 
         <div class="receipt-title">
-            {{ $isSelective ? 'WORKSHOP SLIP (SELECTED ITEMS)' : 'JOB CARD / WORK ORDER' }}
+            {{ $isSelective ? 'Workshop Work Slip' : 'Job Card / Work Order' }}
+        </div>
+        <div style="font-size: 9px; text-align: center; color: #555; margin-top: 2px;">
+            Work Order &bull; Not a Tax Invoice
         </div>
 
         <div class="divider"></div>
@@ -358,7 +361,7 @@
 
         <div class="meta-row">
             <span class="meta-label">Status:</span>
-            <span class="meta-val uppercase font-bold">{{ str_replace('_', ' ', $jobCard->status) }}</span>
+            <span class="meta-val uppercase font-bold">{{ strtoupper(str_replace('_', ' ', $jobCard->status)) }}</span>
         </div>
 
         <div class="meta-row">

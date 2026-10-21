@@ -232,7 +232,7 @@
         </a>
         <div style="display: flex; gap: 6px;">
             <button onclick="window.print()" class="btn btn-primary">
-                Print 80mm
+                Print Bill
             </button>
         </div>
     </div>

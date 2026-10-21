@@ -171,5 +171,31 @@ class JobCard extends Model
     {
         return $this->issues()->where('status', 'approved')->exists();
     }
+
+    public function payments()
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    public function getTotalPaidAttribute(): float
+    {
+        if ($this->invoice_id && $this->invoice) {
+            return (float) $this->invoice->amount_paid;
+        }
+
+        return (float) $this->payments()->where('status', 'completed')->sum('amount');
+    }
+
+    public function getOutstandingBalanceAttribute(): float
+    {
+        if ($this->invoice_id && $this->invoice) {
+            return (float) $this->invoice->balance_amount;
+        }
+
+        $total = (float) $this->grand_total;
+        $paid = $this->total_paid;
+
+        return max(0, round($total - $paid, 2));
+    }
 }
 

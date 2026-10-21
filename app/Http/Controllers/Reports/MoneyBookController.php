@@ -48,13 +48,14 @@ class MoneyBookController extends Controller
         $methodFilter = $request->input('payment_method', 'all');
 
         // Query payments received on payment_date between dateFrom and dateTo
-        $paymentQuery = Payment::with(['invoice.customer', 'invoice.branch', 'customer', 'receipt'])
+        $paymentQuery = Payment::with(['invoice.customer', 'invoice.branch', 'customer', 'receipt', 'jobCard.customer', 'jobCard.branch'])
             ->whereDate('payment_date', '>=', $dateFrom)
             ->whereDate('payment_date', '<=', $dateTo);
 
         if ($branchId && $branchId !== 'all') {
-            $paymentQuery->whereHas('invoice', function ($iq) use ($branchId) {
-                $iq->where('branch_id', $branchId);
+            $paymentQuery->where(function ($q) use ($branchId) {
+                $q->whereHas('invoice', fn ($iq) => $iq->where('branch_id', $branchId))
+                  ->orWhereHas('jobCard', fn ($jq) => $jq->where('branch_id', $branchId));
             });
         }
 
@@ -152,12 +153,15 @@ class MoneyBookController extends Controller
         $dateFrom = $request->input('date_from', Carbon::today()->format('Y-m-d'));
         $dateTo = $request->input('date_to', Carbon::today()->format('Y-m-d'));
 
-        $paymentQuery = Payment::with(['invoice.customer', 'invoice.branch', 'customer'])
+        $paymentQuery = Payment::with(['invoice.customer', 'invoice.branch', 'customer', 'jobCard.customer', 'jobCard.branch'])
             ->whereDate('payment_date', '>=', $dateFrom)
             ->whereDate('payment_date', '<=', $dateTo);
 
         if ($branchId && $branchId !== 'all') {
-            $paymentQuery->whereHas('invoice', fn ($q) => $q->where('branch_id', $branchId));
+            $paymentQuery->where(function ($q) use ($branchId) {
+                $q->whereHas('invoice', fn ($iq) => $iq->where('branch_id', $branchId))
+                  ->orWhereHas('jobCard', fn ($jq) => $jq->where('branch_id', $branchId));
+            });
         }
 
         $payments = $paymentQuery->orderBy('payment_date', 'desc')->get();
@@ -206,12 +210,15 @@ class MoneyBookController extends Controller
         $dateFrom = $request->input('date_from', Carbon::today()->format('Y-m-d'));
         $dateTo = $request->input('date_to', Carbon::today()->format('Y-m-d'));
 
-        $paymentQuery = Payment::with(['invoice.customer', 'invoice.branch', 'customer'])
+        $paymentQuery = Payment::with(['invoice.customer', 'invoice.branch', 'customer', 'jobCard.customer', 'jobCard.branch'])
             ->whereDate('payment_date', '>=', $dateFrom)
             ->whereDate('payment_date', '<=', $dateTo);
 
         if ($branchId && $branchId !== 'all') {
-            $paymentQuery->whereHas('invoice', fn ($q) => $q->where('branch_id', $branchId));
+            $paymentQuery->where(function ($q) use ($branchId) {
+                $q->whereHas('invoice', fn ($iq) => $iq->where('branch_id', $branchId))
+                  ->orWhereHas('jobCard', fn ($jq) => $jq->where('branch_id', $branchId));
+            });
         }
 
         $payments = $paymentQuery->orderBy('payment_date', 'desc')->get();
@@ -242,17 +249,17 @@ class MoneyBookController extends Controller
             ]);
 
             foreach ($payments as $p) {
-                $cust = $p->invoice?->customer?->display_name ?? ($p->customer?->display_name ?? 'Guest Customer');
+                $invOrJob = $p->invoice?->invoice_number ?? ($p->jobCard ? "Job #{$p->jobCard->job_number} (Advance)" : 'Multiple Invoices');
+                $cust = $p->invoice?->customer?->display_name ?? ($p->jobCard?->customer?->display_name ?? ($p->customer?->display_name ?? 'Guest Customer'));
                 fputcsv($file, [
                     $p->payment_date?->format('Y-m-d') ?? '-',
                     $p->payment_number,
-                    $p->invoice?->invoice_number ?? 'Multiple Invoices',
+                    $invOrJob,
                     $cust,
                     ucfirst(str_replace('_', ' ', $p->payment_method ?? 'cash')),
                     $p->reference_number ?? '-',
                     number_format($p->amount, 2, '.', ''),
                     ucfirst($p->status ?? 'completed'),
-                    $p->notes ?? '',
                 ]);
             }
 

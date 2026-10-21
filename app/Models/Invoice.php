@@ -63,21 +63,9 @@ class Invoice extends Model
         'customer_snapshot' => 'array',
     ];
 
-    public static function generateInvoiceNumber(): string
+    public static function generateInvoiceNumber(?string $date = null): string
     {
-        $prefix = 'INV-'.date('Ym').'-';
-        $lastInvoice = self::where('invoice_number', 'LIKE', $prefix.'%')
-            ->orderBy('id', 'desc')
-            ->first();
-
-        if ($lastInvoice) {
-            $lastSeq = (int) substr($lastInvoice->invoice_number, strlen($prefix));
-            $newSeq = str_pad((string) ($lastSeq + 1), 4, '0', STR_PAD_LEFT);
-        } else {
-            $newSeq = '0001';
-        }
-
-        return $prefix.$newSeq;
+        return \App\Services\InvoiceNumberService::generateNextInvoiceNumber($date);
     }
 
     public function customer()

@@ -55,8 +55,8 @@
                         <tr class="{{ $p->isReversed() ? 'line-through text-gray-400' : '' }}">
                             <td class="p-2 border-r border-gray-200">{{ $p->payment_date?->format('Y-m-d') }}</td>
                             <td class="p-2 border-r border-gray-200 font-mono">{{ $p->payment_number }}</td>
-                            <td class="p-2 border-r border-gray-200 font-mono">{{ $p->invoice?->invoice_number ?? '-' }}</td>
-                            <td class="p-2 border-r border-gray-200">{{ $p->invoice?->customer?->display_name ?? ($p->customer?->display_name ?? 'Guest') }}</td>
+                            <td class="p-2 border-r border-gray-200 font-mono">{{ $p->invoice?->invoice_number ?? ($p->jobCard ? $p->jobCard->job_number . ' (Advance)' : '-') }}</td>
+                            <td class="p-2 border-r border-gray-200">{{ $p->invoice?->customer?->display_name ?? ($p->jobCard?->customer?->display_name ?? ($p->customer?->display_name ?? 'Guest')) }}</td>
                             <td class="p-2 border-r border-gray-200">{{ ucfirst(str_replace('_', ' ', $p->payment_method)) }}</td>
                             <td class="p-2 border-r border-gray-200 font-mono">{{ $p->reference_number ?? '-' }}</td>
                             <td class="p-2 text-right font-medium">LKR {{ number_format($p->amount, 2) }}</td>
