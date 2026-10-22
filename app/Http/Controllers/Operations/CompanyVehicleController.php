@@ -174,11 +174,14 @@ class CompanyVehicleController extends Controller
     /**
      * Update an existing company customer's details and credit terms.
      */
-    public function updateCompany(Request $request, Customer $customer): RedirectResponse
+    public function updateCompany(Request $request, Customer $customer): RedirectResponse|JsonResponse
     {
         $user = Auth::user();
 
         if ($customer->customer_type !== 'company') {
+            if ($request->wantsJson()) {
+                return response()->json(['message' => 'Customer is not a company.'], 404);
+            }
             abort(404, 'Customer is not a company.');
         }
 
@@ -212,7 +215,14 @@ class CompanyVehicleController extends Controller
             ->first();
 
         if ($duplicate) {
-            return back()->withInput()->with('error', "Another company '{$duplicate->company_name}' already exists with this registration number or name.");
+            $msg = "Another company '{$duplicate->company_name}' already exists with this registration number or name.";
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'message' => $msg,
+                    'errors' => ['company_name' => [$msg]],
+                ], 422);
+            }
+            return back()->withInput()->with('error', $msg);
         }
 
         $termsDays = match ($validated['payment_terms']) {
@@ -268,8 +278,18 @@ class CompanyVehicleController extends Controller
             );
         });
 
+        $successMessage = "Company '{$customer->company_name}' updated successfully.";
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $successMessage,
+                'company' => $customer->fresh(['creditAccount']),
+            ]);
+        }
+
         return redirect()->route('operations.company-vehicles.index', ['selected_id' => $customer->id])
-            ->with('success', "Company '{$customer->company_name}' updated successfully.");
+            ->with('success', $successMessage);
     }
 
     /**
@@ -395,11 +415,12 @@ class CompanyVehicleController extends Controller
     /**
      * Update an existing company vehicle and driver details.
      */
-    public function updateVehicle(Request $request, Vehicle $vehicle): RedirectResponse
+    public function updateVehicle(Request $request, Vehicle $vehicle): RedirectResponse|JsonResponse
     {
         $user = Auth::user();
 
         $validated = $request->validate([
+            'vehicle_number' => ['required', 'string', 'max:50'],
             'vehicle_type_id' => ['required', 'exists:vehicle_types,id'],
             'brand' => ['nullable', 'string', 'max:100'],
             'model' => ['nullable', 'string', 'max:100'],
@@ -411,11 +432,37 @@ class CompanyVehicleController extends Controller
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
+        $rawNumber = trim($validated['vehicle_number']);
+        $normalized = Vehicle::normalizeNumber($rawNumber);
+
+        // Check if another vehicle already has this vehicle number
+        $duplicate = Vehicle::where('id', '!=', $vehicle->id)
+            ->where(function ($q) use ($normalized, $rawNumber) {
+                $q->where('vehicle_number_normalized', $normalized)
+                    ->orWhereRaw("UPPER(REPLACE(REPLACE(vehicle_number, '-', ''), ' ', '')) = ?", [$normalized])
+                    ->orWhere('vehicle_number', strtoupper($rawNumber));
+            })
+            ->first();
+
+        if ($duplicate) {
+            $owner = $duplicate->customer ? ($duplicate->customer->company_name ?: $duplicate->customer->customer_name) : 'another customer';
+            $msg = "Vehicle number '{$rawNumber}' is already registered in the system (Owner: {$owner}).";
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'message' => $msg,
+                    'errors' => ['vehicle_number' => [$msg]],
+                ], 422);
+            }
+            return back()->withInput()->with('error', $msg);
+        }
+
         $brand = ! empty($validated['brand']) ? trim($validated['brand']) : null;
         $model = ! empty($validated['model']) ? trim($validated['model']) : null;
         $makeModel = trim("{$brand} {$model}") ?: ($vehicle->make_model ?? null);
 
         $vehicle->update([
+            'vehicle_number' => strtoupper($rawNumber),
+            'vehicle_number_normalized' => $normalized,
             'vehicle_type_id' => $validated['vehicle_type_id'],
             'brand' => $brand,
             'model' => $model,
@@ -435,8 +482,18 @@ class CompanyVehicleController extends Controller
             userId: $user->id
         );
 
+        $successMessage = "Vehicle {$vehicle->vehicle_number} updated successfully.";
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $successMessage,
+                'vehicle' => $vehicle->fresh(['vehicleType']),
+            ]);
+        }
+
         return redirect()->route('operations.company-vehicles.index', ['selected_id' => $vehicle->customer_id])
-            ->with('success', "Vehicle {$vehicle->vehicle_number} updated successfully.");
+            ->with('success', $successMessage);
     }
 
     /**
@@ -493,7 +550,6 @@ class CompanyVehicleController extends Controller
     public function vehicleHistory(Vehicle $vehicle): JsonResponse
     {
         $jobs = JobCard::where('vehicle_id', $vehicle->id)
-            ->whereIn('status', ['completed', 'delivered'])
             ->with(['services', 'products', 'assignedTechnician', 'invoice', 'issues', 'branch'])
             ->orderBy('date', 'desc')
             ->orderBy('id', 'desc')
@@ -502,17 +558,18 @@ class CompanyVehicleController extends Controller
                 return [
                     'id' => $job->id,
                     'job_number' => $job->job_number,
-                    'date' => $job->date ? $job->date->format('d M Y') : 'N/A',
+                    'date' => $job->date ? $job->date->format('d M Y') : ($job->created_at ? $job->created_at->format('d M Y') : '-'),
                     'services' => $job->services->pluck('service_name')->toArray(),
                     'products' => $job->products->map(fn ($p) => "{$p->product_name} ({$p->quantity})")->toArray(),
                     'technician' => $job->assignedTechnician?->name ?? 'Unassigned',
-                    'mileage' => $job->current_mileage > 0 ? number_format($job->current_mileage).' km' : 'N/A',
+                    'mileage' => $job->current_mileage > 0 ? number_format($job->current_mileage).' km' : '-',
                     'additional_issues' => $job->issues->pluck('description')->toArray(),
-                    'invoice_number' => $job->invoice?->invoice_number ?? 'N/A',
+                    'invoice_number' => $job->invoice?->invoice_number ?? '-',
                     'grand_total' => (float) $job->grand_total,
                     'status' => ucfirst(str_replace('_', ' ', $job->status)),
+                    'status_raw' => $job->status,
                     'branch' => $job->branch?->name ?? 'Main Branch',
-                    'view_url' => route('operations.job-cards.show', $job),
+                    'view_url' => route('operations.job-cards.show', $job->id),
                 ];
             });
 
@@ -521,9 +578,9 @@ class CompanyVehicleController extends Controller
                 'id' => $vehicle->id,
                 'vehicle_number' => $vehicle->vehicle_number,
                 'type' => $vehicle->vehicleType?->name ?? 'Vehicle',
-                'make_model' => $vehicle->make_model ?: 'N/A',
-                'driver_name' => $vehicle->driver_name ?: 'N/A',
-                'current_mileage' => $vehicle->current_mileage > 0 ? number_format($vehicle->current_mileage).' km' : 'N/A',
+                'make_model' => $vehicle->make_model ?: '-',
+                'driver_name' => $vehicle->driver_name ?: '-',
+                'current_mileage' => $vehicle->current_mileage > 0 ? number_format($vehicle->current_mileage).' km' : '-',
             ],
             'history' => $jobs,
         ]);

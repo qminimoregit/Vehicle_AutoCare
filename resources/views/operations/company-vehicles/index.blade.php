@@ -16,6 +16,18 @@
         showHistoryModal: false,
         showInvoicesModal: false,
 
+        // Errors & Submitting states
+        companyErrors: {},
+        isSubmittingCompany: false,
+        vehicleErrors: {},
+        isSubmittingVehicle: false,
+
+        init() {
+            this.$watch('showAddCompanyModal || showEditCompanyModal || showAddVehicleModal || showEditVehicleModal || showHistoryModal || showInvoicesModal', (isOpen) => {
+                document.body.classList.toggle('overflow-hidden', Boolean(isOpen));
+            });
+        },
+
         // Add/Edit Company Form State
         companyForm: {
             id: null,
@@ -160,6 +172,8 @@
 
         // Open Add Company Modal
         openAddCompany() {
+            this.companyErrors = {};
+            this.isSubmittingCompany = false;
             this.companyForm = {
                 id: null,
                 company_name: '',
@@ -179,12 +193,14 @@
 
         // Open Edit Company Modal
         openEditCompany(data) {
+            this.companyErrors = {};
+            this.isSubmittingCompany = false;
             this.companyForm = {
                 id: data.id,
-                company_name: data.company_name,
+                company_name: data.company_name || '',
                 registration_number: data.registration_number || '',
-                customer_name: data.customer_name,
-                phone: data.phone,
+                customer_name: data.customer_name || '',
+                phone: data.phone || '',
                 email: data.email || '',
                 address: data.address || '',
                 credit_limit: data.credit_limit || 0,
@@ -196,8 +212,56 @@
             this.showEditCompanyModal = true;
         },
 
+        async submitEditCompany(event) {
+            this.companyErrors = {};
+            this.isSubmittingCompany = true;
+
+            let form = event.target;
+            let url = form.action;
+            let formData = new FormData(form);
+
+            try {
+                let res = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    },
+                    body: formData
+                });
+
+                let data = await res.json();
+
+                if (!res.ok) {
+                    if (res.status === 422 && data.errors) {
+                        this.companyErrors = data.errors;
+                    } else if (data.message) {
+                        this.companyErrors = { general: [data.message] };
+                    } else {
+                        this.companyErrors = { general: ['An unexpected error occurred. Please try again.'] };
+                    }
+                    return;
+                }
+
+                // Success! Close modal and refresh page to show updated company details
+                this.showEditCompanyModal = false;
+                let targetUrl = new URL('{{ route('operations.company-vehicles.index') }}', window.location.origin);
+                targetUrl.searchParams.set('selected_id', this.companyForm.id);
+                targetUrl.searchParams.set('success_msg', data.message || 'Company profile updated successfully.');
+                window.location.href = targetUrl.toString();
+            } catch (err) {
+                console.error(err);
+                this.companyErrors = { general: ['Network or server communication error. Please try again.'] };
+            } finally {
+                this.isSubmittingCompany = false;
+            }
+        },
+
         // Open Add Vehicle Modal for selected company
         openAddVehicle(companyId, companyName) {
+            this.vehicleErrors = {};
+            this.isSubmittingVehicle = false;
             this.vehicleForm = {
                 id: null,
                 company_id: companyId,
@@ -220,12 +284,14 @@
 
         // Open Edit Vehicle Modal
         openEditVehicle(v) {
+            this.vehicleErrors = {};
+            this.isSubmittingVehicle = false;
             this.vehicleForm = {
                 id: v.id,
                 company_id: v.customer_id,
                 company_name: '{{ $selectedCompany ? addslashes($selectedCompany->company_name) : '' }}',
-                vehicle_number: v.vehicle_number,
-                vehicle_type_id: String(v.vehicle_type_id),
+                vehicle_number: v.vehicle_number || '',
+                vehicle_type_id: String(v.vehicle_type_id || ''),
                 brand: v.brand || '',
                 model: v.model || '',
                 year_of_manufacture: v.year_of_manufacture || '',
@@ -237,10 +303,71 @@
                 transfer_confirmed: 0
             };
             this.showEditVehicleModal = true;
+        },
+
+        async submitEditVehicle(event) {
+            this.vehicleErrors = {};
+            this.isSubmittingVehicle = true;
+
+            let form = event.target;
+            let url = form.action;
+            let formData = new FormData(form);
+
+            try {
+                let res = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    },
+                    body: formData
+                });
+
+                let data = await res.json();
+
+                if (!res.ok) {
+                    if (res.status === 422 && data.errors) {
+                        this.vehicleErrors = data.errors;
+                    } else if (data.message) {
+                        this.vehicleErrors = { general: [data.message] };
+                    } else {
+                        this.vehicleErrors = { general: ['An unexpected error occurred. Please try again.'] };
+                    }
+                    return;
+                }
+
+                // Success! Close modal and refresh to display updated vehicle details
+                this.showEditVehicleModal = false;
+                let targetUrl = new URL('{{ route('operations.company-vehicles.index') }}', window.location.origin);
+                targetUrl.searchParams.set('selected_id', this.vehicleForm.company_id);
+                targetUrl.searchParams.set('success_msg', data.message || 'Vehicle details updated successfully.');
+                window.location.href = targetUrl.toString();
+            } catch (err) {
+                console.error(err);
+                this.vehicleErrors = { general: ['Network or server communication error. Please try again.'] };
+            } finally {
+                this.isSubmittingVehicle = false;
+            }
         }
     }"
     class="space-y-6 max-w-7xl mx-auto"
 >
+    <!-- FLASH SUCCESS ALERT -->
+    @if(request('success_msg'))
+        <div x-data="{ show: true }" x-show="show" class="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center justify-between shadow-xs">
+            <div class="flex items-center space-x-2.5">
+                <svg class="w-5 h-5 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                <span class="text-sm font-semibold">{{ request('success_msg') }}</span>
+            </div>
+            <button type="button" @click="show = false" class="text-emerald-600 hover:text-emerald-800 cursor-pointer">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+    @endif
+
     <!-- PAGE HEADER -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2">
         <div>
@@ -262,7 +389,7 @@
                 <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
                 </svg>
-                + Add Company
+                Add Company
             </button>
         </div>
     </div>
@@ -365,7 +492,7 @@
                                     href="{{ route('operations.company-vehicles.index', ['selected_id' => $company->id, 'search' => $search]) }}"
                                     class="px-2 py-1 text-[11px] font-semibold text-[#0B1849] bg-white border border-[#0B1849]/30 rounded hover:bg-[#EEF1FA] transition"
                                 >
-                                    Manage
+                                    View / Manage
                                 </a>
                                 <button 
                                     type="button" 
@@ -378,7 +505,7 @@
                                         'email' => $company->email,
                                         'address' => $company->address,
                                         'credit_limit' => $creditAcc?->credit_limit ?? 0,
-                                        'payment_terms' => $company->payment_terms_text,
+                                        'payment_terms' => $company->payment_terms_code,
                                         'custom_days' => $creditAcc?->payment_terms_days ?? 30,
                                         'status' => $company->status,
                                         'notes' => $company->notes
@@ -441,7 +568,7 @@
                                     'email' => $selectedCompany->email,
                                     'address' => $selectedCompany->address,
                                     'credit_limit' => $creditLimit,
-                                    'payment_terms' => $selectedCompany->payment_terms_text,
+                                    'payment_terms' => $selectedCompany->payment_terms_code,
                                     'custom_days' => $creditAcc?->payment_terms_days ?? 30,
                                     'status' => $selectedCompany->status,
                                     'notes' => $selectedCompany->notes
@@ -503,7 +630,7 @@
                             <svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
                             </svg>
-                            + Add Vehicle
+                            Add Vehicle
                         </button>
                     </div>
 
@@ -567,7 +694,7 @@
                                                     @click="openVehicleHistory({{ $v->id }})"
                                                     class="px-2 py-1 bg-[#EEF1FA] hover:bg-[#dbe2f6] text-[#0B1849] rounded font-semibold text-[11px] transition cursor-pointer"
                                                 >
-                                                    History
+                                                    View Job History
                                                 </button>
                                                 <button 
                                                     type="button" 
@@ -708,20 +835,38 @@
         x-show="showAddCompanyModal" 
         class="fixed inset-0 z-50 overflow-y-auto" 
         style="display: none;"
+        x-cloak
+        @keydown.escape.window="showAddCompanyModal = false"
     >
-        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div 
-                x-show="showAddCompanyModal" 
-                @click="showAddCompanyModal = false"
-                class="fixed inset-0 transition-opacity bg-gray-900/60 backdrop-blur-xs"
-            ></div>
+        <!-- Pure Dim Backdrop (NO backdrop-blur, NO overlapping dialog) -->
+        <div 
+            x-show="showAddCompanyModal" 
+            x-transition:enter="ease-out duration-200"
+            x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"
+            x-transition:leave="ease-in duration-150"
+            x-transition:leave-start="opacity-100"
+            x-transition:leave-end="opacity-0"
+            @click="showAddCompanyModal = false"
+            class="fixed inset-0 bg-gray-900/60 transition-opacity"
+            aria-hidden="true"
+        ></div>
 
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
-
+        <!-- Center Container -->
+        <div class="flex min-h-full items-center justify-center p-4 text-center sm:p-0 pointer-events-none">
+            <!-- Modal Dialog Panel (Sharp, elevated with relative z-10 and pointer-events-auto) -->
             <div 
-                class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-xl sm:w-full border border-gray-200"
+                x-show="showAddCompanyModal"
+                x-transition:enter="ease-out duration-200"
+                x-transition:enter-start="opacity-0 scale-95"
+                x-transition:enter-end="opacity-100 scale-100"
+                x-transition:leave="ease-in duration-150"
+                x-transition:leave-start="opacity-100 scale-100"
+                x-transition:leave-end="opacity-0 scale-95"
+                @click.stop
+                class="relative z-10 pointer-events-auto transform overflow-hidden rounded-2xl bg-white text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-xl border border-gray-200 flex flex-col max-h-[90vh]"
             >
-                <div class="px-6 py-4 bg-[#0B1849] text-white flex items-center justify-between">
+                <div class="px-6 py-4 bg-[#0B1849] text-white flex items-center justify-between shrink-0">
                     <div class="flex items-center space-x-2">
                         <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
                         <h3 class="text-base font-bold tracking-tight">Register New Company</h3>
@@ -733,7 +878,7 @@
                     </button>
                 </div>
 
-                <form action="{{ route('operations.company-vehicles.companies.store') }}" method="POST" class="p-6 space-y-4">
+                <form action="{{ route('operations.company-vehicles.companies.store') }}" method="POST" class="overflow-y-auto flex-1 p-6 space-y-4">
                     @csrf
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -916,20 +1061,38 @@
         x-show="showEditCompanyModal" 
         class="fixed inset-0 z-50 overflow-y-auto" 
         style="display: none;"
+        x-cloak
+        @keydown.escape.window="showEditCompanyModal = false"
     >
-        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div 
-                x-show="showEditCompanyModal" 
-                @click="showEditCompanyModal = false"
-                class="fixed inset-0 transition-opacity bg-gray-900/60 backdrop-blur-xs"
-            ></div>
+        <!-- Pure Dim Backdrop (NO backdrop-blur, NO overlapping dialog) -->
+        <div 
+            x-show="showEditCompanyModal" 
+            x-transition:enter="ease-out duration-200"
+            x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"
+            x-transition:leave="ease-in duration-150"
+            x-transition:leave-start="opacity-100"
+            x-transition:leave-end="opacity-0"
+            @click="showEditCompanyModal = false"
+            class="fixed inset-0 bg-gray-900/60 transition-opacity"
+            aria-hidden="true"
+        ></div>
 
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
-
+        <!-- Center Container -->
+        <div class="flex min-h-full items-center justify-center p-4 text-center sm:p-0 pointer-events-none">
+            <!-- Modal Dialog Panel (Sharp, elevated with relative z-10 and pointer-events-auto) -->
             <div 
-                class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-xl sm:w-full border border-gray-200"
+                x-show="showEditCompanyModal"
+                x-transition:enter="ease-out duration-200"
+                x-transition:enter-start="opacity-0 scale-95"
+                x-transition:enter-end="opacity-100 scale-100"
+                x-transition:leave="ease-in duration-150"
+                x-transition:leave-start="opacity-100 scale-100"
+                x-transition:leave-end="opacity-0 scale-95"
+                @click.stop
+                class="relative z-10 pointer-events-auto transform overflow-hidden rounded-2xl bg-white text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-xl border border-gray-200 flex flex-col max-h-[90vh]"
             >
-                <div class="px-6 py-4 bg-[#0B1849] text-white flex items-center justify-between">
+                <div class="px-6 py-4 bg-[#0B1849] text-white flex items-center justify-between shrink-0">
                     <div class="flex items-center space-x-2">
                         <span class="w-2.5 h-2.5 rounded-full bg-blue-400"></span>
                         <h3 class="text-base font-bold tracking-tight">Edit Company Profile</h3>
@@ -944,10 +1107,30 @@
                 <form 
                     :action="'{{ url('operations/company-vehicles/companies') }}/' + companyForm.id" 
                     method="POST" 
-                    class="p-6 space-y-4"
+                    @submit.prevent="submitEditCompany($event)"
+                    class="overflow-y-auto flex-1 p-6 space-y-4"
                 >
                     @csrf
                     @method('PUT')
+
+                    <!-- Inline Validation Errors Container -->
+                    <template x-if="Object.keys(companyErrors).length > 0">
+                        <div class="p-3.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 space-y-1">
+                            <div class="font-bold flex items-center gap-1.5 text-red-800">
+                                <svg class="w-4 h-4 shrink-0 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                <span>Please fix the following errors:</span>
+                            </div>
+                            <ul class="list-disc list-inside space-y-0.5 ml-1">
+                                <template x-for="(errList, field) in companyErrors" :key="field">
+                                    <template x-for="err in errList" :key="err">
+                                        <li x-text="err"></li>
+                                    </template>
+                                </template>
+                            </ul>
+                        </div>
+                    </template>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div class="sm:col-span-2">
@@ -977,12 +1160,12 @@
 
                         <div>
                             <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-                                Status
+                                Company Status
                             </label>
                             <select 
                                 name="status" 
                                 x-model="companyForm.status" 
-                                class="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white"
+                                class="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white font-semibold"
                             >
                                 <option value="active">Active</option>
                                 <option value="inactive">Inactive</option>
@@ -1095,9 +1278,16 @@
                         </button>
                         <button 
                             type="submit" 
-                            class="px-5 py-2 text-xs font-bold text-white bg-[#0B1849] hover:bg-[#15286e] rounded-lg shadow-sm transition cursor-pointer"
+                            :disabled="isSubmittingCompany"
+                            class="px-5 py-2 text-xs font-bold text-white bg-[#0B1849] hover:bg-[#15286e] rounded-lg shadow-sm transition cursor-pointer flex items-center space-x-1.5"
                         >
-                            Update Company
+                            <template x-if="isSubmittingCompany">
+                                <svg class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </template>
+                            <span>Save Changes</span>
                         </button>
                     </div>
                 </form>
@@ -1112,20 +1302,38 @@
         x-show="showAddVehicleModal" 
         class="fixed inset-0 z-50 overflow-y-auto" 
         style="display: none;"
+        x-cloak
+        @keydown.escape.window="showAddVehicleModal = false"
     >
-        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div 
-                x-show="showAddVehicleModal" 
-                @click="showAddVehicleModal = false"
-                class="fixed inset-0 transition-opacity bg-gray-900/60 backdrop-blur-xs"
-            ></div>
+        <!-- Pure Dim Backdrop (NO backdrop-blur, NO overlapping dialog) -->
+        <div 
+            x-show="showAddVehicleModal" 
+            x-transition:enter="ease-out duration-200"
+            x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"
+            x-transition:leave="ease-in duration-150"
+            x-transition:leave-start="opacity-100"
+            x-transition:leave-end="opacity-0"
+            @click="showAddVehicleModal = false"
+            class="fixed inset-0 bg-gray-900/60 transition-opacity"
+            aria-hidden="true"
+        ></div>
 
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
-
+        <!-- Center Container -->
+        <div class="flex min-h-full items-center justify-center p-4 text-center sm:p-0 pointer-events-none">
+            <!-- Modal Dialog Panel (Sharp, elevated with relative z-10 and pointer-events-auto) -->
             <div 
-                class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-xl sm:w-full border border-gray-200"
+                x-show="showAddVehicleModal"
+                x-transition:enter="ease-out duration-200"
+                x-transition:enter-start="opacity-0 scale-95"
+                x-transition:enter-end="opacity-100 scale-100"
+                x-transition:leave="ease-in duration-150"
+                x-transition:leave-start="opacity-100 scale-100"
+                x-transition:leave-end="opacity-0 scale-95"
+                @click.stop
+                class="relative z-10 pointer-events-auto transform overflow-hidden rounded-2xl bg-white text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-xl border border-gray-200 flex flex-col max-h-[90vh]"
             >
-                <div class="px-6 py-4 bg-[#0B1849] text-white flex items-center justify-between">
+                <div class="px-6 py-4 bg-[#0B1849] text-white flex items-center justify-between shrink-0">
                     <div>
                         <div class="flex items-center space-x-2">
                             <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
@@ -1142,7 +1350,7 @@
                     </button>
                 </div>
 
-                <form action="{{ route('operations.company-vehicles.vehicles.store') }}" method="POST" class="p-6 space-y-4">
+                <form action="{{ route('operations.company-vehicles.vehicles.store') }}" method="POST" class="overflow-y-auto flex-1 p-6 space-y-4">
                     @csrf
                     <input type="hidden" name="company_id" :value="vehicleForm.company_id">
 
@@ -1363,20 +1571,38 @@
         x-show="showEditVehicleModal" 
         class="fixed inset-0 z-50 overflow-y-auto" 
         style="display: none;"
+        x-cloak
+        @keydown.escape.window="showEditVehicleModal = false"
     >
-        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div 
-                x-show="showEditVehicleModal" 
-                @click="showEditVehicleModal = false"
-                class="fixed inset-0 transition-opacity bg-gray-900/60 backdrop-blur-xs"
-            ></div>
+        <!-- Pure Dim Backdrop (NO backdrop-blur, NO overlapping dialog) -->
+        <div 
+            x-show="showEditVehicleModal" 
+            x-transition:enter="ease-out duration-200"
+            x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"
+            x-transition:leave="ease-in duration-150"
+            x-transition:leave-start="opacity-100"
+            x-transition:leave-end="opacity-0"
+            @click="showEditVehicleModal = false"
+            class="fixed inset-0 bg-gray-900/60 transition-opacity"
+            aria-hidden="true"
+        ></div>
 
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
-
+        <!-- Center Container -->
+        <div class="flex min-h-full items-center justify-center p-4 text-center sm:p-0 pointer-events-none">
+            <!-- Modal Dialog Panel (Sharp, elevated with relative z-10 and pointer-events-auto) -->
             <div 
-                class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-xl sm:w-full border border-gray-200"
+                x-show="showEditVehicleModal"
+                x-transition:enter="ease-out duration-200"
+                x-transition:enter-start="opacity-0 scale-95"
+                x-transition:enter-end="opacity-100 scale-100"
+                x-transition:leave="ease-in duration-150"
+                x-transition:leave-start="opacity-100 scale-100"
+                x-transition:leave-end="opacity-0 scale-95"
+                @click.stop
+                class="relative z-10 pointer-events-auto transform overflow-hidden rounded-2xl bg-white text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-xl border border-gray-200 flex flex-col max-h-[90vh]"
             >
-                <div class="px-6 py-4 bg-[#0B1849] text-white flex items-center justify-between">
+                <div class="px-6 py-4 bg-[#0B1849] text-white flex items-center justify-between shrink-0">
                     <div>
                         <div class="flex items-center space-x-2">
                             <span class="w-2.5 h-2.5 rounded-full bg-blue-400"></span>
@@ -1396,12 +1622,47 @@
                 <form 
                     :action="'{{ url('operations/company-vehicles/vehicles') }}/' + vehicleForm.id" 
                     method="POST" 
-                    class="p-6 space-y-4"
+                    @submit.prevent="submitEditVehicle($event)"
+                    class="overflow-y-auto flex-1 p-6 space-y-4"
                 >
                     @csrf
                     @method('PUT')
 
+                    <!-- Validation Errors Box Inside Edit Vehicle Modal -->
+                    <template x-if="Object.keys(vehicleErrors).length > 0">
+                        <div class="p-3.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800 space-y-1">
+                            <div class="font-bold flex items-center">
+                                <svg class="w-4 h-4 mr-1.5 text-rose-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span>Please resolve the following errors:</span>
+                            </div>
+                            <ul class="list-disc list-inside space-y-0.5 pl-5">
+                                <template x-for="(errList, field) in vehicleErrors" :key="field">
+                                    <template x-for="msg in errList" :key="msg">
+                                        <li x-text="msg"></li>
+                                    </template>
+                                </template>
+                            </ul>
+                        </div>
+                    </template>
+
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <!-- Vehicle Registration Number -->
+                        <div class="sm:col-span-2">
+                            <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                                Vehicle Registration Number <span class="text-red-500">*</span>
+                            </label>
+                            <input 
+                                type="text" 
+                                name="vehicle_number" 
+                                x-model="vehicleForm.vehicle_number" 
+                                required
+                                class="w-full px-3.5 py-2.5 text-sm font-bold uppercase tracking-wider border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white font-mono"
+                            >
+                        </div>
+
+                        <!-- Vehicle Type -->
                         <div class="sm:col-span-2">
                             <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
                                 Vehicle Type <span class="text-red-500">*</span>
@@ -1418,6 +1679,7 @@
                             </select>
                         </div>
 
+                        <!-- Vehicle Brand -->
                         <div>
                             <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
                                 Vehicle Brand
@@ -1426,10 +1688,12 @@
                                 type="text" 
                                 name="brand" 
                                 x-model="vehicleForm.brand" 
+                                placeholder="e.g. Toyota, Isuzu"
                                 class="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white"
                             >
                         </div>
 
+                        <!-- Vehicle Model -->
                         <div>
                             <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
                                 Vehicle Model
@@ -1438,10 +1702,28 @@
                                 type="text" 
                                 name="model" 
                                 x-model="vehicleForm.model" 
+                                placeholder="e.g. HiAce, KDH"
                                 class="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white"
                             >
                         </div>
 
+                        <!-- Vehicle Year -->
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                                Vehicle Year
+                            </label>
+                            <input 
+                                type="number" 
+                                name="year_of_manufacture" 
+                                x-model="vehicleForm.year_of_manufacture" 
+                                placeholder="e.g. 2018"
+                                min="1950"
+                                max="{{ date('Y') + 1 }}"
+                                class="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white"
+                            >
+                        </div>
+
+                        <!-- Driver Name -->
                         <div>
                             <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
                                 Driver Name
@@ -1450,22 +1732,26 @@
                                 type="text" 
                                 name="driver_name" 
                                 x-model="vehicleForm.driver_name" 
+                                placeholder="e.g. Kasun Perera"
                                 class="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white"
                             >
                         </div>
 
-                        <div>
+                        <!-- Driver Mobile Number -->
+                        <div class="sm:col-span-2">
                             <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-                                Driver Mobile
+                                Driver Mobile Number
                             </label>
                             <input 
                                 type="text" 
                                 name="driver_mobile" 
                                 x-model="vehicleForm.driver_mobile" 
+                                placeholder="e.g. 0771234567"
                                 class="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white font-mono"
                             >
                         </div>
 
+                        <!-- Current Mileage -->
                         <div>
                             <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
                                 Current Mileage (km)
@@ -1479,6 +1765,7 @@
                             >
                         </div>
 
+                        <!-- Next Service Mileage -->
                         <div>
                             <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
                                 Next Service Mileage (km)
@@ -1492,6 +1779,7 @@
                             >
                         </div>
 
+                        <!-- Notes -->
                         <div class="sm:col-span-2">
                             <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
                                 Notes
@@ -1500,6 +1788,7 @@
                                 type="text" 
                                 name="notes" 
                                 x-model="vehicleForm.notes" 
+                                placeholder="e.g. Assigned to express logistics"
                                 class="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white"
                             >
                         </div>
@@ -1515,9 +1804,16 @@
                         </button>
                         <button 
                             type="submit" 
-                            class="px-5 py-2 text-xs font-bold text-white bg-[#0B1849] hover:bg-[#15286e] rounded-lg shadow-sm transition cursor-pointer"
+                            :disabled="isSubmittingVehicle"
+                            class="px-5 py-2 text-xs font-bold text-white bg-[#0B1849] hover:bg-[#15286e] rounded-lg shadow-sm transition cursor-pointer flex items-center space-x-1.5"
                         >
-                            Update Vehicle
+                            <template x-if="isSubmittingVehicle">
+                                <svg class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </template>
+                            <span>Save Changes</span>
                         </button>
                     </div>
                 </form>
@@ -1526,37 +1822,57 @@
     </div>
 
     <!-- ======================================================== -->
-    <!-- MODAL 5: VEHICLE SERVICE HISTORY MODAL                   -->
+    <!-- MODAL 5: VEHICLE SERVICE / JOB HISTORY MODAL             -->
     <!-- ======================================================== -->
     <div 
         x-show="showHistoryModal" 
         class="fixed inset-0 z-50 overflow-y-auto" 
         style="display: none;"
+        x-cloak
+        @keydown.escape.window="showHistoryModal = false"
     >
-        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div 
-                x-show="showHistoryModal" 
-                @click="showHistoryModal = false"
-                class="fixed inset-0 transition-opacity bg-gray-900/60 backdrop-blur-xs"
-            ></div>
+        <!-- Pure Dim Backdrop (NO backdrop-blur, NO overlapping dialog) -->
+        <div 
+            x-show="showHistoryModal" 
+            x-transition:enter="ease-out duration-200"
+            x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"
+            x-transition:leave="ease-in duration-150"
+            x-transition:leave-start="opacity-100"
+            x-transition:leave-end="opacity-0"
+            @click="showHistoryModal = false"
+            class="fixed inset-0 bg-gray-900/60 transition-opacity"
+            aria-hidden="true"
+        ></div>
 
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
-
+        <!-- Center Container -->
+        <div class="flex min-h-full items-center justify-center p-4 text-center sm:p-0 pointer-events-none">
+            <!-- Modal Dialog Panel (Sharp, elevated with relative z-10 and pointer-events-auto) -->
             <div 
-                class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full border border-gray-200"
+                x-show="showHistoryModal"
+                x-transition:enter="ease-out duration-200"
+                x-transition:enter-start="opacity-0 scale-95"
+                x-transition:enter-end="opacity-100 scale-100"
+                x-transition:leave="ease-in duration-150"
+                x-transition:leave-start="opacity-100 scale-100"
+                x-transition:leave-end="opacity-0 scale-95"
+                @click.stop
+                class="relative z-10 pointer-events-auto transform overflow-hidden rounded-2xl bg-white text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-5xl border border-gray-200 flex flex-col max-h-[90vh]"
             >
-                <div class="px-6 py-4 bg-[#0B1849] text-white flex items-center justify-between">
+                <div class="px-6 py-4 bg-[#0B1849] text-white flex items-center justify-between shrink-0">
                     <div>
                         <div class="flex items-center space-x-2">
                             <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
-                            <h3 class="text-base font-bold tracking-tight">Vehicle Service History</h3>
+                            <h3 class="text-base font-bold tracking-tight">
+                                Vehicle Job History – <span class="font-mono text-emerald-300" x-text="historyVehicle ? historyVehicle.vehicle_number : ''"></span>
+                            </h3>
                         </div>
                         <template x-if="historyVehicle">
                             <p class="text-xs text-slate-300 mt-0.5">
-                                Vehicle: <strong class="text-white font-mono" x-text="historyVehicle.vehicle_number"></strong> | 
-                                Type: <span x-text="historyVehicle.type"></span> | 
-                                Driver: <span x-text="historyVehicle.driver_name"></span> | 
-                                Mileage: <span x-text="historyVehicle.current_mileage"></span>
+                                Type: <span class="text-white" x-text="historyVehicle.type"></span> | 
+                                Model: <span class="text-white" x-text="historyVehicle.make_model"></span> | 
+                                Driver: <span class="text-white" x-text="historyVehicle.driver_name"></span> | 
+                                Current Mileage: <span class="text-white" x-text="historyVehicle.current_mileage"></span>
                             </p>
                         </template>
                     </div>
@@ -1567,14 +1883,14 @@
                     </button>
                 </div>
 
-                <div class="p-6">
+                <div class="overflow-y-auto flex-1 p-6">
                     <template x-if="loadingHistory">
                         <div class="py-12 text-center text-gray-500">
                             <svg class="animate-spin h-8 w-8 text-[#0B1849] mx-auto" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
-                            <p class="text-xs font-semibold text-gray-600 mt-2">Loading service records...</p>
+                            <p class="text-xs font-semibold text-gray-600 mt-2">Loading vehicle job history...</p>
                         </div>
                     </template>
 
@@ -1583,68 +1899,80 @@
                             <svg class="mx-auto h-10 w-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                             </svg>
-                            <p class="mt-2 text-sm font-bold text-gray-700">No previous service history.</p>
-                            <p class="text-xs text-gray-400 mt-0.5">This company vehicle has not completed any services yet.</p>
+                            <p class="mt-2 text-sm font-bold text-gray-700">No job history found for this vehicle.</p>
+                            <p class="text-xs text-gray-400 mt-0.5">There are no job card records registered for this vehicle.</p>
                         </div>
                     </template>
 
                     <template x-if="!loadingHistory && historyRecords.length > 0">
-                        <div class="overflow-x-auto max-h-96 thin-scrollbar">
+                        <div class="overflow-x-auto border border-gray-200 rounded-xl shadow-2xs">
                             <table class="min-w-full divide-y divide-gray-200 text-left text-xs">
                                 <thead class="bg-gray-50 text-gray-600 font-bold uppercase text-[10px] tracking-wider sticky top-0">
                                     <tr>
-                                        <th class="px-3.5 py-2.5">Date</th>
-                                        <th class="px-3.5 py-2.5">Job / Invoice</th>
-                                        <th class="px-3.5 py-2.5">Services Completed</th>
-                                        <th class="px-3.5 py-2.5">Products Used</th>
-                                        <th class="px-3.5 py-2.5">Technician</th>
-                                        <th class="px-3.5 py-2.5">Mileage</th>
-                                        <th class="px-3.5 py-2.5 text-right">Total</th>
-                                        <th class="px-3.5 py-2.5 text-right">Action</th>
+                                        <th class="px-3.5 py-3">Service Date</th>
+                                        <th class="px-3.5 py-3">Job Number</th>
+                                        <th class="px-3.5 py-3">Invoice Number</th>
+                                        <th class="px-3.5 py-3">Services Completed</th>
+                                        <th class="px-3.5 py-3">Products Used</th>
+                                        <th class="px-3.5 py-3">Technician</th>
+                                        <th class="px-3.5 py-3">Mileage</th>
+                                        <th class="px-3.5 py-3 text-right">Total</th>
+                                        <th class="px-3.5 py-3 text-center">Status</th>
+                                        <th class="px-3.5 py-3 text-right">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-gray-100 text-gray-800">
                                     <template x-for="rec in historyRecords" :key="rec.id">
                                         <tr class="hover:bg-slate-50 transition">
                                             <td class="px-3.5 py-2.5 font-semibold text-gray-900 whitespace-nowrap" x-text="rec.date"></td>
-                                            <td class="px-3.5 py-2.5 whitespace-nowrap">
-                                                <div class="font-bold text-[#0B1849]" x-text="rec.job_number"></div>
-                                                <div class="text-[10px] text-gray-500 font-mono" x-text="rec.invoice_number"></div>
-                                            </td>
-                                            <td class="px-3.5 py-2.5 max-w-[200px]">
-                                                <template x-if="rec.services.length > 0">
+                                            <td class="px-3.5 py-2.5 whitespace-nowrap font-bold font-mono text-[#0B1849]" x-text="rec.job_number"></td>
+                                            <td class="px-3.5 py-2.5 whitespace-nowrap font-mono text-gray-700" x-text="rec.invoice_number"></td>
+                                            <td class="px-3.5 py-2.5 max-w-[180px]">
+                                                <template x-if="rec.services && rec.services.length > 0">
                                                     <div class="space-y-0.5">
                                                         <template x-for="s in rec.services" :key="s">
-                                                            <span class="inline-block px-1.5 py-0.5 rounded text-[10px] bg-slate-100 text-slate-800 mr-1 mb-0.5" x-text="s"></span>
+                                                            <span class="inline-block px-1.5 py-0.5 rounded text-[10px] bg-slate-100 text-slate-800 mr-1 mb-0.5 font-medium" x-text="s"></span>
                                                         </template>
                                                     </div>
                                                 </template>
-                                                <template x-if="rec.services.length === 0">
-                                                    <span class="text-gray-400 italic">None</span>
+                                                <template x-if="!rec.services || rec.services.length === 0">
+                                                    <span class="text-gray-400 italic">-</span>
                                                 </template>
                                             </td>
-                                            <td class="px-3.5 py-2.5 max-w-[180px]">
-                                                <template x-if="rec.products.length > 0">
+                                            <td class="px-3.5 py-2.5 max-w-[160px]">
+                                                <template x-if="rec.products && rec.products.length > 0">
                                                     <div class="space-y-0.5">
                                                         <template x-for="p in rec.products" :key="p">
-                                                            <span class="inline-block px-1.5 py-0.5 rounded text-[10px] bg-blue-50 text-blue-800 mr-1 mb-0.5" x-text="p"></span>
+                                                            <span class="inline-block px-1.5 py-0.5 rounded text-[10px] bg-blue-50 text-blue-800 mr-1 mb-0.5 font-medium" x-text="p"></span>
                                                         </template>
                                                     </div>
                                                 </template>
-                                                <template x-if="rec.products.length === 0">
-                                                    <span class="text-gray-400 italic">None</span>
+                                                <template x-if="!rec.products || rec.products.length === 0">
+                                                    <span class="text-gray-400 italic">-</span>
                                                 </template>
                                             </td>
                                             <td class="px-3.5 py-2.5 text-gray-700 whitespace-nowrap" x-text="rec.technician"></td>
                                             <td class="px-3.5 py-2.5 font-semibold text-gray-900 whitespace-nowrap" x-text="rec.mileage"></td>
                                             <td class="px-3.5 py-2.5 text-right font-bold text-gray-900 whitespace-nowrap" x-text="'LKR ' + rec.grand_total.toLocaleString('en-US', {minimumFractionDigits: 2})"></td>
+                                            <td class="px-3.5 py-2.5 text-center whitespace-nowrap">
+                                                <span 
+                                                    class="px-2 py-0.5 rounded-full text-[10px] font-bold"
+                                                    :class="{
+                                                        'bg-emerald-100 text-emerald-800': rec.status_raw === 'completed' || rec.status_raw === 'delivered',
+                                                        'bg-blue-100 text-blue-800': rec.status_raw === 'in_progress',
+                                                        'bg-amber-100 text-amber-800': rec.status_raw === 'pending',
+                                                        'bg-gray-100 text-gray-800': rec.status_raw === 'cancelled'
+                                                    }"
+                                                    x-text="rec.status"
+                                                ></span>
+                                            </td>
                                             <td class="px-3.5 py-2.5 text-right whitespace-nowrap">
                                                 <a 
                                                     :href="rec.view_url" 
                                                     target="_blank" 
-                                                    class="inline-flex items-center px-2 py-1 bg-[#0B1849] hover:bg-[#15286e] text-white text-[10px] font-bold rounded transition"
+                                                    class="inline-flex items-center px-2.5 py-1 bg-[#0B1849] hover:bg-[#15286e] text-white text-[11px] font-bold rounded-md transition shadow-2xs cursor-pointer"
                                                 >
-                                                    View Job
+                                                    View Job Card
                                                 </a>
                                             </td>
                                         </tr>
@@ -1655,7 +1983,7 @@
                     </template>
                 </div>
 
-                <div class="px-6 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-end">
+                <div class="px-6 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-end shrink-0">
                     <button 
                         type="button" 
                         @click="showHistoryModal = false"
@@ -1675,20 +2003,38 @@
         x-show="showInvoicesModal" 
         class="fixed inset-0 z-50 overflow-y-auto" 
         style="display: none;"
+        x-cloak
+        @keydown.escape.window="showInvoicesModal = false"
     >
-        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div 
-                x-show="showInvoicesModal" 
-                @click="showInvoicesModal = false"
-                class="fixed inset-0 transition-opacity bg-gray-900/60 backdrop-blur-xs"
-            ></div>
+        <!-- Pure Dim Backdrop (NO backdrop-blur, NO overlapping dialog) -->
+        <div 
+            x-show="showInvoicesModal" 
+            x-transition:enter="ease-out duration-200"
+            x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"
+            x-transition:leave="ease-in duration-150"
+            x-transition:leave-start="opacity-100"
+            x-transition:leave-end="opacity-0"
+            @click="showInvoicesModal = false"
+            class="fixed inset-0 bg-gray-900/60 transition-opacity"
+            aria-hidden="true"
+        ></div>
 
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
-
+        <!-- Center Container -->
+        <div class="flex min-h-full items-center justify-center p-4 text-center sm:p-0 pointer-events-none">
+            <!-- Modal Dialog Panel (Sharp, elevated with relative z-10 and pointer-events-auto) -->
             <div 
-                class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-5xl sm:w-full border border-gray-200"
+                x-show="showInvoicesModal"
+                x-transition:enter="ease-out duration-200"
+                x-transition:enter-start="opacity-0 scale-95"
+                x-transition:enter-end="opacity-100 scale-100"
+                x-transition:leave="ease-in duration-150"
+                x-transition:leave-start="opacity-100 scale-100"
+                x-transition:leave-end="opacity-0 scale-95"
+                @click.stop
+                class="relative z-10 pointer-events-auto transform overflow-hidden rounded-2xl bg-white text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-5xl border border-gray-200 flex flex-col max-h-[90vh]"
             >
-                <div class="px-6 py-4 bg-[#0B1849] text-white flex items-center justify-between">
+                <div class="px-6 py-4 bg-[#0B1849] text-white flex items-center justify-between shrink-0">
                     <div>
                         <div class="flex items-center space-x-2">
                             <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
@@ -1705,7 +2051,7 @@
                     </button>
                 </div>
 
-                <div class="p-6 space-y-4">
+                <div class="overflow-y-auto flex-1 p-6 space-y-4">
                     <!-- Filters Row -->
                     <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-gray-50 p-3.5 rounded-xl border border-gray-200 text-xs">
                         <div>
@@ -1841,7 +2187,7 @@
                     </div>
                 </div>
 
-                <div class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
+                <div class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3 shrink-0">
                     @if($selectedCompany)
                         <a 
                             href="{{ route('operations.company-vehicles.companies.statement', $selectedCompany) }}"

@@ -109,6 +109,23 @@ class Customer extends Model
         };
     }
 
+    public function getPaymentTermsCodeAttribute(): string
+    {
+        if (! $this->creditAccount) {
+            return 'immediate';
+        }
+
+        $days = (int) $this->creditAccount->payment_terms_days;
+
+        return match ($days) {
+            0 => 'immediate',
+            7 => '7_days',
+            15 => '15_days',
+            30 => '30_days',
+            default => 'custom',
+        };
+    }
+
     public function getDisplayNameAttribute(): string
     {
         return ($this->customer_type === 'company' && $this->company_name)
