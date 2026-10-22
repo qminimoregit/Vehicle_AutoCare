@@ -25,7 +25,7 @@ class DashboardController extends Controller
         $activeVehicleTypes = VehicleType::active()->count();
 
         $activeBranchId = BranchContext::getActiveBranchId();
-        $today = Carbon::today()->toDateString();
+        $today = Carbon::today('Asia/Colombo')->toDateString();
 
         // 1. Today's Jobs: Count jobs created today
         $todayJobsQuery = JobCard::where(function ($q) use ($today) {

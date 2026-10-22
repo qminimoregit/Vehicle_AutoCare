@@ -46,13 +46,14 @@ class SalaryController extends Controller
     {
         $this->authorizeSalaryView();
 
-        $year = (int) $request->input('year', today()->year);
-        $month = (int) $request->input('month', today()->month);
+        $now = Carbon::now('Asia/Colombo');
+        $year = (int) $request->input('year', $now->year);
+        $month = (int) $request->input('month', $now->month);
 
-        $periodDate = Carbon::createFromDate($year, $month, 1);
+        $periodDate = Carbon::createFromDate($year, $month, 1, 'Asia/Colombo');
         $monthStart = $periodDate->copy()->startOfMonth()->toDateString();
         $monthEnd = $periodDate->copy()->endOfMonth()->toDateString();
-        $today = Carbon::today();
+        $today = Carbon::today('Asia/Colombo');
 
         // Check if payroll period exists in database
         $period = PayrollPeriod::where('year', $year)

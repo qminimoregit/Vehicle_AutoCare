@@ -25,9 +25,9 @@ class AttendanceController extends Controller
             abort(403, 'Unauthorized access to employee attendance.');
         }
 
-        $dateStr = $request->input('date', today()->toDateString());
-        $selectedDate = Carbon::parse($dateStr);
-        $today = Carbon::today();
+        $today = Carbon::today('Asia/Colombo');
+        $dateStr = $request->input('date', $today->toDateString());
+        $selectedDate = Carbon::parse($dateStr, 'Asia/Colombo');
 
         // Staff can only mark for today or yesterday; Admin can mark/edit any date
         $canEdit = $user->isAdmin() || $selectedDate->isSameDay($today) || $selectedDate->isYesterday();
@@ -155,9 +155,9 @@ class AttendanceController extends Controller
             'attendances.*.is_paid_leave' => 'nullable|boolean',
         ]);
 
-        $attendanceDate = Carbon::parse($validated['attendance_date'])->toDateString();
-        $today = Carbon::today();
-        $targetDate = Carbon::parse($attendanceDate);
+        $today = Carbon::today('Asia/Colombo');
+        $attendanceDate = Carbon::parse($validated['attendance_date'], 'Asia/Colombo')->toDateString();
+        $targetDate = Carbon::parse($attendanceDate, 'Asia/Colombo');
 
         // Security check for staff: only today or yesterday
         if (! $user->isAdmin() && ! $targetDate->isSameDay($today) && ! $targetDate->isYesterday()) {
