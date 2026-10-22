@@ -41,7 +41,7 @@ $maxWidthClass = [
     <!-- Backdrop -->
     <div
         x-show="show"
-        class="fixed inset-0 transform transition-all"
+        class="fixed inset-0 bg-gray-900/60 backdrop-blur-xs transition-opacity"
         x-on:click="show = false"
         x-transition:enter="ease-out duration-200"
         x-transition:enter-start="opacity-0"
@@ -49,14 +49,14 @@ $maxWidthClass = [
         x-transition:leave="ease-in duration-150"
         x-transition:leave-start="opacity-100"
         x-transition:leave-end="opacity-0"
-    >
-        <div class="absolute inset-0 bg-gray-900/50 backdrop-blur-xs"></div>
-    </div>
+        aria-hidden="true"
+    ></div>
 
     <!-- Modal Box -->
     <div
         x-show="show"
-        class="mb-6 bg-white rounded-xl overflow-hidden shadow-xl transform transition-all sm:w-full {{ $maxWidthClass }} border border-gray-200 z-10"
+        @click.stop
+        class="relative z-10 pointer-events-auto my-6 bg-white rounded-2xl overflow-hidden shadow-2xl transform transition-all w-full {{ $maxWidthClass }} border border-gray-200"
         x-transition:enter="ease-out duration-200"
         x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
         x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"

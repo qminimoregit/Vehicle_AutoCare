@@ -12,6 +12,12 @@
         absentCount: 0,
         calendarOpen: false,
 
+        init() {
+            this.$watch('showConfirmModal', (isOpen) => {
+                document.body.classList.toggle('overflow-hidden', Boolean(isOpen));
+            });
+        },
+
         selectAllPresent() {
             document.querySelectorAll('.employee-row').forEach(row => {
                 let p = row.querySelector('.present-cb');
@@ -546,27 +552,59 @@
     <div 
         x-show="showConfirmModal" 
         x-cloak 
+        @keydown.escape.window="showConfirmModal = false"
         class="fixed inset-0 z-50 overflow-y-auto"
         style="display: none;"
+        aria-labelledby="attendance-confirm-title"
+        role="dialog"
+        aria-modal="true"
     >
-        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div @click="showConfirmModal = false" class="fixed inset-0 transition-opacity bg-gray-900/50 backdrop-blur-xs"></div>
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+        <!-- 1. Backdrop Overlay (Applies dimming and subtle blur ONLY to the page behind the modal) -->
+        <div 
+            x-show="showConfirmModal"
+            x-transition:enter="ease-out duration-200"
+            x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"
+            x-transition:leave="ease-in duration-150"
+            x-transition:leave-start="opacity-100"
+            x-transition:leave-end="opacity-0"
+            @click="showConfirmModal = false" 
+            class="fixed inset-0 bg-gray-900/60 backdrop-blur-xs transition-opacity"
+            aria-hidden="true"
+        ></div>
 
-            <div class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full p-6">
+        <!-- 2. Centering Wrapper (pointer-events-none so backdrop clicks work in margins) -->
+        <div class="flex min-h-full items-center justify-center p-4 text-center sm:p-0 pointer-events-none">
+            <!-- 3. Modal Dialog Panel (Sharp, elevated with relative z-10 and pointer-events-auto) -->
+            <div 
+                x-show="showConfirmModal"
+                x-transition:enter="ease-out duration-200"
+                x-transition:enter-start="opacity-0 scale-95"
+                x-transition:enter-end="opacity-100 scale-100"
+                x-transition:leave="ease-in duration-150"
+                x-transition:leave-start="opacity-100 scale-100"
+                x-transition:leave-end="opacity-0 scale-95"
+                @click.stop
+                class="relative z-10 pointer-events-auto transform overflow-hidden rounded-2xl bg-white text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-md border border-gray-200 p-6"
+            >
                 <div class="flex items-center justify-between pb-3 border-b border-gray-100 mb-3">
                     <div>
-                        <h3 class="text-base font-bold text-gray-900">Confirm Daily Attendance</h3>
-                        <p class="text-xs text-gray-500">{{ $selectedDate->format('l, d F Y') }}</p>
+                        <h3 class="text-base font-bold text-gray-900" id="attendance-confirm-title">Confirm Daily Attendance</h3>
+                        <p class="text-xs text-gray-500 mt-0.5">{{ $selectedDate->format('l, d F Y') }}</p>
                     </div>
-                    <button type="button" @click="showConfirmModal = false" class="text-gray-400 hover:text-gray-600">
+                    <button 
+                        type="button" 
+                        @click="showConfirmModal = false" 
+                        class="text-gray-400 hover:text-gray-600 transition cursor-pointer p-1 rounded-lg"
+                        aria-label="Close dialog"
+                    >
                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
                 </div>
 
-                <div class="my-4 p-4 bg-gray-50 rounded-xl space-y-2.5 text-sm">
+                <div class="my-4 p-4 bg-gray-50 rounded-xl space-y-2.5 text-sm border border-gray-100">
                     <div class="flex items-center justify-between">
                         <span class="flex items-center text-xs font-bold text-emerald-800">
                             <span class="w-2 h-2 rounded-full bg-emerald-500 mr-2"></span>
@@ -601,14 +639,14 @@
                     <button 
                         type="button" 
                         @click="showConfirmModal = false" 
-                        class="px-4 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
+                        class="px-4 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition cursor-pointer min-h-[38px]"
                     >
                         Cancel
                     </button>
                     <button 
                         type="button" 
                         @click="confirmAndSubmit()" 
-                        class="px-5 py-2 text-xs font-bold text-white bg-[#0B1849] hover:bg-[#15286e] rounded-lg shadow-xs transition"
+                        class="px-5 py-2 text-xs font-bold text-white bg-[#0B1849] hover:bg-[#15286e] rounded-lg shadow-xs transition cursor-pointer min-h-[38px]"
                     >
                         Confirm & Save Attendance
                     </button>

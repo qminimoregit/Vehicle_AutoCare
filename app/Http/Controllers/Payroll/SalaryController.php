@@ -61,6 +61,12 @@ class SalaryController extends Controller
             ->with(['items.employee', 'items.payments', 'approver'])
             ->first();
 
+        if ($period) {
+            $period->items->each(function ($item) use ($period) {
+                $item->setRelation('period', $period);
+            });
+        }
+
         // Handle "Generate Salary" button action
         if ($request->has('generate') || $request->input('action') === 'generate') {
             $this->authorizeAdmin();
@@ -144,12 +150,20 @@ class SalaryController extends Controller
             ['status' => PayrollPeriod::STATUS_DRAFT]
         );
 
-        // Active employees, plus any employee with recorded attendance in this month
+        // Active employees eligible in this period (joined on or before month end), plus any employee with recorded attendance in this month
         $empIdsWithAttendance = EmployeeAttendance::whereBetween('attendance_date', [$monthStart, $monthEnd])
             ->pluck('employee_id');
 
-        $employees = Employee::where('is_active', true)
+        $employees = Employee::query()
+            ->where(function ($query) use ($monthEnd) {
+                $query->where('is_active', true)
+                    ->where(function ($sub) use ($monthEnd) {
+                        $sub->whereDate('joining_date', '<=', $monthEnd)
+                            ->orWhereNull('joining_date');
+                    });
+            })
             ->orWhereIn('id', $empIdsWithAttendance)
+            ->orderBy('name')
             ->get();
 
         foreach ($employees as $employee) {

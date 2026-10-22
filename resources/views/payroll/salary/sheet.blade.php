@@ -355,17 +355,44 @@
     <div 
         x-show="showPaymentModal" 
         x-cloak 
+        @keydown.escape.window="showPaymentModal = false"
         class="fixed inset-0 z-50 overflow-y-auto"
         style="display: none;"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="payment-modal-title"
     >
-        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div @click="showPaymentModal = false" class="fixed inset-0 transition-opacity bg-gray-900/50 backdrop-blur-xs"></div>
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+        <!-- 1. Backdrop Overlay (Dimming and blur applied strictly behind the modal) -->
+        <div 
+            x-show="showPaymentModal"
+            @click="showPaymentModal = false"
+            x-transition:enter="ease-out duration-300"
+            x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"
+            x-transition:leave="ease-in duration-200"
+            x-transition:leave-start="opacity-100"
+            x-transition:leave-end="opacity-0"
+            class="fixed inset-0 bg-gray-900/60 backdrop-blur-xs transition-opacity"
+            aria-hidden="true"
+        ></div>
 
-            <div class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full p-6">
+        <!-- 2. Centering Wrapper (pointer-events-none lets outside clicks pass to backdrop) -->
+        <div class="flex min-h-full items-center justify-center p-4 text-center sm:p-0 pointer-events-none">
+            <!-- 3. Modal Dialog Panel (Sharp, elevated with relative z-10 and pointer-events-auto) -->
+            <div 
+                x-show="showPaymentModal"
+                x-transition:enter="ease-out duration-300"
+                x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+                x-transition:leave="ease-in duration-200"
+                x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
+                x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                @click.stop
+                class="relative z-10 pointer-events-auto w-full max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6 my-8 text-left align-middle transition-all transform bg-white shadow-2xl rounded-2xl border border-gray-100"
+            >
                 <div class="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
-                    <h3 class="text-base font-bold text-gray-900">Record Salary Payment</h3>
-                    <button type="button" @click="showPaymentModal = false" class="text-gray-400 hover:text-gray-600">
+                    <h3 class="text-base font-bold text-gray-900" id="payment-modal-title">Record Salary Payment</h3>
+                    <button type="button" @click="showPaymentModal = false" class="text-gray-400 hover:text-gray-600 transition cursor-pointer p-1 rounded-lg" aria-label="Close dialog">
                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                         </svg>
@@ -430,10 +457,10 @@
                     </div>
 
                     <div class="pt-3 border-t border-gray-100 flex justify-end gap-2">
-                        <button type="button" @click="showPaymentModal = false" class="px-3 py-1.5 text-xs font-semibold text-gray-600 bg-gray-100 rounded-lg">
+                        <button type="button" @click="showPaymentModal = false" class="px-3 py-1.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition cursor-pointer">
                             Cancel
                         </button>
-                        <button type="submit" class="px-4 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg">
+                        <button type="submit" class="px-4 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-xs transition cursor-pointer">
                             Confirm Payment
                         </button>
                     </div>
