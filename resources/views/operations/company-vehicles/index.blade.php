@@ -3,8 +3,9 @@
 @section('title', 'Company & Vehicles')
 
 @section('content')
-<div 
-    x-data="{
+<script>
+function companyVehicles() {
+    return {
         // Selected Company State
         selectedCompanyId: {{ $selectedCompany ? $selectedCompany->id : 'null' }},
 
@@ -15,6 +16,23 @@
         showEditVehicleModal: false,
         showHistoryModal: false,
         showInvoicesModal: false,
+
+        // Add Company State
+        companyAddForm: {
+            company_name: '',
+            registration_number: '',
+            customer_name: '',
+            phone: '',
+            email: '',
+            address: '',
+            credit_limit: 0,
+            payment_terms: '30_days',
+            custom_days: 30,
+            status: 'active',
+            notes: ''
+        },
+        companyAddErrors: {},
+        isSubmittingAddCompany: false,
 
         // Errors & Submitting states
         companyErrors: {},
@@ -48,9 +66,9 @@
         vehicleForm: {
             id: null,
             company_id: {{ $selectedCompany ? $selectedCompany->id : 'null' }},
-            company_name: '{{ $selectedCompany ? addslashes($selectedCompany->company_name) : '' }}',
+            company_name: {{ Js::from($selectedCompany ? $selectedCompany->company_name : '') }},
             vehicle_number: '',
-            vehicle_type_id: '{{ $vehicleTypes->first()?->id ?? '' }}',
+            vehicle_type_id: {{ Js::from($vehicleTypes->first()?->id ? (string) $vehicleTypes->first()->id : '') }},
             brand: '',
             model: '',
             year_of_manufacture: '',
@@ -142,10 +160,10 @@
             if (!this.selectedCompanyId) return;
             this.loadingInvoices = true;
             let params = new URLSearchParams({
-                date_from: this.invoiceFilters.date_from,
-                date_to: this.invoiceFilters.date_to,
-                vehicle_id: this.invoiceFilters.vehicle_id,
-                status: this.invoiceFilters.status
+                date_from: this.invoiceFilters.date_from || '',
+                date_to: this.invoiceFilters.date_to || '',
+                vehicle_id: this.invoiceFilters.vehicle_id || '',
+                status: this.invoiceFilters.status || 'all'
             });
 
             try {
@@ -172,10 +190,9 @@
 
         // Open Add Company Modal
         openAddCompany() {
-            this.companyErrors = {};
-            this.isSubmittingCompany = false;
-            this.companyForm = {
-                id: null,
+            this.companyAddErrors = {};
+            this.isSubmittingAddCompany = false;
+            this.companyAddForm = {
                 company_name: '',
                 registration_number: '',
                 customer_name: '',
@@ -189,6 +206,57 @@
                 notes: ''
             };
             this.showAddCompanyModal = true;
+        },
+
+        async submitAddCompany(event) {
+            this.companyAddErrors = {};
+            this.isSubmittingAddCompany = true;
+
+            let form = event.target;
+            let url = form.action || '{{ route('operations.company-vehicles.companies.store') }}';
+            let formData = new FormData(form);
+            let csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
+
+            try {
+                let res = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': csrfToken
+                    },
+                    body: formData
+                });
+
+                let data = await res.json().catch(() => ({}));
+
+                if (!res.ok) {
+                    if (res.status === 422 && data.errors) {
+                        this.companyAddErrors = data.errors;
+                    } else if (data.message) {
+                        this.companyAddErrors = { general: [data.message] };
+                    } else {
+                        this.companyAddErrors = { general: ['An unexpected error occurred. Please try again.'] };
+                    }
+                    return;
+                }
+
+                // Success! Close modal and refresh company list with the newly created company selected
+                this.showAddCompanyModal = false;
+                let newCompanyId = data.company_id || (data.company ? data.company.id : '');
+                let successMessage = data.message || 'Company registered successfully.';
+                let targetUrl = new URL('{{ route('operations.company-vehicles.index') }}', window.location.origin);
+                if (newCompanyId) {
+                    targetUrl.searchParams.set('selected_id', newCompanyId);
+                }
+                targetUrl.searchParams.set('success_msg', successMessage);
+                window.location.href = targetUrl.toString();
+            } catch (err) {
+                console.error(err);
+                this.companyAddErrors = { general: ['Network or server communication error. Please try again.'] };
+            } finally {
+                this.isSubmittingAddCompany = false;
+            }
         },
 
         // Open Edit Company Modal
@@ -214,11 +282,16 @@
 
         async submitEditCompany(event) {
             this.companyErrors = {};
+            if (!this.companyForm.id) {
+                this.companyErrors = { general: ['Invalid company selected for editing.'] };
+                return;
+            }
             this.isSubmittingCompany = true;
 
             let form = event.target;
-            let url = form.action;
+            let url = '{{ url('operations/company-vehicles/companies') }}/' + this.companyForm.id;
             let formData = new FormData(form);
+            let csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
 
             try {
                 let res = await fetch(url, {
@@ -226,12 +299,12 @@
                     headers: {
                         'Accept': 'application/json',
                         'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                        'X-CSRF-TOKEN': csrfToken
                     },
                     body: formData
                 });
 
-                let data = await res.json();
+                let data = await res.json().catch(() => ({}));
 
                 if (!res.ok) {
                     if (res.status === 422 && data.errors) {
@@ -267,7 +340,7 @@
                 company_id: companyId,
                 company_name: companyName,
                 vehicle_number: '',
-                vehicle_type_id: '{{ $vehicleTypes->first()?->id ?? '' }}',
+                vehicle_type_id: {{ Js::from($vehicleTypes->first()?->id ? (string) $vehicleTypes->first()->id : '') }},
                 brand: '',
                 model: '',
                 year_of_manufacture: '',
@@ -289,7 +362,7 @@
             this.vehicleForm = {
                 id: v.id,
                 company_id: v.customer_id,
-                company_name: '{{ $selectedCompany ? addslashes($selectedCompany->company_name) : '' }}',
+                company_name: {{ Js::from($selectedCompany ? $selectedCompany->company_name : '') }},
                 vehicle_number: v.vehicle_number || '',
                 vehicle_type_id: String(v.vehicle_type_id || ''),
                 brand: v.brand || '',
@@ -312,6 +385,7 @@
             let form = event.target;
             let url = form.action;
             let formData = new FormData(form);
+            let csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
 
             try {
                 let res = await fetch(url, {
@@ -319,12 +393,12 @@
                     headers: {
                         'Accept': 'application/json',
                         'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                        'X-CSRF-TOKEN': csrfToken
                     },
                     body: formData
                 });
 
-                let data = await res.json();
+                let data = await res.json().catch(() => ({}));
 
                 if (!res.ok) {
                     if (res.status === 422 && data.errors) {
@@ -350,19 +424,47 @@
                 this.isSubmittingVehicle = false;
             }
         }
-    }"
+    };
+}
+
+window.companyVehicles = companyVehicles;
+if (window.Alpine) {
+    window.Alpine.data('companyVehicles', companyVehicles);
+} else {
+    document.addEventListener('alpine:init', () => {
+        window.Alpine.data('companyVehicles', companyVehicles);
+    });
+}
+</script>
+
+<div 
+    x-data="companyVehicles()"
     class="space-y-6 max-w-7xl mx-auto"
 >
-    <!-- FLASH SUCCESS ALERT -->
-    @if(request('success_msg'))
+    <!-- FLASH SUCCESS & ERROR ALERTS -->
+    @if(request('success_msg') || session('success'))
         <div x-data="{ show: true }" x-show="show" class="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center justify-between shadow-xs">
             <div class="flex items-center space-x-2.5">
                 <svg class="w-5 h-5 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                 </svg>
-                <span class="text-sm font-semibold">{{ request('success_msg') }}</span>
+                <span class="text-sm font-semibold">{{ request('success_msg') ?? session('success') }}</span>
             </div>
             <button type="button" @click="show = false" class="text-emerald-600 hover:text-emerald-800 cursor-pointer">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+    @endif
+
+    @if(session('error'))
+        <div x-data="{ show: true }" x-show="show" class="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 flex items-center justify-between shadow-xs">
+            <div class="flex items-center space-x-2.5">
+                <svg class="w-5 h-5 text-rose-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span class="text-sm font-semibold">{{ session('error') }}</span>
+            </div>
+            <button type="button" @click="show = false" class="text-rose-600 hover:text-rose-800 cursor-pointer">
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
         </div>
@@ -624,7 +726,7 @@
 
                         <button 
                             type="button" 
-                            @click="openAddVehicle({{ $selectedCompany->id }}, '{{ addslashes($selectedCompany->company_name) }}')"
+                            @click="openAddVehicle({{ $selectedCompany->id }}, {{ Js::from($selectedCompany->company_name) }})"
                             class="inline-flex items-center px-3 py-1.5 bg-[#0B1849] hover:bg-[#15286e] text-white text-xs font-bold rounded-lg shadow-xs transition cursor-pointer"
                         >
                             <svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -795,7 +897,7 @@
 
                         <div>
                             <a 
-                                :href="'{{ route('billing.multiple-invoice-payment.index') }}?customer_id=' + selectedCompanyId"
+                                href="{{ route('billing.multiple-invoice-payment.index', ['customer_id' => $selectedCompany->id, 'tab' => 'bulk']) }}"
                                 class="inline-flex items-center px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition shadow-2xs cursor-pointer"
                             >
                                 <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -878,8 +980,32 @@
                     </button>
                 </div>
 
-                <form action="{{ route('operations.company-vehicles.companies.store') }}" method="POST" class="overflow-y-auto flex-1 p-6 space-y-4">
+                <form 
+                    action="{{ route('operations.company-vehicles.companies.store') }}" 
+                    method="POST" 
+                    @submit.prevent="submitAddCompany($event)"
+                    class="overflow-y-auto flex-1 p-6 space-y-4"
+                >
                     @csrf
+
+                    <!-- Inline Validation Errors Container -->
+                    <template x-if="Object.keys(companyAddErrors).length > 0">
+                        <div class="p-3.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 space-y-1">
+                            <div class="font-bold flex items-center gap-1.5 text-red-800">
+                                <svg class="w-4 h-4 shrink-0 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                <span>Please fix the following errors:</span>
+                            </div>
+                            <ul class="list-disc list-inside space-y-0.5 ml-1">
+                                <template x-for="(errList, field) in companyAddErrors" :key="field">
+                                    <template x-for="err in errList" :key="err">
+                                        <li x-text="err"></li>
+                                    </template>
+                                </template>
+                            </ul>
+                        </div>
+                    </template>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <!-- Company Name -->
@@ -890,7 +1016,7 @@
                             <input 
                                 type="text" 
                                 name="company_name" 
-                                x-model="companyForm.company_name" 
+                                x-model="companyAddForm.company_name" 
                                 placeholder="e.g. ABC Transport (Pvt) Ltd"
                                 required
                                 class="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white font-medium"
@@ -905,7 +1031,7 @@
                             <input 
                                 type="text" 
                                 name="registration_number" 
-                                x-model="companyForm.registration_number" 
+                                x-model="companyAddForm.registration_number" 
                                 placeholder="e.g. PV-12345"
                                 class="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white font-mono"
                             >
@@ -918,7 +1044,7 @@
                             </label>
                             <select 
                                 name="status" 
-                                x-model="companyForm.status" 
+                                x-model="companyAddForm.status" 
                                 class="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white"
                             >
                                 <option value="active">Active</option>
@@ -934,7 +1060,7 @@
                             <input 
                                 type="text" 
                                 name="customer_name" 
-                                x-model="companyForm.customer_name" 
+                                x-model="companyAddForm.customer_name" 
                                 placeholder="e.g. Nimal Perera"
                                 required
                                 class="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white font-medium"
@@ -949,7 +1075,7 @@
                             <input 
                                 type="text" 
                                 name="phone" 
-                                x-model="companyForm.phone" 
+                                x-model="companyAddForm.phone" 
                                 placeholder="e.g. 0771234567"
                                 required
                                 class="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white font-medium"
@@ -964,7 +1090,7 @@
                             <input 
                                 type="email" 
                                 name="email" 
-                                x-model="companyForm.email" 
+                                x-model="companyAddForm.email" 
                                 placeholder="e.g. billing@abctransport.lk"
                                 class="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white"
                             >
@@ -978,7 +1104,7 @@
                             <input 
                                 type="text" 
                                 name="address" 
-                                x-model="companyForm.address" 
+                                x-model="companyAddForm.address" 
                                 placeholder="e.g. 125, Baseline Road, Colombo 09"
                                 class="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white"
                             >
@@ -994,7 +1120,7 @@
                                 step="0.01"
                                 min="0"
                                 name="credit_limit" 
-                                x-model="companyForm.credit_limit" 
+                                x-model="companyAddForm.credit_limit" 
                                 placeholder="e.g. 100000"
                                 class="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white font-semibold"
                             >
@@ -1007,7 +1133,7 @@
                             </label>
                             <select 
                                 name="payment_terms" 
-                                x-model="companyForm.payment_terms" 
+                                x-model="companyAddForm.payment_terms" 
                                 class="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white"
                             >
                                 <option value="immediate">Immediate Payment</option>
@@ -1019,7 +1145,7 @@
                         </div>
 
                         <!-- Custom Days (if custom) -->
-                        <div x-show="companyForm.payment_terms === 'custom'" class="sm:col-span-2">
+                        <div x-show="companyAddForm.payment_terms === 'custom'" class="sm:col-span-2">
                             <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
                                 Custom Payment Terms (Days)
                             </label>
@@ -1028,9 +1154,23 @@
                                 min="1" 
                                 max="365"
                                 name="custom_days" 
-                                x-model="companyForm.custom_days" 
+                                x-model="companyAddForm.custom_days" 
                                 class="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white"
                             >
+                        </div>
+
+                        <!-- Notes -->
+                        <div class="sm:col-span-2">
+                            <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                                Notes <span class="text-gray-400 font-normal lowercase">(optional)</span>
+                            </label>
+                            <textarea 
+                                name="notes" 
+                                x-model="companyAddForm.notes" 
+                                rows="2"
+                                placeholder="Additional notes about company or credit agreement..."
+                                class="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white"
+                            ></textarea>
                         </div>
                     </div>
 
@@ -1044,9 +1184,16 @@
                         </button>
                         <button 
                             type="submit" 
-                            class="px-5 py-2 text-xs font-bold text-white bg-[#0B1849] hover:bg-[#15286e] rounded-lg shadow-sm transition cursor-pointer"
+                            :disabled="isSubmittingAddCompany"
+                            class="px-5 py-2 text-xs font-bold text-white bg-[#0B1849] hover:bg-[#15286e] rounded-lg shadow-sm transition cursor-pointer flex items-center space-x-1.5"
                         >
-                            Save Company
+                            <template x-if="isSubmittingAddCompany">
+                                <svg class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </template>
+                            <span>Save Company</span>
                         </button>
                     </div>
                 </form>
@@ -1253,6 +1400,7 @@
                             </select>
                         </div>
 
+                        <!-- Custom Days (if custom) -->
                         <div x-show="companyForm.payment_terms === 'custom'" class="sm:col-span-2">
                             <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
                                 Custom Payment Terms (Days)
@@ -1265,6 +1413,20 @@
                                 x-model="companyForm.custom_days" 
                                 class="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white"
                             >
+                        </div>
+
+                        <!-- Notes -->
+                        <div class="sm:col-span-2">
+                            <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                                Notes <span class="text-gray-400 font-normal lowercase">(optional)</span>
+                            </label>
+                            <textarea 
+                                name="notes" 
+                                x-model="companyForm.notes" 
+                                rows="2"
+                                placeholder="Additional notes about company or credit agreement..."
+                                class="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] focus:outline-none bg-white"
+                            ></textarea>
                         </div>
                     </div>
 

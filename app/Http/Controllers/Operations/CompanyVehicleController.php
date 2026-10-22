@@ -84,7 +84,7 @@ class CompanyVehicleController extends Controller
     /**
      * Register a new company customer with credit terms.
      */
-    public function storeCompany(Request $request): RedirectResponse
+    public function storeCompany(Request $request): RedirectResponse|JsonResponse
     {
         $user = Auth::user();
         if (! $user->isAdmin() && ! $user->hasPermission('view_employees')) {
@@ -120,7 +120,14 @@ class CompanyVehicleController extends Controller
             ->first();
 
         if ($existing) {
-            return back()->withInput()->with('error', "Company '{$existing->company_name}' is already registered in the system (Contact: {$existing->customer_name}, Phone: {$existing->phone}).");
+            $msg = "Company '{$existing->company_name}' is already registered in the system (Contact: {$existing->customer_name}, Phone: {$existing->phone}).";
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'message' => $msg,
+                    'errors' => ['company_name' => [$msg]],
+                ], 422);
+            }
+            return back()->withInput()->with('error', $msg);
         }
 
         $termsDays = match ($validated['payment_terms']) {
@@ -167,8 +174,19 @@ class CompanyVehicleController extends Controller
             return $customer;
         });
 
-        return redirect()->route('operations.company-vehicles.index', ['selected_id' => $company->id])
-            ->with('success', "Company '{$company->company_name}' registered successfully. You can now add vehicles.");
+        $successMessage = "Company '{$company->company_name}' registered successfully. You can now add vehicles.";
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $successMessage,
+                'company_id' => $company->id,
+                'redirect' => route('operations.company-vehicles.index', ['selected_id' => $company->id, 'success_msg' => $successMessage]),
+            ]);
+        }
+
+        return redirect()->route('operations.company-vehicles.index', ['selected_id' => $company->id, 'success_msg' => $successMessage])
+            ->with('success', $successMessage);
     }
 
     /**
