@@ -20,6 +20,8 @@ class JobCard extends Model
         'next_service_mileage',
         'status',
         'assigned_to',
+        'driver_name',
+        'driver_mobile',
         'service_total',
         'product_total',
         'discount_amount',
@@ -78,6 +80,11 @@ class JobCard extends Model
     public function vehicle()
     {
         return $this->belongsTo(Vehicle::class);
+    }
+
+    public function company()
+    {
+        return $this->belongsTo(Customer::class, 'customer_id')->where('customer_type', 'company');
     }
 
     public function vehicleType()

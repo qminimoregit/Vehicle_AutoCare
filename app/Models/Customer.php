@@ -87,6 +87,28 @@ class Customer extends Model
         return $this->customer_type === 'company';
     }
 
+    public function scopeCompany($query)
+    {
+        return $query->where('customer_type', 'company');
+    }
+
+    public function getPaymentTermsTextAttribute(): string
+    {
+        if (! $this->creditAccount) {
+            return 'Immediate Payment';
+        }
+
+        $days = (int) $this->creditAccount->payment_terms_days;
+
+        return match ($days) {
+            0 => 'Immediate Payment',
+            7 => '7 Days',
+            15 => '15 Days',
+            30 => '30 Days',
+            default => "Custom ({$days} Days)",
+        };
+    }
+
     public function getDisplayNameAttribute(): string
     {
         return ($this->customer_type === 'company' && $this->company_name)
@@ -94,3 +116,4 @@ class Customer extends Model
             : $this->customer_name;
     }
 }
+

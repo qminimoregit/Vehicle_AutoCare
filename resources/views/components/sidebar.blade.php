@@ -189,6 +189,17 @@
                             <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isJobCards ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
                             <span class="truncate">Job Cards</span>
                         </a>
+
+                        <!-- Company & Vehicles -->
+                        @php $isCompanyVehicles = request()->routeIs('operations.company-vehicles.*'); @endphp
+                        <a 
+                            href="{{ route('operations.company-vehicles.index') }}" 
+                            @click="if (window.innerWidth < 1024) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isCompanyVehicles ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isCompanyVehicles ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Company & Vehicles</span>
+                        </a>
                     </div>
                 </div>
 

@@ -516,11 +516,25 @@
                 <span class="text-gray-400 uppercase text-[10px] font-bold block">Vehicle Number</span>
                 <span class="font-extrabold text-base text-gray-900 tracking-wider block mt-0.5">{{ $jobCard->vehicle->vehicle_number }}</span>
                 <span class="text-gray-500 text-xs">{{ $jobCard->vehicle->make_model ?? 'Model not specified' }}</span>
+                @if($jobCard->driver_name || $jobCard->vehicle->driver_name)
+                    <div class="mt-1 text-[11px] text-gray-600 font-medium">
+                        Driver: {{ $jobCard->driver_name ?? $jobCard->vehicle->driver_name }}
+                        @if($jobCard->driver_mobile ?? $jobCard->vehicle->driver_mobile)
+                            ({{ $jobCard->driver_mobile ?? $jobCard->vehicle->driver_mobile }})
+                        @endif
+                    </div>
+                @endif
             </div>
             <div>
                 <span class="text-gray-400 uppercase text-[10px] font-bold block">Customer Details</span>
-                <span class="font-bold text-gray-900 block mt-0.5">{{ $jobCard->customer->customer_name }}</span>
-                <span class="text-gray-500 text-xs">{{ $jobCard->customer->phone }}</span>
+                @if($jobCard->customer->isCompany())
+                    <span class="font-bold text-[#0B1849] block mt-0.5">{{ $jobCard->customer->company_name }}</span>
+                    <span class="text-xs text-gray-600 block">Contact: {{ $jobCard->customer->customer_name }}</span>
+                    <span class="text-gray-500 text-xs">{{ $jobCard->customer->phone }}</span>
+                @else
+                    <span class="font-bold text-gray-900 block mt-0.5">{{ $jobCard->customer->customer_name }}</span>
+                    <span class="text-gray-500 text-xs">{{ $jobCard->customer->phone }}</span>
+                @endif
             </div>
             <div>
                 <span class="text-gray-400 uppercase text-[10px] font-bold block">Mileage Record</span>

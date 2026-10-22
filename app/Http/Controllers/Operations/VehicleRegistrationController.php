@@ -108,6 +108,11 @@ class VehicleRegistrationController extends Controller
                 'vehicle_type_id' => $vehicle->vehicle_type_id,
                 'vehicle_type_name' => $vehicle->vehicleType?->name,
                 'make_model' => $vehicle->make_model,
+                'brand' => $vehicle->brand,
+                'model' => $vehicle->model,
+                'year' => $vehicle->year_of_manufacture,
+                'driver_name' => $vehicle->driver_name,
+                'driver_mobile' => $vehicle->driver_mobile,
                 'current_mileage' => $vehicle->current_mileage,
                 'next_service_mileage' => $vehicle->next_service_mileage,
                 'notes' => $vehicle->notes,
@@ -154,6 +159,10 @@ class VehicleRegistrationController extends Controller
             'company_name' => ['nullable', 'string', 'max:150'],
             'address' => ['nullable', 'string', 'max:500'],
             'make_model' => ['nullable', 'string', 'max:100'],
+            'brand' => ['nullable', 'string', 'max:100'],
+            'model' => ['nullable', 'string', 'max:100'],
+            'driver_name' => ['nullable', 'string', 'max:150'],
+            'driver_mobile' => ['nullable', 'string', 'max:50'],
             'customer_notes' => ['nullable', 'string'],
             'ignore_active_job' => ['nullable', 'boolean'],
             'carpets' => ['nullable', 'array'],
@@ -175,20 +184,29 @@ class VehicleRegistrationController extends Controller
             if ($vehicle && $vehicle->customer_id) {
                 $customer = Customer::find($vehicle->customer_id);
                 $customerUpdate = [
-                    'customer_name' => $validated['customer_name'],
-                    'phone' => $validated['phone'],
                     'email' => $validated['email'] ?? $customer->email,
                     'address' => $validated['address'] ?? $customer->address,
                 ];
 
                 if ($customer->customer_type === 'company') {
+                    // For company customers, customer_name is the company contact person - do not replace with driver details
+                    if (! empty($validated['customer_name'])) {
+                        $customerUpdate['customer_name'] = $validated['customer_name'];
+                    }
+                    if (! empty($validated['phone'])) {
+                        $customerUpdate['phone'] = $validated['phone'];
+                    }
                     if (! empty($validated['company_name'])) {
                         $customerUpdate['company_name'] = $validated['company_name'];
                     }
-                } elseif (! empty($validated['customer_type'])) {
-                    $customerUpdate['customer_type'] = $validated['customer_type'];
-                    if ($validated['customer_type'] === 'company' && ! empty($validated['company_name'])) {
-                        $customerUpdate['company_name'] = $validated['company_name'];
+                } else {
+                    $customerUpdate['customer_name'] = $validated['customer_name'];
+                    $customerUpdate['phone'] = $validated['phone'];
+                    if (! empty($validated['customer_type'])) {
+                        $customerUpdate['customer_type'] = $validated['customer_type'];
+                        if ($validated['customer_type'] === 'company' && ! empty($validated['company_name'])) {
+                            $customerUpdate['company_name'] = $validated['company_name'];
+                        }
                     }
                 }
 
@@ -228,13 +246,23 @@ class VehicleRegistrationController extends Controller
             $currentMileage = ! empty($validated['current_mileage']) ? (int) $validated['current_mileage'] : ($vehicle?->current_mileage ?? 0);
             $nextMileage = ! empty($validated['next_service_mileage']) ? (int) $validated['next_service_mileage'] : ($vehicle?->next_service_mileage ?? null);
 
+            $brand = ! empty($validated['brand']) ? trim($validated['brand']) : ($vehicle?->brand ?? null);
+            $model = ! empty($validated['model']) ? trim($validated['model']) : ($vehicle?->model ?? null);
+            $makeModel = ! empty($validated['make_model']) ? trim($validated['make_model']) : ($vehicle?->make_model ?? trim("{$brand} {$model}"));
+            $driverName = ! empty($validated['driver_name']) ? trim($validated['driver_name']) : ($vehicle?->driver_name ?? null);
+            $driverMobile = ! empty($validated['driver_mobile']) ? trim($validated['driver_mobile']) : ($vehicle?->driver_mobile ?? null);
+
             if ($vehicle) {
                 $vehicle->update([
                     'customer_id' => $customer->id,
                     'vehicle_type_id' => $validated['vehicle_type_id'],
                     'vehicle_number' => strtoupper(trim($validated['vehicle_number'])),
                     'vehicle_number_normalized' => $normalized,
-                    'make_model' => $validated['make_model'] ?? $vehicle->make_model,
+                    'brand' => $brand,
+                    'model' => $model,
+                    'make_model' => $makeModel,
+                    'driver_name' => $driverName,
+                    'driver_mobile' => $driverMobile,
                     'current_mileage' => $currentMileage > 0 ? $currentMileage : $vehicle->current_mileage,
                     'next_service_mileage' => $nextMileage ?? $vehicle->next_service_mileage,
                     'notes' => $validated['customer_notes'] ?? $vehicle->notes,
@@ -245,7 +273,11 @@ class VehicleRegistrationController extends Controller
                     'vehicle_type_id' => $validated['vehicle_type_id'],
                     'vehicle_number' => strtoupper(trim($validated['vehicle_number'])),
                     'vehicle_number_normalized' => $normalized,
-                    'make_model' => $validated['make_model'] ?? null,
+                    'brand' => $brand,
+                    'model' => $model,
+                    'make_model' => $makeModel,
+                    'driver_name' => $driverName,
+                    'driver_mobile' => $driverMobile,
                     'current_mileage' => $currentMileage,
                     'next_service_mileage' => $nextMileage,
                     'notes' => $validated['customer_notes'] ?? null,
@@ -272,6 +304,8 @@ class VehicleRegistrationController extends Controller
                 'customer_id' => $customer->id,
                 'vehicle_id' => $vehicle->id,
                 'vehicle_type_id' => $vehicle->vehicle_type_id,
+                'driver_name' => $driverName,
+                'driver_mobile' => $driverMobile,
                 'current_mileage' => $currentMileage,
                 'next_service_mileage' => $nextMileage,
                 'status' => 'pending',

@@ -363,10 +363,27 @@
             </span>
         </div>
 
-        <div class="meta-row">
-            <span class="meta-label">Customer:</span>
-            <span class="meta-val font-bold">{{ $jobCard->customer?->customer_name ?? 'Customer Name' }}</span>
-        </div>
+        @if($jobCard->customer?->isCompany())
+            <div class="meta-row">
+                <span class="meta-label">Company:</span>
+                <span class="meta-val font-black">{{ $jobCard->customer->company_name }}</span>
+            </div>
+            <div class="meta-row">
+                <span class="meta-label">Contact:</span>
+                <span class="meta-val font-bold">{{ $jobCard->customer->customer_name }}</span>
+            </div>
+            @if($jobCard->driver_name || $jobCard->vehicle?->driver_name)
+                <div class="meta-row">
+                    <span class="meta-label">Driver:</span>
+                    <span class="meta-val">{{ $jobCard->driver_name ?? $jobCard->vehicle?->driver_name }} {{ ($jobCard->driver_mobile ?? $jobCard->vehicle?->driver_mobile) ? '('.($jobCard->driver_mobile ?? $jobCard->vehicle?->driver_mobile).')' : '' }}</span>
+                </div>
+            @endif
+        @else
+            <div class="meta-row">
+                <span class="meta-label">Customer:</span>
+                <span class="meta-val font-bold">{{ $jobCard->customer?->customer_name ?? 'Customer Name' }}</span>
+            </div>
+        @endif
 
         <div class="meta-row">
             <span class="meta-label">Phone:</span>

@@ -16,10 +16,14 @@ class Vehicle extends Model
         'vehicle_number',
         'vehicle_number_normalized',
         'make_model',
+        'brand',
+        'model',
         'year_of_manufacture',
         'color',
         'chassis_number',
         'engine_number',
+        'driver_name',
+        'driver_mobile',
         'current_mileage',
         'next_service_mileage',
         'notes',
@@ -47,6 +51,26 @@ class Vehicle extends Model
     public function customer()
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function company()
+    {
+        return $this->belongsTo(Customer::class, 'customer_id')->where('customer_type', 'company');
+    }
+
+    public function lastJobCard()
+    {
+        return $this->hasOne(JobCard::class)->latestOfMany();
+    }
+
+    public function lastCompletedJob()
+    {
+        return $this->hasOne(JobCard::class)->ofMany([
+            'date' => 'max',
+            'id' => 'max',
+        ], function ($query) {
+            $query->whereIn('status', ['completed', 'delivered']);
+        });
     }
 
     public function vehicleType()

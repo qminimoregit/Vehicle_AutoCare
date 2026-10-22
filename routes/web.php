@@ -25,6 +25,7 @@ use App\Http\Controllers\MasterData\ServiceController;
 use App\Http\Controllers\MasterData\ServicePaymentController;
 use App\Http\Controllers\MasterData\VehicleTypeController;
 use App\Http\Controllers\Operations\AppointmentController;
+use App\Http\Controllers\Operations\CompanyVehicleController;
 use App\Http\Controllers\Operations\CustomerController;
 use App\Http\Controllers\Operations\DirectSaleController;
 use App\Http\Controllers\Operations\InvoiceController;
@@ -229,6 +230,17 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/invoices/{invoice}/pdf', [InvoiceController::class, 'downloadPdf'])->name('invoices.pdf');
         Route::post('/invoices/{invoice}/payment', [InvoiceController::class, 'addPayment'])->name('invoices.payment');
         Route::post('/invoices/{invoice}/email', [InvoiceController::class, 'sendEmail'])->name('invoices.email');
+
+        // Company & Vehicles
+        Route::get('/company-vehicles', [CompanyVehicleController::class, 'index'])->name('company-vehicles.index');
+        Route::post('/company-vehicles/companies', [CompanyVehicleController::class, 'storeCompany'])->name('company-vehicles.companies.store');
+        Route::put('/company-vehicles/companies/{customer}', [CompanyVehicleController::class, 'updateCompany'])->name('company-vehicles.companies.update');
+        Route::post('/company-vehicles/vehicles', [CompanyVehicleController::class, 'storeVehicle'])->name('company-vehicles.vehicles.store');
+        Route::put('/company-vehicles/vehicles/{vehicle}', [CompanyVehicleController::class, 'updateVehicle'])->name('company-vehicles.vehicles.update');
+        Route::get('/company-vehicles/check-vehicle', [CompanyVehicleController::class, 'checkVehicle'])->name('company-vehicles.check-vehicle');
+        Route::get('/company-vehicles/vehicles/{vehicle}/history', [CompanyVehicleController::class, 'vehicleHistory'])->name('company-vehicles.vehicles.history');
+        Route::get('/company-vehicles/companies/{customer}/invoices', [CompanyVehicleController::class, 'invoices'])->name('company-vehicles.companies.invoices');
+        Route::get('/company-vehicles/companies/{customer}/statement', [CompanyVehicleController::class, 'statement'])->name('company-vehicles.companies.statement');
     });
 
     // Sales & Billing Module

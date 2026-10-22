@@ -16,6 +16,10 @@
         companyName: '{{ old('company_name') }}',
         address: '{{ old('address') }}',
         makeModel: '{{ old('make_model') }}',
+        brand: '{{ old('brand') }}',
+        model: '{{ old('model') }}',
+        driverName: '{{ old('driver_name') }}',
+        driverMobile: '{{ old('driver_mobile') }}',
         customerNotes: '{{ old('customer_notes') }}',
         showMoreDetails: false,
         
@@ -128,6 +132,10 @@
                     this.currentMileage = data.vehicle.current_mileage || '';
                     this.nextServiceMileage = data.vehicle.next_service_mileage || '';
                     this.customerNotes = data.vehicle.notes || '';
+                    this.driverName = data.vehicle.driver_name || '';
+                    this.driverMobile = data.vehicle.driver_mobile || '';
+                    this.brand = data.vehicle.brand || '';
+                    this.model = data.vehicle.model || '';
 
                     this.customerName = data.customer.customer_name || '';
                     this.phone = data.customer.phone || '';
@@ -153,6 +161,10 @@
                     this.companyName = '';
                     this.address = '';
                     this.makeModel = '';
+                    this.brand = '';
+                    this.model = '';
+                    this.driverName = '';
+                    this.driverMobile = '';
                     this.currentMileage = '';
                     this.nextServiceMileage = '';
                     this.customerNotes = '';
@@ -342,7 +354,7 @@
                 <!-- Customer Name -->
                 <div>
                     <label for="customer_name" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-                        Customer Name <span class="text-red-500">*</span>
+                        <span x-text="isCompanyCustomer ? 'Company Contact Person' : 'Customer Name'"></span> <span class="text-red-500">*</span>
                     </label>
                     <input 
                         type="text" 
@@ -361,7 +373,7 @@
                 <!-- Mobile Number -->
                 <div>
                     <label for="phone" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-                        Mobile Number <span class="text-red-500">*</span>
+                        <span x-text="isCompanyCustomer ? 'Company Phone / Mobile' : 'Mobile Number'"></span> <span class="text-red-500">*</span>
                     </label>
                     <input 
                         type="text" 
@@ -393,6 +405,49 @@
                     @error('email')
                         <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
                     @enderror
+                </div>
+            </div>
+
+            <!-- Company Driver & Fleet Details (When company vehicle is detected) -->
+            <div x-show="isCompanyCustomer" class="bg-indigo-50/70 border border-indigo-200 rounded-xl p-4 sm:p-5 space-y-3" style="display: none;">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-[#0B1849]"></span>
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-[#0B1849]">
+                            Company Vehicle Driver Details
+                        </h4>
+                    </div>
+                    <span class="text-[11px] text-indigo-700 font-medium">Company billing contact is protected. Enter driver info below.</span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="driver_name" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                            Driver Name <span class="text-gray-400 font-normal lowercase">(optional)</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            name="driver_name" 
+                            id="driver_name"
+                            x-model="driverName"
+                            placeholder="e.g. Kasun Fernando"
+                            class="block w-full py-2.5 px-3.5 text-sm sm:text-base text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] bg-white min-h-[44px]"
+                        >
+                    </div>
+
+                    <div>
+                        <label for="driver_mobile" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                            Driver Mobile <span class="text-gray-400 font-normal lowercase">(optional)</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            name="driver_mobile" 
+                            id="driver_mobile"
+                            x-model="driverMobile"
+                            placeholder="e.g. 0777654321"
+                            class="block w-full py-2.5 px-3.5 text-sm sm:text-base text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] bg-white min-h-[44px]"
+                        >
+                    </div>
                 </div>
             </div>
 
@@ -589,6 +644,8 @@
                                 placeholder="e.g. Toyota Prius, Honda Civic"
                                 class="block w-full py-2 px-3 text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#0B1849] bg-white min-h-[44px]"
                             >
+                            <input type="hidden" name="brand" :value="brand">
+                            <input type="hidden" name="model" :value="model">
                         </div>
 
                         <!-- Customer Type (Individual vs Company) -->
