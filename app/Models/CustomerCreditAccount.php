@@ -54,7 +54,7 @@ class CustomerCreditAccount extends Model
 
     /**
      * Compute current outstanding balance for this credit account:
-     * Opening balance + Total unpaid/partially paid balance of non-cancelled invoices.
+     * Opening balance + Total unpaid/partially paid balance of non-cancelled invoices + unbilled direct sales.
      */
     public function getOutstandingBalanceAttribute(): float
     {
@@ -63,7 +63,14 @@ class CustomerCreditAccount extends Model
             ->where('status', '!=', 'cancelled')
             ->sum('balance_amount');
 
-        return round($opening + $invoicesBalance, 2);
+        $directSalesBalance = (float) $this->customer->directSales()
+            ->whereNull('invoice_id')
+            ->where('status', 'completed')
+            ->whereRaw('grand_total > amount_paid')
+            ->selectRaw('SUM(grand_total - amount_paid) as unbilled_credit')
+            ->value('unbilled_credit');
+
+        return round($opening + $invoicesBalance + $directSalesBalance, 2);
     }
 
     /**
@@ -91,7 +98,7 @@ class CustomerCreditAccount extends Model
     }
 
     /**
-     * Calculate credit aging buckets based on invoice due dates:
+     * Calculate credit aging buckets based on invoice due dates and unbilled direct sales:
      * - Current / Not Yet Due
      * - 1-30 Days Overdue
      * - 31-60 Days Overdue
@@ -123,6 +130,35 @@ class CustomerCreditAccount extends Model
             $aging['total'] += $balance;
 
             $dueDate = $inv->due_date ? Carbon::parse($inv->due_date) : Carbon::parse($inv->invoice_date)->addDays($this->payment_terms_days ?: 30);
+
+            if ($today->lte($dueDate)) {
+                $aging['current'] += $balance;
+            } else {
+                $daysOverdue = $dueDate->diffInDays($today);
+
+                if ($daysOverdue <= 30) {
+                    $aging['days_1_30'] += $balance;
+                } elseif ($daysOverdue <= 60) {
+                    $aging['days_31_60'] += $balance;
+                } elseif ($daysOverdue <= 90) {
+                    $aging['days_61_90'] += $balance;
+                } else {
+                    $aging['over_90'] += $balance;
+                }
+            }
+        }
+
+        $unbilledDirectSales = $this->customer->directSales()
+            ->whereNull('invoice_id')
+            ->where('status', 'completed')
+            ->whereRaw('grand_total > amount_paid')
+            ->get();
+
+        foreach ($unbilledDirectSales as $ds) {
+            $balance = (float) ($ds->grand_total - $ds->amount_paid);
+            $aging['total'] += $balance;
+
+            $dueDate = $ds->sale_date ? Carbon::parse($ds->sale_date)->addDays($this->payment_terms_days ?: 30) : $today;
 
             if ($today->lte($dueDate)) {
                 $aging['current'] += $balance;

@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Reports;
 
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
+use App\Models\DirectSale;
 use App\Models\Invoice;
 use App\Services\BranchContext;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -105,6 +107,55 @@ class SalesReportController extends Controller
 
         $invoices = $query->orderBy('invoice_date', 'desc')->orderBy('id', 'desc')->get();
 
+        // Include Direct Sales that have not yet generated an official invoice
+        if ($saleType !== 'service_sale') {
+            $directSalesQuery = DirectSale::with(['customer', 'branch'])
+                ->whereNull('invoice_id')
+                ->where('status', '!=', 'cancelled')
+                ->whereDate('sale_date', '>=', $dateFrom)
+                ->whereDate('sale_date', '<=', $dateTo);
+
+            if ($branchId && $branchId !== 'all') {
+                $directSalesQuery->where('branch_id', $branchId);
+            }
+
+            if ($saleType === 'credit_sale') {
+                $directSalesQuery->whereRaw('grand_total > amount_paid');
+            }
+
+            if ($paymentStatus === 'paid') {
+                $directSalesQuery->whereRaw('amount_paid >= grand_total');
+            } elseif ($paymentStatus === 'partially_paid') {
+                $directSalesQuery->whereRaw('amount_paid > 0.0001 AND amount_paid < grand_total');
+            } elseif ($paymentStatus === 'unpaid') {
+                $directSalesQuery->whereRaw('amount_paid <= 0.0001 AND grand_total > 0.0001');
+            }
+
+            if ($search !== '') {
+                $directSalesQuery->where(function ($q) use ($search) {
+                    $q->where('bill_number', 'like', "%{$search}%")
+                        ->orWhere('sale_number', 'like', "%{$search}%")
+                        ->orWhereHas('customer', function ($cq) use ($search) {
+                            $cq->where('customer_name', 'like', "%{$search}%")
+                                ->orWhere('company_name', 'like', "%{$search}%")
+                                ->orWhere('phone', 'like', "%{$search}%");
+                        });
+                });
+            }
+
+            $unbilledDirectSales = $directSalesQuery->get();
+            foreach ($unbilledDirectSales as $ds) {
+                $ds->invoice_date = $ds->sale_date;
+                $ds->invoice_number = $ds->bill_number;
+                $ds->balance_amount = max(0, (float) $ds->grand_total - (float) $ds->amount_paid);
+                $ds->is_bill = true;
+                $ds->invoice_type = 'direct_sale';
+                $ds->jobCard = null;
+            }
+
+            $invoices = $invoices->concat($unbilledDirectSales)->sortByDesc(fn ($item) => $item->invoice_date ?? $item->sale_date)->values();
+        }
+
         // Calculate Summary Cards
         $totalDirectSales = 0.0;
         $totalServiceSales = 0.0;
@@ -121,7 +172,7 @@ class SalesReportController extends Controller
             $totalCollected += $paid;
             $totalOutstanding += $balance;
 
-            $isDirect = ($inv->invoice_type === 'direct_sale' || $inv->directSale !== null);
+            $isDirect = ($inv->invoice_type === 'direct_sale' || ($inv->is_bill ?? false) || $inv->directSale !== null);
             if ($isDirect) {
                 $totalDirectSales += $grand;
             } else {
@@ -182,6 +233,34 @@ class SalesReportController extends Controller
 
         $invoices = $query->orderBy('invoice_date', 'desc')->get();
 
+        if ($saleType !== 'service_sale') {
+            $directSalesQuery = DirectSale::with(['customer', 'branch'])
+                ->whereNull('invoice_id')
+                ->where('status', '!=', 'cancelled')
+                ->whereDate('sale_date', '>=', $dateFrom)
+                ->whereDate('sale_date', '<=', $dateTo);
+
+            if ($branchId && $branchId !== 'all') {
+                $directSalesQuery->where('branch_id', $branchId);
+            }
+
+            if ($saleType === 'credit_sale') {
+                $directSalesQuery->whereRaw('grand_total > amount_paid');
+            }
+
+            $unbilledDirectSales = $directSalesQuery->get();
+            foreach ($unbilledDirectSales as $ds) {
+                $ds->invoice_date = $ds->sale_date;
+                $ds->invoice_number = $ds->bill_number;
+                $ds->balance_amount = max(0, (float) $ds->grand_total - (float) $ds->amount_paid);
+                $ds->is_bill = true;
+                $ds->invoice_type = 'direct_sale';
+                $ds->jobCard = null;
+            }
+
+            $invoices = $invoices->concat($unbilledDirectSales)->sortByDesc(fn ($item) => $item->invoice_date ?? $item->sale_date)->values();
+        }
+
         $totalSales = (float) $invoices->sum('grand_total');
         $totalCollected = (float) $invoices->sum('amount_paid');
         $totalOutstanding = (float) $invoices->sum('balance_amount');
@@ -227,6 +306,31 @@ class SalesReportController extends Controller
         }
 
         $invoices = $query->orderBy('invoice_date', 'desc')->get();
+
+        if ($saleType !== 'service_sale') {
+            $directSalesQuery = DirectSale::with(['customer', 'branch'])
+                ->whereNull('invoice_id')
+                ->where('status', '!=', 'cancelled')
+                ->whereDate('sale_date', '>=', $dateFrom)
+                ->whereDate('sale_date', '<=', $dateTo);
+
+            if ($branchId && $branchId !== 'all') {
+                $directSalesQuery->where('branch_id', $branchId);
+            }
+
+            $unbilledDirectSales = $directSalesQuery->get();
+            foreach ($unbilledDirectSales as $ds) {
+                $ds->invoice_date = $ds->sale_date;
+                $ds->invoice_number = $ds->bill_number;
+                $ds->balance_amount = max(0, (float) $ds->grand_total - (float) $ds->amount_paid);
+                $ds->is_bill = true;
+                $ds->invoice_type = 'direct_sale';
+                $ds->jobCard = null;
+            }
+
+            $invoices = $invoices->concat($unbilledDirectSales)->sortByDesc(fn ($item) => $item->invoice_date ?? $item->sale_date)->values();
+        }
+
         $fileName = 'sales_report_'.now()->format('Y_m_d_His').'.csv';
 
         $headers = [
@@ -240,7 +344,7 @@ class SalesReportController extends Controller
 
             fputcsv($file, [
                 'Date',
-                'Invoice Number',
+                'Invoice / Bill Number',
                 'Customer / Company',
                 'Vehicle',
                 'Sale Type',
@@ -255,9 +359,12 @@ class SalesReportController extends Controller
             ]);
 
             foreach ($invoices as $inv) {
-                $isDirect = ($inv->invoice_type === 'direct_sale' || $inv->directSale !== null);
+                $isDirect = ($inv->invoice_type === 'direct_sale' || ($inv->is_bill ?? false) || $inv->directSale !== null);
                 $type = $isDirect ? 'Direct Sale' : 'Service Sale';
                 $vehicle = $inv->jobCard?->vehicle?->license_plate ?? '-';
+                $status = ($inv->balance_amount <= 0.0001 && $inv->grand_total > 0)
+                    ? 'Paid in Full'
+                    : ($inv->amount_paid > 0.0001 ? 'Partially Paid' : 'Unpaid');
 
                 fputcsv($file, [
                     $inv->invoice_date?->format('Y-m-d') ?? '-',
@@ -272,7 +379,7 @@ class SalesReportController extends Controller
                     number_format($inv->grand_total, 2, '.', ''),
                     number_format($inv->amount_paid, 2, '.', ''),
                     number_format($inv->balance_amount, 2, '.', ''),
-                    $inv->payment_status,
+                    $status,
                 ]);
             }
 

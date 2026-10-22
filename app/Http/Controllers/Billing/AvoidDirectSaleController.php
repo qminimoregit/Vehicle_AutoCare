@@ -39,6 +39,7 @@ class AvoidDirectSaleController extends Controller
                 'creator',
                 'items.product.uom',
                 'invoice.payments.creator',
+                'payments.creator',
             ]);
 
             // Branch scoping
@@ -49,16 +50,17 @@ class AvoidDirectSaleController extends Controller
                 });
             }
 
-            // Search by invoice number or sale number
+            // Search by bill number, invoice number, or sale number
             $directSale = $query->where(function ($q) use ($search) {
                 $q->where('sale_number', $search)
+                    ->orWhere('bill_number', $search)
                     ->orWhereHas('invoice', function ($iq) use ($search) {
                         $iq->where('invoice_number', $search);
                     });
             })->first();
 
             if (! $directSale) {
-                $error = "No Direct Sale found matching '{$search}'. Please check the Invoice or Sale number.";
+                $error = "No Direct Sale found matching '{$search}'. Please check the Bill, Invoice, or Sale number.";
             }
         }
 
@@ -128,7 +130,15 @@ class AvoidDirectSaleController extends Controller
                     'stock_reversed' => $stockRestored || $freshSale->stock_reversed,
                 ]);
 
-                // 4. Update Invoice & reverse financial records
+                // 4. Reverse financial records & payments
+                foreach ($freshSale->payments as $payment) {
+                    $payment->update([
+                        'status' => 'reversed',
+                        'reversed_at' => now(),
+                        'reversal_reason' => "Avoid Direct Sale #{$freshSale->sale_number} (Bill #{$freshSale->bill_number}): {$reason}",
+                    ]);
+                }
+
                 if ($invoice) {
                     $invoice->update([
                         'status' => 'cancelled',
@@ -140,7 +150,7 @@ class AvoidDirectSaleController extends Controller
                         'notes' => trim(($invoice->notes ? $invoice->notes."\n" : '')."Cancelled via Avoid Direct Sale: {$reason}"),
                     ]);
 
-                    // Reverse all linked payments
+                    // Reverse any payments linked specifically to the invoice
                     foreach ($invoice->payments as $payment) {
                         $payment->update([
                             'status' => 'reversed',

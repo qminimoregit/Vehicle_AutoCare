@@ -11,6 +11,7 @@ class Payment extends Model
 
     protected $fillable = [
         'invoice_id',
+        'direct_sale_id',
         'job_card_id',
         'customer_id',
         'payment_receipt_id',
@@ -65,6 +66,11 @@ class Payment extends Model
         return $this->belongsTo(Invoice::class);
     }
 
+    public function directSale()
+    {
+        return $this->belongsTo(DirectSale::class);
+    }
+
     public function jobCard()
     {
         return $this->belongsTo(JobCard::class);
@@ -92,6 +98,6 @@ class Payment extends Model
 
     public function getBranchAttribute()
     {
-        return $this->invoice?->branch ?? $this->jobCard?->branch;
+        return $this->invoice?->branch ?? ($this->directSale?->branch ?? $this->jobCard?->branch);
     }
 }

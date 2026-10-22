@@ -47,6 +47,11 @@ class Customer extends Model
         return $this->hasMany(Quotation::class);
     }
 
+    public function directSales()
+    {
+        return $this->hasMany(DirectSale::class);
+    }
+
     public function payments()
     {
         return $this->hasMany(Payment::class);
