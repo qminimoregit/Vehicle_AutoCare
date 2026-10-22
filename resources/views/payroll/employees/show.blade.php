@@ -148,7 +148,7 @@
             </a>
         </div>
         @if($employee->attendances->count() > 0)
-            <div class="overflow-x-auto">
+            <div class="responsive-table-wrapper">
                 <table class="min-w-full divide-y divide-gray-200 text-sm">
                     <thead class="bg-gray-50">
                         <tr>
@@ -213,7 +213,7 @@
             <span class="text-xs text-gray-400">All generated monthly payroll runs</span>
         </div>
         @if($employee->payrollItems->count() > 0)
-            <div class="overflow-x-auto">
+            <div class="responsive-table-wrapper">
                 <table class="min-w-full divide-y divide-gray-200 text-sm">
                     <thead class="bg-gray-50">
                         <tr>
@@ -293,7 +293,7 @@
             <h3 class="text-sm font-semibold text-gray-900">Daily Wage History & Historical Snapshots</h3>
             <p class="text-xs text-gray-500 mt-0.5">Wage rate periods are immutable to safeguard historical payroll calculations.</p>
         </div>
-        <div class="overflow-x-auto">
+        <div class="responsive-table-wrapper">
             <table class="min-w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
@@ -363,7 +363,7 @@
                 </button>
             @endif
         </div>
-        <div class="overflow-x-auto">
+        <div class="responsive-table-wrapper">
             <table class="min-w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
@@ -432,7 +432,7 @@
             <div @click="showAdvanceModal = false" class="fixed inset-0 transition-opacity bg-gray-900/50 backdrop-blur-xs"></div>
             <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
 
-            <div class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full p-6">
+            <div class="inline-block align-bottom bg-white rounded-xl text-left shadow-xl transform transition-all sm:my-8 sm:align-middle w-full max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6">
                 <div class="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
                     <h3 class="text-base font-bold text-gray-900">Record Salary Advance</h3>
                     <button type="button" @click="showAdvanceModal = false" class="text-gray-400 hover:text-gray-600">

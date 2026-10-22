@@ -210,7 +210,7 @@
                 </div>
                 <div class="doc-meta">
                     <strong>Job #:</strong> {{ $jobCard->job_number }}<br>
-                    <strong>Date:</strong> {{ $jobCard->date ? $jobCard->date->format('Y-m-d') : $jobCard->created_at->format('Y-m-d') }}<br>
+                    <strong>Date:</strong> {{ $jobCard->date ? $jobCard->date->format('Y-m-d') : ($jobCard->created_at ? $jobCard->created_at->setTimezone('Asia/Colombo')->format('Y-m-d') : \Carbon\Carbon::now('Asia/Colombo')->format('Y-m-d')) }}<br>
                     <strong>Status:</strong> {{ ucfirst(str_replace('_', ' ', $jobCard->status)) }}
                 </div>
             </td>

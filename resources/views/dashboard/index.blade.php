@@ -10,7 +10,7 @@
             <div>
                 <h1 class="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">AutoCare Center Dashboard</h1>
                 <p class="mt-1 text-sm text-gray-500">
-                    Daily workshop operations overview & center records. Today is <span class="font-medium text-gray-700">{{ now()->format('l, d F Y') }}</span>.
+                    Daily workshop operations overview & center records. Today is <span class="font-medium text-gray-700">{{ \Carbon\Carbon::now('Asia/Colombo')->format('l, d F Y') }}</span>.
                 </p>
             </div>
             <div class="flex items-center space-x-2">
@@ -346,7 +346,7 @@
                                                 @endif
                                             </p>
                                             <p class="text-xs text-gray-600 mt-0.5 line-clamp-2">{{ $log->description }}</p>
-                                            <span class="text-[10px] text-gray-400 mt-1 block">{{ $log->created_at->diffForHumans() }}</span>
+                                            <span class="text-[10px] text-gray-400 mt-1 block" title="{{ $log->created_at ? $log->created_at->setTimezone('Asia/Colombo')->format('Y-m-d h:i A') : '' }}">{{ $log->created_at ? $log->created_at->diffForHumans() : '' }} &bull; {{ $log->created_at ? $log->created_at->setTimezone('Asia/Colombo')->format('h:i A') : '' }}</span>
                                         </div>
                                     </div>
                                 </li>

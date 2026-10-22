@@ -975,7 +975,7 @@
                             </td>
                             <td class="px-5 py-3 font-medium text-gray-900">
                                 <div>{{ $issue->description }}</div>
-                                <div class="text-[11px] text-gray-400 mt-0.5">Recorded by {{ $issue->recordedByUser?->name ?? 'Staff' }} on {{ $issue->created_at->format('M d, Y') }}</div>
+                                <div class="text-[11px] text-gray-400 mt-0.5">Recorded by {{ $issue->recordedByUser?->name ?? 'Staff' }} on {{ $issue->created_at ? $issue->created_at->setTimezone('Asia/Colombo')->format('M d, Y') : '' }}</div>
                             </td>
                             <td class="px-4 py-3 text-gray-700 font-medium">
                                 {{ $issue->recommended_repair }}

@@ -89,8 +89,8 @@
                     @forelse($logs as $log)
                         <tr class="hover:bg-gray-50/60 transition">
                             <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
-                                <div>{{ $log->created_at->format('Y-m-d H:i') }}</div>
-                                <div class="text-[10px] text-gray-400">{{ $log->created_at->diffForHumans() }}</div>
+                                <div>{{ $log->created_at ? $log->created_at->setTimezone('Asia/Colombo')->format('Y-m-d H:i') : '' }}</div>
+                                <div class="text-[10px] text-gray-400">{{ $log->created_at ? $log->created_at->diffForHumans() : '' }}</div>
                             </td>
 
                             <td class="px-6 py-4 whitespace-nowrap">

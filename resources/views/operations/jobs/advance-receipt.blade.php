@@ -86,11 +86,11 @@
             margin-bottom: 8px;
         }
 
+        /* 60–65mm centered logo for 80mm thermal paper */
         .logo-img {
-            width: 60mm;
+            width: 62mm;
             max-width: 65mm;
             height: auto;
-            max-height: 85px;
             margin: 0 auto 6px auto;
             display: block;
             object-fit: contain;
@@ -99,20 +99,28 @@
         }
 
         .company-name {
-            font-size: 14px;
+            font-size: 13.5px;
             font-weight: 900;
-            letter-spacing: -0.2px;
+            letter-spacing: 0.2px;
+            line-height: 1.2;
             text-transform: uppercase;
         }
 
         .branch-name {
             font-size: 11.5px;
-            font-weight: 700;
-            margin-top: 1px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            margin-top: 2px;
+            line-height: 1.2;
+            text-transform: uppercase;
         }
 
-        .company-meta {
+        .branch-meta {
             font-size: 10px;
+            color: #111111;
+            margin-top: 3px;
+            line-height: 1.3;
+        }
             color: #333333;
             margin-top: 2px;
             line-height: 1.3;
@@ -248,14 +256,35 @@
             }
 
             .logo-img {
-                width: 60mm !important;
+                width: 62mm !important;
                 max-width: 65mm !important;
                 height: auto !important;
-                max-height: 85px !important;
                 margin: 0 auto 2mm auto !important;
                 display: block !important;
                 filter: grayscale(100%) contrast(150%) !important;
                 -webkit-filter: grayscale(100%) contrast(150%) !important;
+            }
+
+            .company-name {
+                font-size: 13.5px !important;
+                font-weight: 900 !important;
+                letter-spacing: 0.2px !important;
+                line-height: 1.2 !important;
+            }
+
+            .branch-name {
+                font-size: 11.5px !important;
+                font-weight: 800 !important;
+                letter-spacing: 0.5px !important;
+                margin-top: 1.5px !important;
+                line-height: 1.2 !important;
+            }
+
+            .branch-meta {
+                font-size: 10px !important;
+                color: #000000 !important;
+                margin-top: 2.5px !important;
+                line-height: 1.25 !important;
             }
         }
     </style>
@@ -278,23 +307,7 @@
     <div class="thermal-receipt">
         
         <!-- Header: Company & Branch -->
-        <div class="company-header">
-            @php
-                $logoUrl = $company->getLogoUrl();
-            @endphp
-            @if(!empty($logoUrl))
-                <img src="{{ $logoUrl }}" alt="{{ $company->company_name ?? 'Company Logo' }}" class="logo-img">
-            @endif
-            <div class="company-name">{{ $company->company_name ?? 'AutoCare Service Center' }}</div>
-            <div class="branch-name">{{ $jobCard->branch?->name ?? 'Main Service Branch' }}</div>
-            <div class="company-meta">
-                {{ $jobCard->branch?->address ?? ($company->address ?? 'Colombo, Sri Lanka') }}
-            </div>
-            <div class="company-meta">
-                Tel: {{ $jobCard->branch?->phone ?? ($company->phone ?? '011-2345678') }}
-                @if(!empty($company->email)) | {{ $company->email }} @endif
-            </div>
-        </div>
+        <x-thermal-header :company="$company" :branch="$jobCard->branch" />
 
         <div class="divider"></div>
 
@@ -325,7 +338,7 @@
 
         <div class="meta-row">
             <span class="meta-label">Date & Time:</span>
-            <span class="meta-val">{{ $latestPayment?->created_at ? $latestPayment->created_at->format('Y-m-d H:i') : now()->format('Y-m-d H:i') }}</span>
+            <span class="meta-val">{{ $latestPayment?->created_at ? $latestPayment->created_at->setTimezone('Asia/Colombo')->format('Y-m-d H:i') : \Carbon\Carbon::now('Asia/Colombo')->format('Y-m-d H:i') }}</span>
         </div>
 
         <div class="meta-row">

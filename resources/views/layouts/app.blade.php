@@ -48,7 +48,8 @@
                 class="flex-1 w-full min-w-0 transition-[padding] duration-200 ease-in-out"
             >
                 <div class="max-w-7xl 2xl:max-w-[1700px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-                    <!-- Global Notification / Flash Alerts -->
+                    <!-- Daily Attendance Reminder & Flash Alerts -->
+                    <x-attendance-reminder-banner />
                     <x-alert />
 
                     <!-- View Content -->
