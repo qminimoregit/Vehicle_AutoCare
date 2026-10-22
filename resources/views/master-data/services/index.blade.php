@@ -56,7 +56,7 @@
 
         <!-- Service Lists Data Table -->
         <div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
-            <div class="overflow-x-auto">
+            <div class="responsive-table-wrapper">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50/80">
                         <tr>
@@ -209,7 +209,7 @@
                     x-transition:leave="ease-in duration-150"
                     x-transition:leave-start="opacity-100 scale-100"
                     x-transition:leave-end="opacity-0 scale-95"
-                    class="relative bg-white rounded-xl shadow-xl max-w-lg w-full border border-gray-200 z-10 overflow-hidden"
+                    class="relative bg-white rounded-xl shadow-xl w-full max-w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto border border-gray-200 z-10"
                 >
                     <div class="px-6 py-4 bg-gray-50/80 border-b border-gray-200 flex items-center justify-between">
                         <h3 class="text-lg font-bold text-gray-900">Add Service</h3>

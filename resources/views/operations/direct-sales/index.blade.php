@@ -22,7 +22,7 @@
 
         // UI State
         isSubmitting: false,
-        mobileCartOpen: false,
+        mobileView: 'products',
         showSuccessModal: false,
         completedSale: null,
 
@@ -233,11 +233,41 @@
         description="Over-the-counter spare parts, lubricants, and accessory sales with instant FIFO deduction."
     />
 
-    <!-- Split Layout: Desktop 2-column, Mobile responsive stack -->
+    <!-- Mobile & Tablet View Switcher Tab Bar (< lg) -->
+    <div class="lg:hidden flex items-center p-1 rounded-xl bg-gray-200/90 shadow-2xs">
+        <button 
+            type="button" 
+            @click="mobileView = 'products'"
+            :class="mobileView === 'products' ? 'bg-[#0B1849] text-white shadow-xs font-bold' : 'text-gray-700 hover:text-gray-900 font-semibold'"
+            class="flex-1 py-2.5 px-3 text-xs rounded-lg transition text-center cursor-pointer flex items-center justify-center space-x-1.5 min-h-[40px]"
+        >
+            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+            <span>Products (<span x-text="filteredProducts.length"></span>)</span>
+        </button>
+
+        <button 
+            type="button" 
+            @click="mobileView = 'cart'"
+            :class="mobileView === 'cart' ? 'bg-[#0B1849] text-white shadow-xs font-bold' : 'text-gray-700 hover:text-gray-900 font-semibold'"
+            class="flex-1 py-2.5 px-3 text-xs rounded-lg transition text-center cursor-pointer flex items-center justify-center space-x-1.5 min-h-[40px]"
+        >
+            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            <span>Cart (<span x-text="cart.length"></span>)</span>
+            <template x-if="cart.length > 0">
+                <span class="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-500 text-white font-black" x-text="'LKR ' + grandTotal.toFixed(0)"></span>
+            </template>
+        </button>
+    </div>
+
+    <!-- Split Layout: Desktop side-by-side, Mobile responsive toggle -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
         <!-- LEFT COLUMN: Product Search & Product Grid (lg:col-span-7) -->
-        <div class="lg:col-span-7 space-y-4">
+        <div :class="mobileView === 'products' ? 'block' : 'hidden lg:block'" class="lg:col-span-7 space-y-4">
             <!-- Search & Filter Banner -->
             <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
                 <div class="relative">
@@ -342,12 +372,23 @@
         </div>
 
         <!-- RIGHT COLUMN (DESKTOP) / CART & PAYMENT PANEL (lg:col-span-5) -->
-        <div id="pos-cart-panel" class="lg:col-span-5 space-y-4">
+        <div id="pos-cart-panel" :class="mobileView === 'cart' ? 'block' : 'hidden lg:block'" class="lg:col-span-5 space-y-4">
             <div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
                 <!-- Cart Header -->
                 <div class="px-5 py-3.5 border-b border-gray-100 bg-[#0B1849] text-white flex items-center justify-between">
                     <div class="flex items-center space-x-2">
-                        <svg class="w-5 h-5 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <button 
+                            type="button" 
+                            @click="mobileView = 'products'" 
+                            class="lg:hidden text-xs text-blue-200 hover:text-white flex items-center cursor-pointer font-semibold mr-1"
+                            title="Back to products list"
+                        >
+                            <svg class="w-4 h-4 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                            </svg>
+                            Back
+                        </button>
+                        <svg class="w-5 h-5 text-gray-200 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
                         </svg>
                         <h3 class="text-sm font-bold uppercase tracking-wider">Sale Cart (<span x-text="cart.length"></span>)</h3>
@@ -568,7 +609,7 @@
 
     <!-- Mobile Sticky Cart Summary Banner (lg:hidden) -->
     <div 
-        x-show="cart.length > 0 && !showSuccessModal" 
+        x-show="cart.length > 0 && !showSuccessModal && mobileView !== 'cart'" 
         class="lg:hidden fixed bottom-4 inset-x-4 z-30 bg-[#0B1849] text-white p-3.5 rounded-2xl shadow-2xl flex items-center justify-between border border-white/20 animate-fade-in"
         style="display: none;"
     >
@@ -578,7 +619,7 @@
         </div>
         <button 
             type="button"
-            @click="document.getElementById('pos-cart-panel').scrollIntoView({ behavior: 'smooth' })"
+            @click="mobileView = 'cart'; window.scrollTo({ top: 0, behavior: 'smooth' })"
             class="inline-flex items-center px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black rounded-xl shadow-xs transition cursor-pointer"
         >
             Checkout &rarr;
@@ -593,7 +634,7 @@
     >
         <div 
             @click.outside="resetSale()"
-            class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 text-center space-y-5 border border-gray-200"
+            class="bg-white rounded-2xl shadow-2xl max-w-md w-full max-w-[calc(100vw-2rem)] p-5 sm:p-6 text-center space-y-4 sm:space-y-5 border border-gray-200 max-h-[90vh] overflow-y-auto"
         >
             <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
                 <svg class="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">

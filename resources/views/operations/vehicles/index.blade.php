@@ -338,7 +338,7 @@
             </div>
 
             <!-- Customer & Vehicle Main Fields Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
                 <!-- Customer Name -->
                 <div>
                     <label for="customer_name" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
@@ -350,7 +350,7 @@
                         id="customer_name"
                         x-model="customerName"
                         placeholder="e.g. Kamal Perera"
-                        class="block w-full py-2.5 px-3.5 text-sm text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] bg-white min-h-[44px]"
+                        class="block w-full py-2.5 px-3.5 text-sm sm:text-base text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] bg-white min-h-[44px]"
                         required
                     >
                     @error('customer_name')
@@ -369,7 +369,7 @@
                         id="phone"
                         x-model="phone"
                         placeholder="e.g. 0771234567"
-                        class="block w-full py-2.5 px-3.5 text-sm text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] bg-white min-h-[44px]"
+                        class="block w-full py-2.5 px-3.5 text-sm sm:text-base text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] bg-white min-h-[44px]"
                         required
                     >
                     @error('phone')
@@ -378,7 +378,7 @@
                 </div>
 
                 <!-- Email Address (Optional) -->
-                <div>
+                <div class="sm:col-span-2 lg:col-span-1">
                     <label for="email" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
                         Email Address <span class="text-gray-400 font-normal lowercase">(optional)</span>
                     </label>
@@ -388,7 +388,7 @@
                         id="email"
                         x-model="email"
                         placeholder="e.g. customer@example.com"
-                        class="block w-full py-2.5 px-3.5 text-sm text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] bg-white min-h-[44px]"
+                        class="block w-full py-2.5 px-3.5 text-sm sm:text-base text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] bg-white min-h-[44px]"
                     >
                     @error('email')
                         <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
@@ -402,53 +402,36 @@
                     <label class="block text-xs font-bold uppercase tracking-wider text-gray-700">
                         Vehicle Type <span class="text-red-500">*</span>
                     </label>
-                    <span class="text-xs text-gray-500">Service prices & carpet options adjust according to vehicle type</span>
+                    <span class="text-[11px] sm:text-xs text-gray-500 hidden sm:inline">Service prices & carpet options adjust according to vehicle type</span>
                 </div>
 
                 <!-- Hidden Input for Form Submission -->
                 <input type="hidden" name="vehicle_type_id" x-model="vehicleTypeId" required>
 
-                <!-- Desktop / Tablet Grid -->
-                <div class="hidden sm:grid grid-cols-2 md:grid-cols-5 gap-3">
+                <!-- Touch-friendly Vehicle Type Cards (All Screen Sizes) -->
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 sm:gap-3">
                     @foreach($vehicleTypes as $type)
                         <button 
                             type="button" 
                             @click="setVehicleType('{{ $type->id }}')"
-                            class="p-3 rounded-xl border text-center transition flex flex-col items-center justify-center space-y-2 cursor-pointer focus:outline-none min-h-[80px]"
+                            class="p-2.5 sm:p-3 rounded-xl border text-center transition flex flex-col items-center justify-center space-y-1.5 sm:space-y-2 cursor-pointer focus:outline-none min-h-[85px] active:scale-[0.98]"
                             :class="vehicleTypeId === '{{ $type->id }}' ? 'border-[#0B1849] bg-[#EEF1FA] text-[#0B1849] ring-2 ring-[#0B1849]/20 font-bold shadow-xs' : 'border-gray-200 bg-white hover:bg-slate-50 text-gray-700 hover:border-gray-300'"
                         >
                             @if($type->image)
-                                <img src="{{ asset('storage/' . $type->image) }}" alt="{{ $type->name }}" class="h-9 w-auto object-contain">
+                                <img src="{{ asset('storage/' . $type->image) }}" alt="{{ $type->name }}" class="h-8 sm:h-9 w-auto object-contain">
                             @else
-                                <div class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500">
-                                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500">
+                                    <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                                     </svg>
                                 </div>
                             @endif
-                            <span class="text-xs font-semibold block leading-tight">{{ $type->name }}</span>
+                            <span class="text-xs font-semibold block leading-tight text-center">{{ $type->name }}</span>
                             @if($type->enable_carpets)
-                                <span class="text-[10px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded font-normal">Carpets</span>
+                                <span class="text-[9px] sm:text-[10px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded font-normal">Carpets</span>
                             @endif
                         </button>
                     @endforeach
-                </div>
-
-                <!-- Mobile Searchable / Dropdown Selection -->
-                <div class="block sm:hidden">
-                    <select 
-                        x-model="vehicleTypeId" 
-                        @change="syncCarpetsForVehicleType()"
-                        class="block w-full py-3 px-3.5 text-base text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] bg-white min-h-[44px]"
-                        required
-                    >
-                        <option value="">-- Select Vehicle Type --</option>
-                        @foreach($vehicleTypes as $type)
-                            <option value="{{ $type->id }}">
-                                {{ $type->name }} {{ $type->enable_carpets ? '(Carpets Available)' : '' }}
-                            </option>
-                        @endforeach
-                    </select>
                 </div>
                 @error('vehicle_type_id')
                     <p class="mt-1 text-xs text-red-600">{{ $message }}</p>

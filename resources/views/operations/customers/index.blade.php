@@ -50,7 +50,7 @@
 
     <!-- Customer Table -->
     <div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="responsive-table-wrapper">
             <table class="w-full text-left text-sm text-gray-600">
                 <thead class="bg-gray-50 text-[11px] font-bold text-gray-500 uppercase tracking-wider border-b border-gray-200">
                     <tr>
