@@ -41,4 +41,42 @@ body {
     background-color: #CBD5E1;
 }
 
+/* ==========================================================================
+   RESPONSIVE SCREEN UX ENHANCEMENTS (SCREEN ONLY - PRESERVES PRINT INTEGRITY)
+   ========================================================================== */
+@media screen {
+    /* Touch optimization */
+    button, a, input, select, textarea {
+        -webkit-tap-highlight-color: transparent;
+    }
 
+    /* Prevent iOS auto-zoom on mobile input focus */
+    @media (max-width: 768px) {
+        input[type="text"],
+        input[type="number"],
+        input[type="email"],
+        input[type="password"],
+        input[type="search"],
+        input[type="tel"],
+        input[type="date"],
+        select,
+        textarea {
+            font-size: 16px !important;
+        }
+    }
+
+    /* Controlled responsive table scroll containers */
+    .responsive-table-wrapper {
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+    }
+
+    /* Responsive modal viewport safety */
+    .responsive-modal-panel {
+        max-height: calc(100vh - 2.5rem);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+}

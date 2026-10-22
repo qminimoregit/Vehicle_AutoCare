@@ -10,57 +10,70 @@
         $showBranchSelector = $accessibleBranches->count() > 1;
     @endphp
 
-    <!-- Left Section: Brand & Mobile Menu Toggle -->
-    <div class="flex items-center space-x-3 shrink-0">
-        <!-- Mobile Sidebar Button -->
+    <!-- Left Section: Brand & Sidebar Toggles -->
+    <div class="flex items-center space-x-2 sm:space-x-3 shrink-0">
+        <!-- Mobile/Tablet Drawer Toggle (< lg) -->
         <button 
             type="button" 
             @click="sidebarOpen = !sidebarOpen" 
-            class="md:hidden inline-flex items-center justify-center p-2 rounded-lg text-slate-300 hover:text-white hover:bg-[#15286e] focus:outline-none focus:ring-2 focus:ring-white transition"
+            class="lg:hidden inline-flex items-center justify-center p-2 rounded-lg text-slate-300 hover:text-white hover:bg-[#15286e] focus:outline-none focus:ring-2 focus:ring-white transition cursor-pointer"
             aria-label="Toggle Navigation Sidebar"
         >
-            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg class="h-5 w-5 sm:h-6 sm:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
         </button>
 
-        <!-- Brand Logo & Name -->
-        <a href="{{ route('dashboard') }}" class="flex items-center space-x-3 group" title="Viran Auto Care Dashboard">
-            <div class="w-10 h-10 rounded-xl bg-white p-1 flex items-center justify-center shadow-xs shrink-0 ring-1 ring-white/20 group-hover:scale-105 transition-transform duration-150">
+        <!-- Desktop Sidebar Collapse Toggle (>= lg) -->
+        <button 
+            type="button" 
+            @click="toggleSidebarCollapse()" 
+            class="hidden lg:inline-flex items-center justify-center p-2 rounded-lg text-slate-300 hover:text-white hover:bg-[#15286e] focus:outline-none focus:ring-2 focus:ring-white transition cursor-pointer"
+            :title="sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'"
+            aria-label="Toggle Sidebar Collapse"
+        >
+            <svg class="h-5 w-5 transform transition-transform duration-200" :class="sidebarCollapsed ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+            </svg>
+        </button>
+
+        <!-- Brand Logo & Name (Responsive to 320px) -->
+        <a href="{{ route('dashboard') }}" class="flex items-center space-x-2 sm:space-x-2.5 group" title="Viran Auto Care Dashboard">
+            <div class="w-8 h-8 sm:w-9 sm:h-9 lg:w-10 lg:h-10 rounded-xl bg-white p-1 flex items-center justify-center shadow-xs shrink-0 ring-1 ring-white/20 group-hover:scale-105 transition-transform duration-150">
                 <img 
                     src="{{ asset('images/branding/viran_auto_care_logo.png') }}" 
                     alt="Viran Auto Care Logo" 
-                    class="w-8 h-8 object-contain"
+                    class="w-7 h-7 sm:w-8 sm:h-8 object-contain"
                     onerror="this.onerror=null; this.src='{{ asset('storage/company/viran_auto_care_logo.png') }}';"
                 >
             </div>
-            <div>
-                <span class="text-base sm:text-lg font-bold tracking-tight text-white block leading-none font-sans uppercase">VIRAN AUTO CARE</span>
-                <span class="text-[9px] sm:text-[10px] tracking-widest text-slate-300 font-medium uppercase mt-0.5 block">CENTER MANAGEMENT</span>
+            <div class="hidden min-[380px]:block">
+                <span class="text-xs sm:text-sm lg:text-base font-bold tracking-tight text-white block leading-none font-sans uppercase">VIRAN AUTO CARE</span>
+                <span class="text-[8px] sm:text-[9px] lg:text-[10px] tracking-widest text-slate-300 font-medium uppercase mt-0.5 block">CENTER MANAGEMENT</span>
             </div>
         </a>
     </div>
 
-    <!-- Center Section: Quick Shortcut Buttons (Desktop & Tablet) -->
+    <!-- Center Section: Quick Shortcut Buttons (Desktop & Laptop) -->
     @auth
-        <nav id="topbar-shortcuts" class="hidden md:flex items-center space-x-1.5 lg:space-x-2.5 mx-2" aria-label="Operations Quick Shortcuts">
+        <nav id="topbar-shortcuts" class="hidden lg:flex items-center space-x-1.5 xl:space-x-2.5 mx-2" aria-label="Operations Quick Shortcuts">
             <!-- 1. Vehicle Registration Shortcut -->
             <a 
                 href="{{ route('operations.vehicles.index') }}" 
-                class="inline-flex items-center px-2.5 lg:px-3 py-1.5 rounded-lg text-xs font-semibold transition duration-150 border {{ $isVehicleActive ? 'bg-[#1e3a8a] text-white border-blue-400/40 shadow-xs ring-1 ring-blue-400/30' : 'bg-[#15286e]/80 hover:bg-[#1f3796] text-white/90 hover:text-white border-white/10' }}"
+                class="inline-flex items-center px-2.5 xl:px-3 py-1.5 rounded-lg text-xs font-semibold transition duration-150 border {{ $isVehicleActive ? 'bg-[#1e3a8a] text-white border-blue-400/40 shadow-xs ring-1 ring-blue-400/30' : 'bg-[#15286e]/80 hover:bg-[#1f3796] text-white/90 hover:text-white border-white/10' }}"
                 title="Vehicle Registration"
             >
                 <svg class="w-3.5 h-3.5 mr-1.5 shrink-0 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 17a2 2 0 100-4 2 2 0 000 4zm8 0a2 2 0 100-4 2 2 0 000 4zM5 10l1.5-4.5A2 2 0 018.4 4h7.2a2 2 0 011.9 1.5L19 10m-14 0h14m-14 0v6a1 1 0 001 1h1m12-7v6a1 1 0 01-1 1h-1" />
                 </svg>
-                <span class="hidden lg:inline">Vehicle Registration</span>
-                <span class="inline lg:hidden">Vehicle Reg</span>
+                <span class="hidden xl:inline">Vehicle Registration</span>
+                <span class="inline xl:hidden">Vehicle Reg</span>
             </a>
 
             <!-- 2. Direct Sale (POS) Shortcut -->
             <a 
                 href="{{ route('operations.direct-sales.index') }}" 
-                class="inline-flex items-center px-2.5 lg:px-3 py-1.5 rounded-lg text-xs font-semibold transition duration-150 border {{ $isDirectSaleActive ? 'bg-[#1e3a8a] text-white border-blue-400/40 shadow-xs ring-1 ring-blue-400/30' : 'bg-[#15286e]/80 hover:bg-[#1f3796] text-white/90 hover:text-white border-white/10' }}"
+                class="inline-flex items-center px-2.5 xl:px-3 py-1.5 rounded-lg text-xs font-semibold transition duration-150 border {{ $isDirectSaleActive ? 'bg-[#1e3a8a] text-white border-blue-400/40 shadow-xs ring-1 ring-blue-400/30' : 'bg-[#15286e]/80 hover:bg-[#1f3796] text-white/90 hover:text-white border-white/10' }}"
                 title="Direct Sale (POS)"
             >
                 <svg class="w-3.5 h-3.5 mr-1.5 shrink-0 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -72,7 +85,7 @@
             <!-- 3. Job Cards Shortcut -->
             <a 
                 href="{{ route('operations.job-cards.index') }}" 
-                class="inline-flex items-center px-2.5 lg:px-3 py-1.5 rounded-lg text-xs font-semibold transition duration-150 border {{ $isJobCardActive ? 'bg-[#1e3a8a] text-white border-blue-400/40 shadow-xs ring-1 ring-blue-400/30' : 'bg-[#15286e]/80 hover:bg-[#1f3796] text-white/90 hover:text-white border-white/10' }}"
+                class="inline-flex items-center px-2.5 xl:px-3 py-1.5 rounded-lg text-xs font-semibold transition duration-150 border {{ $isJobCardActive ? 'bg-[#1e3a8a] text-white border-blue-400/40 shadow-xs ring-1 ring-blue-400/30' : 'bg-[#15286e]/80 hover:bg-[#1f3796] text-white/90 hover:text-white border-white/10' }}"
                 title="Job Card Management"
             >
                 <svg class="w-3.5 h-3.5 mr-1.5 shrink-0 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -84,7 +97,7 @@
     @endauth
 
     <!-- Right Section: User & Role & Dropdown -->
-    <div class="flex items-center space-x-2 sm:space-x-3 shrink-0">
+    <div class="flex items-center space-x-1.5 sm:space-x-3 shrink-0">
         @auth
             <!-- Branch Selector Dropdown (Shown only when user has access to > 1 branch) -->
             @if($showBranchSelector)
@@ -92,7 +105,7 @@
                     <button 
                         type="button" 
                         @click="branchDropdownOpen = !branchDropdownOpen"
-                        class="inline-flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#15286e]/80 hover:bg-[#1f3796] text-white border border-white/10 text-xs font-semibold transition focus:outline-none focus:ring-1 focus:ring-white/40 cursor-pointer"
+                        class="inline-flex items-center space-x-1 px-2 sm:px-3 py-1.5 rounded-lg bg-[#15286e]/80 hover:bg-[#1f3796] text-white border border-white/10 text-xs font-semibold transition focus:outline-none focus:ring-1 focus:ring-white/40 cursor-pointer"
                         aria-label="Select Active Branch"
                         aria-expanded="false"
                         title="Active Branch"
@@ -101,7 +114,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
-                        <span class="truncate max-w-[110px] sm:max-w-[150px]">{{ $currentBranch ? $currentBranch->branch_name : 'Select Branch' }}</span>
+                        <span class="truncate max-w-[70px] min-[420px]:max-w-[100px] sm:max-w-[150px]">{{ $currentBranch ? $currentBranch->branch_name : 'Branch' }}</span>
                         <svg class="w-3 h-3 text-slate-300 transform transition-transform duration-150 shrink-0" :class="branchDropdownOpen ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                         </svg>
@@ -152,19 +165,19 @@
                 </div>
             @endif
 
-            <!-- Mobile Quick Actions Dropdown (< md) -->
-            <div class="md:hidden relative" x-data="{ quickMenuOpen: false }" @click.outside="quickMenuOpen = false">
+            <!-- Mobile & Tablet Quick Actions Dropdown (< lg) -->
+            <div class="lg:hidden relative" x-data="{ quickMenuOpen: false }" @click.outside="quickMenuOpen = false">
                 <button 
                     type="button" 
                     @click="quickMenuOpen = !quickMenuOpen"
-                    class="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-[#15286e]/80 hover:bg-[#1f3796] text-white border border-white/10 text-xs font-semibold transition focus:outline-none focus:ring-1 focus:ring-white/40"
+                    class="inline-flex items-center space-x-1 px-2 sm:px-2.5 py-1.5 rounded-lg bg-[#15286e]/80 hover:bg-[#1f3796] text-white border border-white/10 text-xs font-semibold transition focus:outline-none focus:ring-1 focus:ring-white/40 cursor-pointer"
                     aria-label="Quick Actions Shortcuts"
                     aria-expanded="false"
                 >
                     <svg class="w-3.5 h-3.5 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
-                    <span class="text-[11px] font-bold">Shortcuts</span>
+                    <span class="text-[11px] font-bold hidden min-[360px]:inline">Quick</span>
                     <svg class="w-3 h-3 text-slate-300 transform transition-transform duration-150" :class="quickMenuOpen ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                     </svg>
@@ -210,7 +223,7 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
                                 </svg>
                             </div>
-                            <span>Direct Sale</span>
+                            <span>Direct Sale (POS)</span>
                         </a>
 
                         <!-- Job Cards -->

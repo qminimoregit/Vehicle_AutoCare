@@ -117,10 +117,10 @@
 
     <!-- 5 Real Workshop Operation Metrics -->
     <div class="mb-8">
-        <h2 class="text-sm font-bold uppercase tracking-wider text-gray-700 mb-3">Workshop Performance Metrics</h2>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <h2 class="text-xs sm:text-sm font-bold uppercase tracking-wider text-gray-700 mb-3">Workshop Performance Metrics</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
             <!-- Today's Jobs -->
-            <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-xs flex flex-col justify-between">
+            <div class="bg-white border border-gray-200 rounded-xl p-4 sm:p-5 shadow-xs flex flex-col justify-between">
                 <div class="flex items-center justify-between text-gray-500 mb-2">
                     <span class="text-xs font-semibold uppercase tracking-wider">Today's Jobs</span>
                     <div class="p-2 rounded-lg bg-blue-50 text-blue-600">
@@ -130,13 +130,13 @@
                     </div>
                 </div>
                 <div>
-                    <div class="text-2xl font-bold text-gray-900">{{ $todayJobs }}</div>
+                    <div class="text-xl sm:text-2xl font-bold text-gray-900">{{ $todayJobs }}</div>
                     <div class="text-[11px] text-gray-400 mt-1">Logged vehicles today</div>
                 </div>
             </div>
 
             <!-- Pending Jobs -->
-            <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-xs flex flex-col justify-between">
+            <div class="bg-white border border-gray-200 rounded-xl p-4 sm:p-5 shadow-xs flex flex-col justify-between">
                 <div class="flex items-center justify-between text-gray-500 mb-2">
                     <span class="text-xs font-semibold uppercase tracking-wider">Pending Jobs</span>
                     <div class="p-2 rounded-lg bg-amber-50 text-amber-600">
@@ -146,13 +146,13 @@
                     </div>
                 </div>
                 <div>
-                    <div class="text-2xl font-bold text-amber-600">{{ $pendingJobs }}</div>
+                    <div class="text-xl sm:text-2xl font-bold text-amber-600">{{ $pendingJobs }}</div>
                     <div class="text-[11px] text-gray-400 mt-1">In progress on floor</div>
                 </div>
             </div>
 
             <!-- Completed Jobs -->
-            <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-xs flex flex-col justify-between">
+            <div class="bg-white border border-gray-200 rounded-xl p-4 sm:p-5 shadow-xs flex flex-col justify-between">
                 <div class="flex items-center justify-between text-gray-500 mb-2">
                     <span class="text-xs font-semibold uppercase tracking-wider">Completed Jobs</span>
                     <div class="p-2 rounded-lg bg-emerald-50 text-emerald-600">
@@ -162,13 +162,13 @@
                     </div>
                 </div>
                 <div>
-                    <div class="text-2xl font-bold text-emerald-600">{{ $completedJobs }}</div>
+                    <div class="text-xl sm:text-2xl font-bold text-emerald-600">{{ $completedJobs }}</div>
                     <div class="text-[11px] text-gray-400 mt-1">Ready for collection today</div>
                 </div>
             </div>
 
             <!-- Today's Sales -->
-            <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-xs flex flex-col justify-between">
+            <div class="bg-white border border-gray-200 rounded-xl p-4 sm:p-5 shadow-xs flex flex-col justify-between">
                 <div class="flex items-center justify-between text-gray-500 mb-2">
                     <span class="text-xs font-semibold uppercase tracking-wider">Today's Sales</span>
                     <div class="p-2 rounded-lg bg-indigo-50 text-indigo-600">
@@ -178,13 +178,15 @@
                     </div>
                 </div>
                 <div>
-                    <div class="text-2xl font-bold text-gray-900">LKR {{ number_format($todaySales, 2) }}</div>
+                    <div class="text-lg sm:text-xl xl:text-2xl font-bold text-gray-900 truncate" title="LKR {{ number_format($todaySales, 2) }}">
+                        LKR {{ number_format($todaySales, 2) }}
+                    </div>
                     <div class="text-[11px] text-gray-400 mt-1">Recognized sales today</div>
                 </div>
             </div>
 
             <!-- Pending Payments -->
-            <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-xs flex flex-col justify-between">
+            <div class="bg-white border border-gray-200 rounded-xl p-4 sm:p-5 shadow-xs flex flex-col justify-between">
                 <div class="flex items-center justify-between text-gray-500 mb-2">
                     <span class="text-xs font-semibold uppercase tracking-wider">Pending Payments</span>
                     <div class="p-2 rounded-lg bg-rose-50 text-rose-600">
@@ -194,7 +196,9 @@
                     </div>
                 </div>
                 <div>
-                    <div class="text-2xl font-bold text-rose-600">LKR {{ number_format($pendingPayments, 2) }}</div>
+                    <div class="text-lg sm:text-xl xl:text-2xl font-bold text-rose-600 truncate" title="LKR {{ number_format($pendingPayments, 2) }}">
+                        LKR {{ number_format($pendingPayments, 2) }}
+                    </div>
                     <div class="text-[11px] text-gray-400 mt-1">Outstanding receivables</div>
                 </div>
             </div>
@@ -390,7 +394,7 @@
                 x-transition:leave="ease-in duration-150" 
                 x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" 
                 x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" 
-                class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-gray-200"
+                class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full max-w-[calc(100vw-2rem)] border border-gray-200 max-h-[85vh] overflow-y-auto"
             >
                 <div class="bg-[#0B1849] px-6 py-4 flex items-center justify-between text-white">
                     <h3 class="text-base font-bold" id="modal-title">Create / Generate Invoice</h3>

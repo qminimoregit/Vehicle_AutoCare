@@ -177,7 +177,7 @@
 
     <!-- Invoices Table -->
     <div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="responsive-table-wrapper">
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50/75">
                     <tr>
@@ -347,7 +347,7 @@
                 </div>
             </div>
 
-            <div class="overflow-x-auto">
+            <div class="responsive-table-wrapper">
                 <table class="min-w-full divide-y divide-gray-100 text-xs">
                     <thead class="bg-slate-50 text-gray-500 font-semibold uppercase text-[10px]">
                         <tr>
@@ -408,7 +408,7 @@
         <div class="flex items-center justify-center min-h-screen px-4 py-6">
             <div class="fixed inset-0 bg-gray-900/50 backdrop-blur-xs transition-opacity" @click="showPaymentModal = false"></div>
 
-            <div class="relative bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-gray-200 space-y-4">
+            <div class="relative bg-white rounded-2xl w-full max-w-[calc(100vw-2rem)] sm:max-w-md p-4 sm:p-6 shadow-xl border border-gray-200 space-y-4 max-h-[88vh] overflow-y-auto">
                 <!-- Modal Header -->
                 <div class="flex items-center justify-between border-b border-gray-100 pb-3">
                     <div>

@@ -14,16 +14,50 @@
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 antialiased min-h-screen py-8 px-4 sm:px-6">
+    @php
+        $jobCard = $payment->jobCard ?? $payment->invoice?->jobCard;
+        $invoice = $payment->invoice;
+        $customer = $payment->customer ?? ($jobCard?->customer ?? $invoice?->customer);
+        $jobTotal = $jobCard ? (float)$jobCard->grand_total : ($invoice ? (float)$invoice->grand_total : (float)$payment->amount);
+
+        if ($jobCard) {
+            $totalPaidToDate = (float) \App\Models\Payment::where('job_card_id', $jobCard->id)
+                ->where('status', 'completed')
+                ->where('id', '<=', $payment->id)
+                ->sum('amount');
+        } elseif ($invoice) {
+            $totalPaidToDate = (float) \App\Models\Payment::where('invoice_id', $invoice->id)
+                ->where('status', 'completed')
+                ->where('id', '<=', $payment->id)
+                ->sum('amount');
+        } else {
+            $totalPaidToDate = (float) $payment->amount;
+        }
+
+        $remDue = max(0, round($jobTotal - $totalPaidToDate, 2));
+        $payStatusStr = ($remDue <= 0.0001) ? 'Paid in Full' : 'Partially Paid';
+        $branch = $jobCard?->branch ?? ($invoice?->branch ?? $company->mainBranch);
+    @endphp
+
     <div class="max-w-3xl mx-auto space-y-4">
         <!-- Print / Navigation Toolbar -->
         <div class="no-print flex items-center justify-between bg-white px-5 py-3 rounded-xl border border-gray-200 shadow-xs">
             <div class="flex items-center space-x-3">
-                <a 
-                    href="{{ route('operations.invoices.show', $payment->invoice_id) }}" 
-                    class="text-xs font-semibold text-[#0B1849] hover:underline inline-flex items-center"
-                >
-                    &larr; Back to Invoice #{{ $payment->invoice->invoice_number }}
-                </a>
+                @if($payment->job_card_id)
+                    <a 
+                        href="{{ route('operations.job-cards.show', $payment->job_card_id) }}" 
+                        class="text-xs font-semibold text-[#0B1849] hover:underline inline-flex items-center"
+                    >
+                        &larr; Back to Job Card #{{ $jobCard?->job_number }}
+                    </a>
+                @elseif($payment->invoice_id && $invoice)
+                    <a 
+                        href="{{ route('operations.invoices.show', $payment->invoice_id) }}" 
+                        class="text-xs font-semibold text-[#0B1849] hover:underline inline-flex items-center"
+                    >
+                        &larr; Back to Invoice #{{ $invoice->invoice_number }}
+                    </a>
+                @endif
                 <span class="text-gray-300">|</span>
                 <a 
                     href="{{ route('billing.payments.index') }}" 
@@ -54,10 +88,10 @@
                         {{ $company->company_name ?? 'AutoCare Service Center (Pvt) Ltd' }}
                     </h1>
                     <p class="text-xs text-gray-500 mt-1 max-w-sm leading-relaxed">
-                        {{ $company->address ?? 'No. 124, High Level Road, Colombo, Sri Lanka' }}
+                        {{ $branch?->address ?? ($company->address ?? 'Mattegoda, Sri Lanka') }}
                     </p>
                     <div class="text-xs text-gray-500 mt-1 space-x-2">
-                        @if(!empty($company->phone)) <span><strong>Tel:</strong> {{ $company->phone }}</span> @endif
+                        @if(!empty($branch?->phone ?? $company->phone)) <span><strong>Tel:</strong> {{ $branch?->phone ?? $company->phone }}</span> @endif
                         @if(!empty($company->email)) <span>| <strong>Email:</strong> {{ $company->email }}</span> @endif
                         @if(!empty($company->tax_number)) <span>| <strong>Tax:</strong> {{ $company->tax_number }}</span> @endif
                     </div>
@@ -65,13 +99,13 @@
 
                 <div class="text-right space-y-1">
                     <span class="inline-block text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
-                        Official Payment Receipt
+                        Payment Receipt
                     </span>
                     <div class="text-xl font-mono font-black text-gray-900">
                         {{ $payment->payment_number }}
                     </div>
                     <div class="text-xs text-gray-500">
-                        Date: <span class="font-semibold text-gray-800">{{ $payment->payment_date ? $payment->payment_date->format('F d, Y') : 'N/A' }}</span>
+                        Date: <span class="font-semibold text-gray-800">{{ $payment->payment_date ? \Carbon\Carbon::parse($payment->payment_date)->format('F d, Y') : 'N/A' }}</span>
                     </div>
                     @if($payment->status === 'reversed')
                         <div class="mt-1">
@@ -83,44 +117,48 @@
                 </div>
             </div>
 
-            <!-- Customer & Invoice Link Details -->
+            <!-- Customer & Job/Invoice Details -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-slate-50/80 p-5 rounded-xl border border-slate-200/80 text-xs sm:text-sm">
                 <div>
                     <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">Received From:</span>
-                    <div class="text-base font-bold text-gray-900">{{ $payment->customer->customer_name ?? $payment->invoice->customer->customer_name }}</div>
-                    @if(($payment->customer && $payment->customer->customer_type === 'company' && $payment->customer->company_name) || ($payment->invoice->customer && $payment->invoice->customer->customer_type === 'company' && $payment->invoice->customer->company_name))
+                    <div class="text-base font-bold text-gray-900">{{ $customer?->customer_name ?? 'Walk-in Customer' }}</div>
+                    @if($customer && $customer->customer_type === 'company' && $customer->company_name)
                         <div class="text-xs text-blue-700 font-semibold mt-0.5">
-                            {{ $payment->customer->company_name ?? $payment->invoice->customer->company_name }}
+                            {{ $customer->company_name }}
                         </div>
                     @endif
-                    @if($payment->customer?->phone || $payment->invoice?->customer?->phone)
+                    @if($customer?->phone)
                         <div class="text-xs text-gray-600 mt-1">
-                            <strong>Phone:</strong> {{ $payment->customer->phone ?? $payment->invoice->customer->phone }}
+                            <strong>Phone:</strong> {{ $customer->phone }}
                         </div>
                     @endif
-                    @if($payment->customer?->address || $payment->invoice?->customer?->address)
+                    @if($customer?->address)
                         <div class="text-xs text-gray-500 mt-0.5">
-                            {{ $payment->customer->address ?? $payment->invoice->customer->address }}
+                            {{ $customer->address }}
                         </div>
                     @endif
                 </div>
 
                 <div class="sm:text-right">
-                    <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">Applied Against Invoice:</span>
-                    <div class="text-sm font-bold text-gray-900">
-                        Invoice #: <span class="font-mono text-[#0B1849]">{{ $payment->invoice->invoice_number }}</span>
-                    </div>
-                    <div class="text-xs text-gray-600 mt-0.5">
-                        Issued Date: {{ $payment->invoice->invoice_date ? $payment->invoice->invoice_date->format('M d, Y') : 'N/A' }}
-                    </div>
-                    @if($payment->invoice->jobCard && $payment->invoice->jobCard->vehicle)
-                        <div class="text-xs text-gray-600 mt-0.5">
-                            Vehicle: <span class="font-semibold text-gray-800">{{ $payment->invoice->jobCard->vehicle->vehicle_number }}</span>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">Applied Against:</span>
+                    @if($jobCard)
+                        <div class="text-sm font-bold text-gray-900">
+                            Job Card #: <span class="font-mono text-[#0B1849]">{{ $jobCard->job_number }}</span>
                         </div>
                     @endif
-                    @if($payment->invoice->branch)
+                    @if($invoice)
+                        <div class="text-sm font-bold text-gray-900 mt-0.5">
+                            Invoice #: <span class="font-mono text-[#0B1849]">{{ $invoice->invoice_number }}</span>
+                        </div>
+                    @endif
+                    @if($jobCard?->vehicle)
+                        <div class="text-xs text-gray-600 mt-0.5">
+                            Vehicle: <span class="font-semibold text-gray-800 uppercase">{{ $jobCard->vehicle->vehicle_number }}</span>
+                        </div>
+                    @endif
+                    @if($branch)
                         <div class="text-xs text-gray-500 mt-0.5">
-                            Branch: {{ $payment->invoice->branch->branch_name }}
+                            Branch: {{ $branch->name }}
                         </div>
                     @endif
                 </div>
@@ -140,7 +178,7 @@
                     <tbody class="divide-y divide-gray-100 text-gray-800 bg-white">
                         <tr>
                             <td class="py-3.5 px-4 font-bold text-gray-900">
-                                Settlement on Invoice #{{ $payment->invoice->invoice_number }}
+                                {{ $invoice ? "Settlement on Invoice #{$invoice->invoice_number}" : "Payment for Job Card #{$jobCard?->job_number}" }}
                                 @if($payment->notes)
                                     <div class="text-xs text-gray-500 font-normal mt-0.5">{{ $payment->notes }}</div>
                                 @endif
@@ -167,33 +205,33 @@
                 </div>
             @endif
 
-            <!-- Invoice Account Balances Summary Card -->
+            <!-- Balances Summary Card -->
             <div class="bg-gray-50/80 rounded-xl p-4 border border-gray-200/80 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs">
                 <div class="grid grid-cols-3 gap-6 text-center w-full sm:w-auto">
                     <div>
-                        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Invoice Total</span>
+                        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Job / Invoice Total</span>
                         <span class="font-bold text-gray-900 text-sm">
-                            LKR {{ number_format($payment->invoice->grand_total, 2) }}
+                            LKR {{ number_format($jobTotal, 2) }}
                         </span>
                     </div>
                     <div>
-                        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Cumulative Paid</span>
+                        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Total Paid to Date</span>
                         <span class="font-bold text-emerald-700 text-sm">
-                            LKR {{ number_format($payment->invoice->amount_paid, 2) }}
+                            LKR {{ number_format($totalPaidToDate, 2) }}
                         </span>
                     </div>
                     <div>
                         <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Remaining Due</span>
-                        <span class="font-extrabold text-sm {{ $payment->invoice->balance_amount > 0 ? 'text-red-600' : 'text-emerald-700' }}">
-                            LKR {{ number_format($payment->invoice->balance_amount, 2) }}
+                        <span class="font-extrabold text-sm {{ $remDue > 0 ? 'text-amber-600' : 'text-emerald-700' }}">
+                            LKR {{ number_format($remDue, 2) }}
                         </span>
                     </div>
                 </div>
 
                 <div class="text-right w-full sm:w-auto">
-                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Invoice Status</span>
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-bold {{ $payment->invoice->payment_status === 'Paid in Full' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800' }}">
-                        {{ $payment->invoice->payment_status }}
+                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Payment Status</span>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-bold {{ $remDue <= 0.0001 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800' }}">
+                        {{ $payStatusStr }}
                     </span>
                 </div>
             </div>
@@ -214,8 +252,8 @@
             </div>
 
             <div class="text-center text-[10px] text-gray-400 pt-4 border-t border-gray-100">
-                This is an official computer-generated receipt from {{ $company->company_name ?? 'AutoCare Service Center' }}.
-                All payments remain linked to original invoice #{{ $payment->invoice->invoice_number }}.
+                This is an official computer-generated payment receipt from {{ $company->company_name ?? 'AutoCare Service Center' }}.
+                Payment Reference: {{ $payment->payment_number }}.
             </div>
         </div>
     </div>

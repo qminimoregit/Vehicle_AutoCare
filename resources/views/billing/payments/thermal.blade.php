@@ -67,11 +67,13 @@
         /* 80mm Thermal Receipt Sheet */
         .thermal-receipt {
             width: 76mm;
+            max-width: 76mm;
             margin: 0 auto;
             background: #ffffff;
-            padding: 12px 10px;
+            padding: 12px 6px;
             box-shadow: 0 2px 6px rgba(0,0,0,0.1);
             color: #000000;
+            position: relative;
         }
 
         .text-center { text-align: center; }
@@ -83,49 +85,49 @@
 
         .company-header {
             text-align: center;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
 
+        /* 55–65mm centered logo for 80mm thermal paper */
         .logo-img {
-            max-height: 42px;
-            max-width: 160px;
+            width: 60mm;
+            max-width: 65mm;
+            height: auto;
+            max-height: 85px;
             margin: 0 auto 6px auto;
             display: block;
             object-fit: contain;
             filter: grayscale(100%) contrast(150%);
+            -webkit-filter: grayscale(100%) contrast(150%);
         }
 
         .company-name {
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 900;
-            letter-spacing: -0.3px;
+            letter-spacing: -0.2px;
             line-height: 1.2;
+            text-transform: uppercase;
         }
 
-        .branch-name {
-            font-size: 11px;
-            font-weight: 700;
-            margin-top: 2px;
-        }
-
-        .company-meta {
+        .branch-meta {
             font-size: 10px;
             color: #111111;
             margin-top: 2px;
-            line-height: 1.3;
+            line-height: 1.25;
         }
 
         .divider {
             border-top: 1px dashed #000000;
-            margin: 8px 0;
+            margin: 6px 0;
         }
 
         .receipt-title {
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 900;
             text-align: center;
             letter-spacing: 0.5px;
-            padding: 2px 0;
+            padding: 3px 0;
+            text-transform: uppercase;
         }
 
         .meta-row {
@@ -146,7 +148,7 @@
         }
 
         .payment-box {
-            border: 1px solid #000000;
+            border: 1.5px solid #000000;
             padding: 8px 10px;
             margin: 8px 0;
             text-align: center;
@@ -166,15 +168,15 @@
         }
 
         .totals-table td {
-            padding: 2px 0;
+            padding: 2px 1px;
         }
 
         .status-badge {
             display: inline-block;
             font-weight: 900;
             font-size: 11px;
-            padding: 2px 6px;
-            border: 1px solid #000000;
+            padding: 3px 8px;
+            border: 1.5px solid #000000;
             margin-top: 4px;
             text-transform: uppercase;
         }
@@ -183,7 +185,7 @@
             text-align: center;
             font-size: 10px;
             margin-top: 10px;
-            line-height: 1.4;
+            line-height: 1.35;
         }
 
         .barcode-area {
@@ -201,11 +203,15 @@
         }
 
         @media print {
-            body {
+            html, body {
                 background: #ffffff !important;
                 padding: 0 !important;
                 margin: 0 !important;
                 width: 80mm !important;
+                max-width: 80mm !important;
+                color: #000000 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
             }
 
             .no-print-bar {
@@ -213,12 +219,29 @@
             }
 
             .thermal-receipt {
-                width: 76mm !important;
+                width: 72mm !important;
                 max-width: 76mm !important;
                 margin: 0 auto !important;
                 padding: 2mm 1mm !important;
                 box-shadow: none !important;
                 border: none !important;
+                page-break-inside: auto !important;
+            }
+
+            tr, .meta-row, .payment-box, .company-header, .footer-note {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+
+            .logo-img {
+                width: 60mm !important;
+                max-width: 65mm !important;
+                height: auto !important;
+                max-height: 85px !important;
+                margin: 0 auto 2mm auto !important;
+                display: block !important;
+                filter: grayscale(100%) contrast(150%) !important;
+                -webkit-filter: grayscale(100%) contrast(150%) !important;
             }
         }
     </style>
@@ -227,12 +250,23 @@
 
     <!-- No-Print Toolbar -->
     <div class="no-print-bar">
-        <a href="{{ route('operations.invoices.show', $payment->invoice_id) }}" class="btn btn-secondary">
-            &larr; Back to Invoice
-        </a>
+        @if($payment->job_card_id)
+            <a href="{{ route('operations.job-cards.show', $payment->job_card_id) }}" class="btn btn-secondary">
+                &larr; Back to Job Card
+            </a>
+        @elseif($payment->invoice_id)
+            <a href="{{ route('operations.invoices.show', $payment->invoice_id) }}" class="btn btn-secondary">
+                &larr; Back to Invoice
+            </a>
+        @else
+            <a href="{{ route('billing.payments.index') }}" class="btn btn-secondary">
+                &larr; Back to Payments
+            </a>
+        @endif
+
         <div style="display: flex; gap: 6px;">
             <button onclick="handlePaymentPrint()" class="btn btn-primary" id="btn-print-payment">
-                Print Bill
+                Print Payment Receipt
             </button>
         </div>
     </div>
@@ -240,50 +274,79 @@
     <!-- 80mm Thermal Payment Receipt -->
     <div class="thermal-receipt">
         
+        @php
+            $logoUrl = $company->getLogoUrl();
+            $branch = $payment->jobCard?->branch ?? ($payment->invoice?->branch ?? $company->mainBranch);
+            $branchName = $branch ? $branch->name : 'Mattegoda';
+
+            $custName = $payment->customer?->customer_name 
+                ?? ($payment->jobCard?->customer?->customer_name 
+                ?? ($payment->invoice?->customer?->customer_name 
+                ?? ($payment->invoice?->customer_snapshot['customer_name'] ?? 'Walk-in Customer')));
+
+            $custPhone = $payment->customer?->phone 
+                ?? ($payment->jobCard?->customer?->phone 
+                ?? ($payment->invoice?->customer?->phone 
+                ?? ($payment->invoice?->customer_snapshot['phone'] ?? null)));
+
+            $vehNumber = $payment->jobCard?->vehicle?->vehicle_number 
+                ?? ($payment->invoice?->jobCard?->vehicle?->vehicle_number 
+                ?? ($payment->invoice?->customer_snapshot['vehicle_number'] ?? null));
+
+            $jobCardNumber = $payment->jobCard?->job_number 
+                ?? ($payment->invoice?->jobCard?->job_number ?? null);
+
+            $paymentDateStr = $payment->payment_date 
+                ? \Carbon\Carbon::parse($payment->payment_date)->format('d/m/Y') 
+                : ($payment->created_at ? $payment->created_at->format('d/m/Y') : now()->format('d/m/Y'));
+        @endphp
+
         <!-- Header: Company & Branch -->
         <div class="company-header">
-            @if(!empty($company->logo) && file_exists(public_path('storage/' . $company->logo)))
-                <img src="{{ asset('storage/' . $company->logo) }}" alt="Logo" class="logo-img">
+            @if(!empty($logoUrl))
+                <img src="{{ $logoUrl }}" alt="{{ $company->company_name ?? 'Viran Auto Care' }}" class="logo-img">
             @endif
-            <div class="company-name">{{ $company->company_name ?? 'AutoCare Service Center' }}</div>
-            <div class="branch-name">{{ $payment->invoice->branch?->name ?? 'Main Service Branch' }}</div>
-            <div class="company-meta">
-                {{ $payment->invoice->branch?->address ?? ($company->address ?? 'Colombo, Sri Lanka') }}
-            </div>
-            <div class="company-meta">
-                Tel: {{ $payment->invoice->branch?->phone ?? ($company->phone ?? '011-2345678') }}
-            </div>
+            <div class="company-name">VIRAN AUTO CARE - {{ strtoupper($branchName) }}</div>
+            @if($branch?->address || $company->address)
+                <div class="branch-meta">{{ $branch?->address ?? $company->address }}</div>
+            @endif
+            @if($branch?->phone || $company->phone)
+                <div class="branch-meta">Tel: {{ $branch?->phone ?? $company->phone }}</div>
+            @endif
         </div>
 
         <div class="divider"></div>
 
+        <!-- Heading: PAYMENT RECEIPT -->
         <div class="receipt-title">
-            OFFICIAL PAYMENT RECEIPT
+            PAYMENT RECEIPT
         </div>
 
         <div class="divider"></div>
 
         <!-- Meta Information -->
         <div class="meta-row">
-            <span class="meta-label">Receipt No:</span>
-            <span class="meta-val">{{ $payment->payment_number }}</span>
+            <span class="meta-label">Receipt Reference:</span>
+            <span class="meta-val font-black">{{ $payment->payment_number }}</span>
         </div>
 
-        <div class="meta-row">
-            <span class="meta-label">Invoice No:</span>
-            <span class="meta-val">{{ $payment->invoice->invoice_number }}</span>
-        </div>
-
-        @if($payment->invoice->jobCard)
+        @if($jobCardNumber)
             <div class="meta-row">
-                <span class="meta-label">Job Card No:</span>
-                <span class="meta-val">{{ $payment->invoice->jobCard->job_number }}</span>
+                <span class="meta-label">Job Card Number:</span>
+                <span class="meta-val font-black">{{ $jobCardNumber }}</span>
+            </div>
+        @endif
+
+        @if($payment->invoice_id && $payment->invoice)
+            <div class="meta-row">
+                <span class="meta-label">Invoice Number:</span>
+                <span class="meta-val">{{ $payment->invoice->invoice_number }}</span>
             </div>
         @endif
 
         <div class="meta-row">
-            <span class="meta-label">Date & Time:</span>
-            <span class="meta-val">{{ $payment->created_at ? $payment->created_at->format('Y-m-d H:i') : now()->format('Y-m-d H:i') }}</span>
+            <span class="meta-label">Payment Date:</span>
+            <span class="meta-val">{{ $paymentDateStr }}</span>
         </div>
 
         <div class="meta-row">
@@ -294,14 +357,8 @@
         <div class="divider"></div>
 
         <!-- Customer & Vehicle -->
-        @php
-            $custName = $payment->customer?->customer_name ?? ($payment->invoice->customer?->customer_name ?? ($payment->invoice->customer_snapshot['customer_name'] ?? 'Walk-in Customer'));
-            $custPhone = $payment->customer?->phone ?? ($payment->invoice->customer?->phone ?? ($payment->invoice->customer_snapshot['phone'] ?? null));
-            $vehNumber = $payment->invoice->jobCard?->vehicle?->vehicle_number ?? ($payment->invoice->customer_snapshot['vehicle_number'] ?? null);
-        @endphp
-
         <div class="meta-row">
-            <span class="meta-label">Received From:</span>
+            <span class="meta-label">Customer Name:</span>
             <span class="meta-val font-bold">{{ $custName }}</span>
         </div>
 
@@ -314,7 +371,7 @@
 
         @if($vehNumber)
             <div class="meta-row">
-                <span class="meta-label">Vehicle No:</span>
+                <span class="meta-label">Vehicle Number:</span>
                 <span class="meta-val uppercase font-black">{{ $vehNumber }}</span>
             </div>
         @endif
@@ -323,40 +380,39 @@
         <div class="payment-box">
             <div style="font-size: 10px; font-weight: 700; text-transform: uppercase;">Amount Received</div>
             <div class="payment-amount">LKR {{ number_format($payment->amount, 2) }}</div>
-            <div style="font-size: 10px; font-weight: 600;">
-                Method: {{ strtoupper(str_replace('_', ' ', $payment->payment_method)) }}
-                @if(!empty($payment->reference_number))
-                    • Ref: {{ $payment->reference_number }}
-                @endif
+            <div style="font-size: 10px; font-weight: 700;">
+                Payment Method: {{ strtoupper(str_replace('_', ' ', $payment->payment_method)) }}
             </div>
+            @if(!empty($payment->reference_number))
+                <div style="font-size: 9.5px; font-weight: 600; margin-top: 2px;">
+                    Ref: {{ $payment->reference_number }}
+                </div>
+            @endif
             @if(!empty($payment->notes))
-                <div style="font-size: 9.5px; color: #444; margin-top: 2px;">{{ $payment->notes }}</div>
+                <div style="font-size: 9.5px; color: #333; margin-top: 2px;">{{ $payment->notes }}</div>
             @endif
         </div>
 
-        <!-- Invoice Balance Summary -->
+        <!-- Balances Summary -->
         <table class="totals-table">
             <tr>
-                <td>Invoice Total:</td>
-                <td class="text-right font-bold">LKR {{ number_format($payment->invoice->grand_total, 2) }}</td>
+                <td>Job Total:</td>
+                <td class="text-right font-bold">LKR {{ number_format($jobTotal, 2) }}</td>
             </tr>
             <tr>
                 <td>Total Paid to Date:</td>
-                <td class="text-right font-bold">LKR {{ number_format($payment->invoice->amount_paid, 2) }}</td>
+                <td class="text-right font-bold">LKR {{ number_format($totalPaidToDate, 2) }}</td>
             </tr>
             <tr style="border-top: 1px dashed #000;">
                 <td class="font-black" style="padding-top: 3px;">REMAINING BALANCE:</td>
-                <td class="text-right font-black" style="padding-top: 3px;">LKR {{ number_format($payment->invoice->balance_amount, 2) }}</td>
+                <td class="text-right font-black" style="padding-top: 3px;">LKR {{ number_format($remainingBalance, 2) }}</td>
             </tr>
         </table>
 
         <!-- Status Badge -->
         <div class="text-center" style="margin-top: 6px;">
             @php
-                $statusLabel = 'PARTIALLY PAID';
-                if ($payment->invoice->status === 'paid' || (float)$payment->invoice->balance_amount <= 0.0001) {
-                    $statusLabel = 'PAID IN FULL';
-                }
+                $statusLabel = ($remainingBalance <= 0.0001) ? 'PAID IN FULL' : 'PARTIALLY PAID';
             @endphp
             <div class="status-badge">{{ $statusLabel }}</div>
         </div>
@@ -366,7 +422,7 @@
         <!-- Thank you & Footer -->
         <div class="footer-note">
             <div class="font-bold">Thank you for your payment!</div>
-            <div>This document serves as your official payment acknowledgment.</div>
+            <div>Official acknowledgment of payment received.</div>
         </div>
 
         <div class="barcode-area">

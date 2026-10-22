@@ -239,11 +239,16 @@ class PaymentController extends Controller
             'invoice.jobCard.vehicle',
             'invoice.jobCard.vehicleType',
             'invoice.branch',
+            'jobCard.customer',
+            'jobCard.vehicle',
+            'jobCard.vehicleType',
+            'jobCard.branch',
             'creator',
             'customer',
         ]);
 
-        if ($payment->invoice && $payment->invoice->branch_id && ! $user->canAccessBranch($payment->invoice->branch_id)) {
+        $branchId = $payment->invoice?->branch_id ?? $payment->jobCard?->branch_id;
+        if ($branchId && ! $user->canAccessBranch($branchId)) {
             abort(403, 'Unauthorized access to this branch.');
         }
 
@@ -268,17 +273,44 @@ class PaymentController extends Controller
             'invoice.jobCard.vehicle',
             'invoice.jobCard.vehicleType',
             'invoice.branch',
+            'jobCard.customer',
+            'jobCard.vehicle',
+            'jobCard.vehicleType',
+            'jobCard.branch',
             'creator',
             'customer',
         ]);
 
-        if ($payment->invoice && $payment->invoice->branch_id && ! $user->canAccessBranch($payment->invoice->branch_id)) {
+        $branchId = $payment->invoice?->branch_id ?? $payment->jobCard?->branch_id;
+        if ($branchId && ! $user->canAccessBranch($branchId)) {
             abort(403, 'Unauthorized access to this branch.');
         }
 
         $company = CompanySetting::getSettings();
 
-        return view('billing.payments.thermal', compact('payment', 'company'));
+        // Calculate job total and cumulative paid up to this payment
+        $jobCard = $payment->jobCard ?? $payment->invoice?->jobCard;
+        $invoice = $payment->invoice;
+
+        $jobTotal = $jobCard ? (float)$jobCard->grand_total : ($invoice ? (float)$invoice->grand_total : (float)$payment->amount);
+
+        if ($jobCard) {
+            $totalPaidToDate = (float) Payment::where('job_card_id', $jobCard->id)
+                ->where('status', 'completed')
+                ->where('id', '<=', $payment->id)
+                ->sum('amount');
+        } elseif ($invoice) {
+            $totalPaidToDate = (float) Payment::where('invoice_id', $invoice->id)
+                ->where('status', 'completed')
+                ->where('id', '<=', $payment->id)
+                ->sum('amount');
+        } else {
+            $totalPaidToDate = (float) $payment->amount;
+        }
+
+        $remainingBalance = max(0, round($jobTotal - $totalPaidToDate, 2));
+
+        return view('billing.payments.thermal', compact('payment', 'company', 'jobTotal', 'totalPaidToDate', 'remainingBalance'));
     }
 
     /**

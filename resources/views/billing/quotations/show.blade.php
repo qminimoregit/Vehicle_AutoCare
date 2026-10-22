@@ -6,14 +6,14 @@
 <div class="max-w-4xl mx-auto space-y-6">
     <!-- Top Action Bar -->
     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div class="flex items-center space-x-3">
-            <a href="{{ route('billing.quotations.index') }}" class="text-gray-400 hover:text-gray-600 transition">
+        <div class="flex items-start sm:items-center space-x-3">
+            <a href="{{ route('billing.quotations.index') }}" class="text-gray-400 hover:text-gray-600 transition mt-1 sm:mt-0 p-1 -ml-1">
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
             </a>
             <div>
-                <div class="flex items-center space-x-3">
+                <div class="flex flex-wrap items-center gap-2 sm:gap-3">
                     <h1 class="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
                         Quotation #{{ $quotation->quotation_number }}
                     </h1>
@@ -278,7 +278,7 @@
         </div>
 
         <!-- Line Items Table -->
-        <div>
+        <div class="responsive-table-wrapper">
             <table class="min-w-full divide-y divide-gray-200">
                 <thead>
                     <tr class="text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-200">

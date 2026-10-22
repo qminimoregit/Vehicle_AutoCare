@@ -96,7 +96,7 @@
 
     <!-- Quotations Table Card -->
     <div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="responsive-table-wrapper">
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50/75">
                     <tr>
