@@ -260,6 +260,54 @@
                         </div>
                     </div>
 
+                    <!-- 8. Authorized Signature -->
+                    <div>
+                        <label for="signature" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-2">
+                            Authorized Signature
+                        </label>
+                        <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+                            <!-- Current Signature Preview -->
+                            <div class="w-48 h-20 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0 p-2">
+                                @if($company->signature_path)
+                                    <img src="{{ asset('storage/' . $company->signature_path) }}" alt="Authorized Signature" class="max-h-full max-w-full object-contain" />
+                                @else
+                                    <div class="text-center p-2 text-gray-400">
+                                        <svg class="mx-auto h-5 w-5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                        </svg>
+                                        <span class="text-[10px] mt-0.5 block">No Signature Uploaded</span>
+                                        <span class="text-[9px] text-gray-400 block">(Blank line will appear on receipts)</span>
+                                    </div>
+                                @endif
+                            </div>
+
+                            <!-- Upload Control -->
+                            @if($canEdit ?? Auth::user()->isAdmin())
+                                <div class="flex-1 space-y-2">
+                                    <input 
+                                        type="file" 
+                                        name="signature" 
+                                        id="signature" 
+                                        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                                        class="block w-full text-xs text-gray-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[#0B1849] file:text-white hover:file:bg-[#15286e] cursor-pointer"
+                                    />
+                                    <p class="text-xs text-gray-400">Upload an authorized signature image for receipts. Supported: PNG, JPG, JPEG, SVG, WEBP (Max 2MB).</p>
+                                    @if($company->signature_path)
+                                        <label class="inline-flex items-center text-xs text-rose-600 hover:text-rose-800 cursor-pointer mt-1">
+                                            <input type="checkbox" name="remove_signature" value="1" class="rounded border-gray-300 text-rose-600 focus:ring-rose-500 mr-1.5">
+                                            <span>Remove existing signature image</span>
+                                        </label>
+                                    @endif
+                                    <x-input-error for="signature" />
+                                </div>
+                            @else
+                                <div class="text-xs text-gray-400">
+                                    Signature uploads restricted to authorized administrators.
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+
                     <!-- Submit Button: [Save Changes] -->
                     @if($canEdit ?? Auth::user()->isAdmin())
                         <div class="pt-6 border-t border-gray-100 flex items-center justify-end">

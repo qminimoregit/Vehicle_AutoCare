@@ -503,6 +503,17 @@ class QuotationController extends Controller
     }
 
     /**
+     * 80mm thermal receipt format for Quotation.
+     */
+    public function thermalReceipt(Quotation $quotation): View
+    {
+        $quotation->load(['customer', 'vehicle.vehicleType', 'branch', 'items', 'creator']);
+        $company = CompanySetting::getSettings();
+
+        return view('billing.quotations.thermal', compact('quotation', 'company'));
+    }
+
+    /**
      * Mark quotation status as SENT.
      */
     public function markAsSent(Quotation $quotation): RedirectResponse

@@ -21,8 +21,8 @@
         }
 
         .no-print-bar {
-            width: 76mm;
-            max-width: 100%;
+            width: 72mm;
+            max-width: 76mm;
             margin: 0 auto 15px auto;
             display: flex;
             justify-content: space-between;
@@ -64,12 +64,13 @@
             background-color: #f9fafb;
         }
 
-        /* 80mm Thermal Receipt Sheet */
+        /* 80mm Thermal Receipt Sheet - Usable content width ~72mm */
         .thermal-receipt {
-            width: 76mm;
+            width: 72mm;
+            max-width: 76mm;
             margin: 0 auto;
             background: #ffffff;
-            padding: 12px 10px;
+            padding: 10px 4px;
             box-shadow: 0 2px 6px rgba(0,0,0,0.1);
             color: #000000;
             position: relative;
@@ -88,11 +89,15 @@
         }
 
         .logo-img {
-            max-height: 52px;
-            max-width: 160px;
-            margin: 0 auto 4px auto;
+            max-height: 48px;
+            max-width: 140px;
+            width: auto;
+            height: auto;
+            margin: 0 auto 5px auto;
             display: block;
             object-fit: contain;
+            filter: grayscale(100%) contrast(150%);
+            -webkit-filter: grayscale(100%) contrast(150%);
         }
 
         .company-name {
@@ -148,7 +153,7 @@
         .items-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 10.5px;
+            font-size: 10px;
             margin: 5px 0;
         }
 
@@ -157,7 +162,7 @@
             border-bottom: 1px dashed #000000;
             padding: 3px 0;
             font-weight: 800;
-            font-size: 10px;
+            font-size: 9.5px;
             text-transform: uppercase;
         }
 
@@ -166,20 +171,27 @@
             vertical-align: top;
         }
 
+        .col-desc {
+            width: 44%;
+            word-break: break-word;
+            padding-right: 4px;
+            text-align: left;
+        }
+
         .col-qty {
-            width: 15%;
+            width: 14%;
             text-align: left;
             font-weight: 700;
         }
 
-        .col-desc {
-            width: 53%;
-            word-break: break-word;
-            padding-right: 4px;
+        .col-price {
+            width: 20%;
+            text-align: right;
+            white-space: nowrap;
         }
 
         .col-amt {
-            width: 32%;
+            width: 22%;
             text-align: right;
             font-weight: 700;
             white-space: nowrap;
@@ -214,10 +226,56 @@
             text-transform: uppercase;
         }
 
+        /* Authorized Signature */
+        .signature-block {
+            text-align: center;
+            margin: 10px auto 4px auto;
+            width: 100%;
+        }
+
+        .signature-img-wrap {
+            height: 38px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            margin-bottom: 2px;
+        }
+
+        .signature-img {
+            max-height: 36px;
+            max-width: 140px;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            filter: grayscale(100%) contrast(150%);
+            -webkit-filter: grayscale(100%) contrast(150%);
+        }
+
+        .signature-blank-space {
+            height: 30px;
+        }
+
+        .signature-rule {
+            font-size: 10px;
+            line-height: 1;
+            letter-spacing: -0.5px;
+            overflow: hidden;
+            white-space: nowrap;
+            color: #000000;
+        }
+
+        .signature-text {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 3px 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
         .footer-note {
             text-align: center;
             font-size: 10.5px;
-            margin-top: 10px;
+            margin-top: 8px;
             line-height: 1.35;
         }
 
@@ -232,15 +290,19 @@
         /* PRINT MEDIA STYLES - 80MM ROLL PAPER */
         @page {
             size: 80mm auto;
-            margin: 0;
+            margin: 0mm;
         }
 
         @media print {
-            body {
+            html, body {
                 background: #ffffff !important;
                 padding: 0 !important;
                 margin: 0 !important;
                 width: 80mm !important;
+                max-width: 80mm !important;
+                color: #000000 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
             }
 
             .no-print-bar {
@@ -248,12 +310,23 @@
             }
 
             .thermal-receipt {
-                width: 76mm !important;
+                width: 72mm !important;
                 max-width: 76mm !important;
                 margin: 0 auto !important;
                 padding: 2mm 1mm !important;
                 box-shadow: none !important;
                 border: none !important;
+                page-break-inside: auto !important;
+            }
+
+            tr, .meta-row, .signature-block, .company-header, .footer-note {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+
+            .logo-img, .signature-img {
+                filter: grayscale(100%) contrast(150%) !important;
+                -webkit-filter: grayscale(100%) contrast(150%) !important;
             }
         }
     </style>
@@ -275,12 +348,15 @@
     <!-- 80mm Thermal Receipt -->
     <div class="thermal-receipt">
         
-        <!-- Header: Centered Logo & Company Details -->
+        <!-- 1. Company Logo & 2. Company Name & 3. Address and Phone -->
         <div class="company-header">
-            @if(!empty($company->logo) && file_exists(public_path('storage/' . $company->logo)))
-                <img src="{{ asset('storage/' . $company->logo) }}" alt="{{ $company->company_name ?? 'Logo' }}" class="logo-img">
+            @php
+                $hasLogo = !empty($company->logo_path) && (file_exists(public_path('storage/' . $company->logo_path)) || \Illuminate\Support\Facades\Storage::disk('public')->exists($company->logo_path));
+            @endphp
+            @if($hasLogo)
+                <img src="{{ asset('storage/' . $company->logo_path) }}" alt="{{ $company->company_name ?? 'Company Logo' }}" class="logo-img">
             @endif
-            <div class="company-name">{{ strtoupper($invoice->branch?->name ?? ($company->company_name ?? 'VIRAN AUTO CARE MATTEGODA')) }}</div>
+            <div class="company-name">{{ strtoupper($company->company_name ?? 'VIRAN AUTO CARE') }}</div>
             @if($invoice->branch?->address || $company->address)
                 <div class="branch-meta">{{ $invoice->branch?->address ?? $company->address }}</div>
             @endif
@@ -291,21 +367,22 @@
 
         <div class="divider"></div>
 
-        <div class="receipt-title">
-            SALES BILL
+        <!-- 4. Invoice Title -->
+        <div class="receipt-title" data-doc-type="SALES BILL">
+            SALES INVOICE
         </div>
 
         <div class="divider"></div>
 
-        <!-- Meta Information -->
+        <!-- 5. Invoice Number & 6. Date/Time & 7. Customer/Vehicle Info -->
         <div class="meta-row">
-            <span class="meta-label">Bill No:</span>
-            <span class="meta-val font-black">{{ $invoice->invoice_number }}</span>
+            <span class="meta-label">Invoice No:</span>
+            <span class="meta-val font-black">#{{ $invoice->invoice_number }}</span>
         </div>
 
         <div class="meta-row">
             <span class="meta-label">Date:</span>
-            <span class="meta-val">{{ $invoice->created_at ? $invoice->created_at->format('d/m/Y') : now()->format('d/m/Y') }}</span>
+            <span class="meta-val">{{ $invoice->invoice_date ? \Carbon\Carbon::parse($invoice->invoice_date)->format('d/m/Y') : ($invoice->created_at ? $invoice->created_at->format('d/m/Y') : now()->format('d/m/Y')) }}</span>
         </div>
 
         <div class="meta-row">
@@ -320,39 +397,57 @@
 
         @php
             $vehNumber = $invoice->jobCard?->vehicle?->vehicle_number ?? ($invoice->vehicle?->vehicle_number ?? ($invoice->customer_snapshot['vehicle_number'] ?? null));
+            $vehModel = $invoice->jobCard?->vehicle?->make_model ?? ($invoice->vehicle?->make_model ?? null);
             $custName = $invoice->customer?->customer_name ?? ($invoice->customer_snapshot['customer_name'] ?? 'Customer Name');
+            $custPhone = $invoice->customer?->phone ?? ($invoice->customer_snapshot['phone'] ?? null);
         @endphp
-
-        @if($vehNumber)
-            <div class="meta-row">
-                <span class="meta-label">Vehicle:</span>
-                <span class="meta-val font-black uppercase" style="font-size: 12px;">{{ $vehNumber }}</span>
-            </div>
-        @endif
 
         <div class="meta-row">
             <span class="meta-label">Customer:</span>
             <span class="meta-val font-bold">{{ $custName }}</span>
         </div>
 
+        @if($custPhone)
+            <div class="meta-row">
+                <span class="meta-label">Phone:</span>
+                <span class="meta-val">{{ $custPhone }}</span>
+            </div>
+        @endif
+
+        @if($vehNumber)
+            <div class="meta-row">
+                <span class="meta-label">Vehicle:</span>
+                <span class="meta-val font-black uppercase" style="font-size: 11.5px;">{{ $vehNumber }}</span>
+            </div>
+        @endif
+
+        @if($vehModel)
+            <div class="meta-row">
+                <span class="meta-label">Model:</span>
+                <span class="meta-val">{{ $vehModel }}</span>
+            </div>
+        @endif
+
         <div class="divider"></div>
 
-        <!-- Items Table -->
+        <!-- 8. Services and products & 9. Quantity, unit price and amount -->
         <table class="items-table">
             <thead>
                 <tr>
-                    <th class="col-qty">Qty</th>
                     <th class="col-desc">Description</th>
+                    <th class="col-qty">Qty</th>
+                    <th class="col-price">Price</th>
                     <th class="col-amt">Amount</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach($invoice->items as $item)
                     <tr>
-                        <td class="col-qty">{{ (float)$item->quantity == (int)$item->quantity ? (int)$item->quantity : number_format($item->quantity, 2) }}</td>
                         <td class="col-desc">
                             {{ $item->item_name }}
                         </td>
+                        <td class="col-qty">{{ (float)$item->quantity == (int)$item->quantity ? (int)$item->quantity : number_format($item->quantity, 2) }}</td>
+                        <td class="col-price">{{ number_format($item->unit_price, 2) }}</td>
                         <td class="col-amt">{{ number_format($item->line_total ?? ($item->total ?? 0), 2) }}</td>
                     </tr>
                 @endforeach
@@ -361,7 +456,7 @@
 
         <div class="divider"></div>
 
-        <!-- Totals & Balances -->
+        <!-- 10. Subtotal, 11. Discount/Tax, 12. Grand Total, 13. Paid, 14. Balance -->
         <table class="totals-table">
             <tr>
                 <td>Subtotal:</td>
@@ -380,20 +475,20 @@
                 </tr>
             @endif
             <tr class="total-highlight">
-                <td>TOTAL:</td>
+                <td>GRAND TOTAL:</td>
                 <td class="text-right">LKR {{ number_format($invoice->grand_total, 2) }}</td>
             </tr>
             <tr>
-                <td style="padding-top: 4px;">Paid:</td>
-                <td class="text-right font-bold" style="padding-top: 4px;">{{ number_format($invoice->amount_paid, 2) }}</td>
+                <td style="padding-top: 4px;">Paid Amount:</td>
+                <td class="text-right font-bold" style="padding-top: 4px;">LKR {{ number_format($invoice->amount_paid, 2) }}</td>
             </tr>
             <tr>
-                <td class="font-black">BALANCE:</td>
+                <td class="font-black">Outstanding Balance:</td>
                 <td class="text-right font-black">LKR {{ number_format($invoice->balance_amount, 2) }}</td>
             </tr>
         </table>
 
-        <!-- Status -->
+        <!-- 15. Payment Status -->
         <div class="text-center" style="margin-top: 6px;">
             @php
                 $statusLabel = 'PARTIALLY PAID';
@@ -415,7 +510,26 @@
 
         <div class="divider"></div>
 
-        <!-- Footer -->
+        <!-- 16. Authorized Signature -->
+        @php
+            $hasSignature = !empty($company->signature_path) && (file_exists(public_path('storage/' . $company->signature_path)) || \Illuminate\Support\Facades\Storage::disk('public')->exists($company->signature_path));
+        @endphp
+        <div class="signature-block">
+            @if($hasSignature)
+                <div class="signature-img-wrap">
+                    <img src="{{ asset('storage/' . $company->signature_path) }}" alt="Authorized Signature" class="signature-img">
+                </div>
+            @else
+                <div class="signature-blank-space"></div>
+            @endif
+            <div class="signature-rule">---------------------------------------------</div>
+            <div class="signature-text">Authorized Signature</div>
+            <div class="signature-rule">---------------------------------------------</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- 17. Thank-you message -->
         <div class="footer-note">
             <div class="font-bold">Thank you for choosing us!</div>
             <div class="font-bold uppercase" style="margin-top: 2px;">{{ strtoupper($company->company_name ?? 'VIRAN AUTO CARE') }}</div>

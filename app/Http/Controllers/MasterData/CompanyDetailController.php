@@ -68,7 +68,22 @@ class CompanyDetailController extends Controller
             $validated['logo_path'] = $path;
         }
 
-        unset($validated['logo']);
+        if ($request->hasFile('signature')) {
+            // Delete previous signature file if exists
+            if ($company->signature_path && Storage::disk('public')->exists($company->signature_path)) {
+                Storage::disk('public')->delete($company->signature_path);
+            }
+
+            $path = $request->file('signature')->store('company', 'public');
+            $validated['signature_path'] = $path;
+        } elseif ($request->boolean('remove_signature')) {
+            if ($company->signature_path && Storage::disk('public')->exists($company->signature_path)) {
+                Storage::disk('public')->delete($company->signature_path);
+            }
+            $validated['signature_path'] = null;
+        }
+
+        unset($validated['logo'], $validated['signature'], $validated['remove_signature']);
 
         $company->update($validated);
 

@@ -30,6 +30,8 @@ class CompanyDetailsRequest extends FormRequest
             'address' => ['nullable', 'string', 'max:500'],
             'tax_number' => ['nullable', 'string', 'max:100'],
             'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp,svg', 'max:2048'],
+            'signature' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp,svg', 'max:2048'],
+            'remove_signature' => ['nullable', 'boolean'],
         ];
     }
 
@@ -44,6 +46,9 @@ class CompanyDetailsRequest extends FormRequest
             'logo.image' => 'The logo must be a valid image file.',
             'logo.mimes' => 'The logo must be a file of type: png, jpg, jpeg, svg, webp.',
             'logo.max' => 'The logo size must not exceed 2MB (2048 KB).',
+            'signature.image' => 'The authorized signature must be a valid image file.',
+            'signature.mimes' => 'The authorized signature must be a file of type: png, jpg, jpeg, svg, webp.',
+            'signature.max' => 'The authorized signature size must not exceed 2MB (2048 KB).',
         ];
     }
 }

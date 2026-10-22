@@ -236,6 +236,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::put('/quotations/{quotation}', [QuotationController::class, 'update'])->name('quotations.update');
         Route::get('/quotations/{quotation}/pdf', [QuotationController::class, 'downloadPdf'])->name('quotations.pdf');
         Route::get('/quotations/{quotation}/print', [QuotationController::class, 'print'])->name('quotations.print');
+        Route::get('/quotations/{quotation}/thermal', [QuotationController::class, 'thermalReceipt'])->name('quotations.thermal');
         Route::post('/quotations/{quotation}/send', [QuotationController::class, 'markAsSent'])->name('quotations.send');
         Route::post('/quotations/{quotation}/accept', [QuotationController::class, 'accept'])->name('quotations.accept');
         Route::post('/quotations/{quotation}/reject', [QuotationController::class, 'reject'])->name('quotations.reject');

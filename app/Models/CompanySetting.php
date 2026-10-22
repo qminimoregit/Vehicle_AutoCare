@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 
 class CompanySetting extends Model
 {
@@ -17,6 +18,7 @@ class CompanySetting extends Model
         'email',
         'tax_number',
         'logo_path',
+        'signature_path',
     ];
 
     /**
@@ -63,16 +65,75 @@ class CompanySetting extends Model
     }
 
     /**
+     * Accessor for signature attribute alias to signature_path.
+     */
+    public function getSignatureAttribute(): ?string
+    {
+        return $this->signature_path;
+    }
+
+    /**
+     * Get accessible public URL for the authorized signature if uploaded.
+     */
+    public function getSignatureUrl(): ?string
+    {
+        if (! empty($this->signature_path)) {
+            if (file_exists(public_path('storage/'.$this->signature_path))) {
+                return asset('storage/'.$this->signature_path);
+            }
+            if (Storage::disk('public')->exists($this->signature_path)) {
+                return asset('storage/'.$this->signature_path);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve base64 data URI for authorized signature.
+     */
+    public function getSignatureBase64(): ?string
+    {
+        if (empty($this->signature_path)) {
+            return null;
+        }
+
+        if (str_starts_with($this->signature_path, 'data:image/')) {
+            return $this->signature_path;
+        }
+
+        $path = storage_path('app/public/'.ltrim(str_replace(['storage/', 'public/'], '', $this->signature_path), '/'));
+        if (file_exists($path) && is_file($path)) {
+            $contents = @file_get_contents($path);
+            if ($contents) {
+                $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+                $mime = match ($ext) {
+                    'png' => 'image/png',
+                    'jpg', 'jpeg' => 'image/jpeg',
+                    'svg' => 'image/svg+xml',
+                    'webp' => 'image/webp',
+                    default => 'image/png',
+                };
+
+                return 'data:'.$mime.';base64,'.base64_encode($contents);
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Get accessible public URL for the company logo with automatic fallback.
      */
     public function getLogoUrl(): string
     {
-        if (!empty($this->logo_path) && file_exists(public_path('storage/' . $this->logo_path))) {
-            return asset('storage/' . $this->logo_path);
+        if (! empty($this->logo_path) && file_exists(public_path('storage/'.$this->logo_path))) {
+            return asset('storage/'.$this->logo_path);
         }
         if (file_exists(public_path('images/branding/viran_auto_care_logo.png'))) {
             return asset('images/branding/viran_auto_care_logo.png');
         }
+
         return asset('images/branding/autocare-logo-transparent.png');
     }
 
