@@ -129,7 +129,7 @@
                 @elseif($invoice->quotation)
                     • Converted from <a href="{{ route('billing.quotations.show', $invoice->quotation) }}" class="text-purple-600 hover:underline font-semibold">Quotation #{{ $invoice->quotation->quotation_number }}</a>
                 @elseif($invoice->invoice_type === 'direct_sale')
-                    • Direct POS Sale
+                    • Direct POS Sale @if($invoice->directSale) • Linked to <a href="{{ route('operations.direct-sales.bill', $invoice->directSale) }}" target="_blank" class="text-emerald-700 hover:underline font-semibold">Sales Bill #{{ $invoice->directSale->bill_number }}</a>@endif
                 @else
                     • Direct Invoice
                 @endif

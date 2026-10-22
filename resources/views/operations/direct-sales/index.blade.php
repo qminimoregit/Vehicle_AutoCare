@@ -10,10 +10,12 @@
         products: {{ Js::from($products) }},
         
         // Cart State
+        // Cart State
         cart: [],
         customerId: '',
         customerName: '',
         customerPhone: '',
+        customerEmail: '',
         discount: 0,
         tax: 0,
         paymentMethod: 'cash',
@@ -26,6 +28,16 @@
         showSuccessModal: false,
         completedSale: null,
 
+        // Sharing State (Email & WhatsApp)
+        activeShareTab: '', // '' | 'email' | 'whatsapp'
+        emailRecipient: '',
+        isSendingEmail: false,
+        emailSuccessMessage: '',
+        emailErrorMessage: '',
+        whatsappRecipientPhone: '',
+        whatsappMessageText: '',
+        copiedWhatsApp: false,
+
         init() {
             window.__posCartHasItems = () => this.cart && this.cart.length > 0;
         },
@@ -37,9 +49,17 @@
             this.tax = 0;
             this.customerName = '';
             this.customerPhone = '';
+            this.customerEmail = '';
             this.notes = '';
             this.showSuccessModal = false;
             this.completedSale = null;
+            this.activeShareTab = '';
+            this.emailRecipient = '';
+            this.emailSuccessMessage = '';
+            this.emailErrorMessage = '';
+            this.whatsappRecipientPhone = '';
+            this.whatsappMessageText = '';
+            this.copiedWhatsApp = false;
         },
 
         formatQty(val) {
@@ -164,6 +184,114 @@
             this.amountPaid = this.grandTotal;
         },
 
+        // Phone normalization helper for Sri Lankan numbers
+        normalizePhone(phone) {
+            if (!phone) return '';
+            let clean = phone.toString().replace(/[\s\-\(\)\.]/g, '').trim();
+            if (clean.startsWith('+')) clean = clean.substring(1);
+            if (clean.startsWith('00')) clean = clean.substring(2);
+            if (/^0([1-9][0-9]{8})$/.test(clean)) return '94' + clean.substring(1);
+            if (/^([1-9][0-9]{8})$/.test(clean)) return '94' + clean;
+            if (/^94[0-9]{9}$/.test(clean)) return clean;
+            let digits = clean.replace(/\D/g, '');
+            return digits || '';
+        },
+
+        isValidWhatsAppPhone(phone) {
+            let norm = this.normalizePhone(phone);
+            return /^94[0-9]{9}$/.test(norm) || (norm.length >= 9 && norm.length <= 15);
+        },
+
+        openEmailModal() {
+            this.activeShareTab = this.activeShareTab === 'email' ? '' : 'email';
+            if (this.activeShareTab === 'email') {
+                this.emailRecipient = this.completedSale?.customer_email || this.customerEmail || '';
+                this.emailSuccessMessage = '';
+                this.emailErrorMessage = '';
+            }
+        },
+
+        async sendBillEmail() {
+            let email = (this.emailRecipient || '').trim();
+            if (!email || !email.includes('@')) {
+                this.emailErrorMessage = 'Please enter a valid email address.';
+                return;
+            }
+
+            this.isSendingEmail = true;
+            this.emailSuccessMessage = '';
+            this.emailErrorMessage = '';
+
+            try {
+                let response = await fetch(this.completedSale?.email_url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify({ email: email }),
+                });
+
+                let data = await response.json();
+
+                if (response.ok && data.success) {
+                    this.emailSuccessMessage = data.message || ('Sales Bill emailed successfully to ' + email + '.');
+                    if (this.completedSale) {
+                        this.completedSale.customer_email = email;
+                    }
+                } else {
+                    this.emailErrorMessage = data.message || 'Failed to send email. Please verify mail configuration.';
+                }
+            } catch (err) {
+                console.error(err);
+                this.emailErrorMessage = 'Network error while attempting to send email. Please check server connection.';
+            } finally {
+                this.isSendingEmail = false;
+            }
+        },
+
+        openWhatsAppModal() {
+            this.activeShareTab = this.activeShareTab === 'whatsapp' ? '' : 'whatsapp';
+            if (this.activeShareTab === 'whatsapp') {
+                this.whatsappRecipientPhone = this.completedSale?.customer_phone || this.customerPhone || '';
+                this.whatsappMessageText = this.completedSale?.whatsapp_message || '';
+            }
+        },
+
+        copyWhatsAppText() {
+            if (navigator.clipboard && this.whatsappMessageText) {
+                navigator.clipboard.writeText(this.whatsappMessageText).then(() => {
+                    this.copiedWhatsApp = true;
+                    setTimeout(() => { this.copiedWhatsApp = false; }, 2500);
+                });
+            }
+        },
+
+        openWhatsApp() {
+            let norm = this.normalizePhone(this.whatsappRecipientPhone);
+            if (!norm || norm.length < 9) {
+                alert('Please enter a valid mobile number (e.g. 077 123 4567).');
+                return;
+            }
+            let url = 'https://wa.me/' + encodeURIComponent(norm) + '?text=' + encodeURIComponent(this.whatsappMessageText);
+            window.open(url, '_blank');
+        },
+
+        printBill() {
+            let url = this.completedSale?.bill_url || this.completedSale?.thermal_url;
+            if (window.AutoCarePrinter && window.AutoCarePrinter.printUrl) {
+                window.AutoCarePrinter.printUrl(url, {
+                    type: 'bill',
+                    title: 'POS Bill #' + (this.completedSale?.bill_number || ''),
+                    documentNumber: this.completedSale?.bill_number || '',
+                    fallbackUrl: url
+                });
+            } else {
+                window.open(url, '_blank');
+            }
+        },
+
         // Submit Checkout via AJAX
         async checkout() {
             if (this.cart.length === 0) {
@@ -171,12 +299,10 @@
                 return;
             }
 
-            if (this.paymentMethod !== 'credit') {
-                let paid = parseFloat(this.amountPaid) || 0;
-                if (paid < this.grandTotal) {
-                    alert('Amount paid cannot be less than Grand Total (LKR ' + this.grandTotal.toFixed(2) + ').');
-                    return;
-                }
+            let paid = parseFloat(this.amountPaid);
+            if (isNaN(paid) || paid < 0) {
+                alert('Please enter a valid payment amount.');
+                return;
             }
 
             this.isSubmitting = true;
@@ -190,10 +316,11 @@
                 customer_id: this.customerId || null,
                 customer_name: this.customerName || null,
                 phone: this.customerPhone || null,
+                email: this.customerEmail || null,
                 discount_amount: parseFloat(this.discount) || 0,
                 tax_amount: parseFloat(this.tax) || 0,
                 payment_method: this.paymentMethod,
-                amount_paid: parseFloat(this.amountPaid) || this.grandTotal,
+                amount_paid: paid,
                 notes: this.notes,
             };
 
@@ -212,6 +339,10 @@
 
                 if (response.ok && data.success) {
                     this.completedSale = data;
+                    this.emailRecipient = data.customer_email || this.customerEmail || '';
+                    this.whatsappRecipientPhone = data.customer_phone || this.customerPhone || '';
+                    this.whatsappMessageText = data.whatsapp_message || '';
+                    this.activeShareTab = '';
                     this.showSuccessModal = true;
                     this.isSubmitting = false;
                 } else {
@@ -405,22 +536,33 @@
 
                 <!-- Customer Selection (Optional for Walk-in) -->
                 <div class="p-4 border-b border-gray-100 bg-slate-50/50 space-y-2">
-                    <label class="block text-[11px] font-bold uppercase tracking-wider text-gray-600">
-                        Customer (Optional Walk-In)
-                    </label>
-                    <div class="grid grid-cols-2 gap-2">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-gray-700">
+                            Customer Details (Optional)
+                        </label>
+                        <span class="text-[10px] text-gray-500 font-medium">Walk-in by default</span>
+                    </div>
+                    <div class="space-y-2">
                         <input 
                             type="text" 
                             x-model="customerName"
-                            placeholder="Customer Name"
-                            class="py-1.5 px-2.5 text-xs text-gray-900 border border-gray-300 rounded-md bg-white min-h-[38px]"
+                            placeholder="Customer Name (optional)"
+                            class="block w-full py-1.5 px-2.5 text-xs text-gray-900 border border-gray-300 rounded-md bg-white min-h-[38px]"
                         >
-                        <input 
-                            type="text" 
-                            x-model="customerPhone"
-                            placeholder="Mobile Number"
-                            class="py-1.5 px-2.5 text-xs text-gray-900 border border-gray-300 rounded-md bg-white min-h-[38px]"
-                        >
+                        <div class="grid grid-cols-2 gap-2">
+                            <input 
+                                type="text" 
+                                x-model="customerPhone"
+                                placeholder="Mobile (e.g. 0771234567)"
+                                class="py-1.5 px-2.5 text-xs text-gray-900 border border-gray-300 rounded-md bg-white min-h-[38px]"
+                            >
+                            <input 
+                                type="email" 
+                                x-model="customerEmail"
+                                placeholder="Email Address"
+                                class="py-1.5 px-2.5 text-xs text-gray-900 border border-gray-300 rounded-md bg-white min-h-[38px]"
+                            >
+                        </div>
                     </div>
                 </div>
 
@@ -597,7 +739,7 @@
                                     <svg class="w-5 h-5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                                     </svg>
-                                    Complete Sale & Invoice
+                                    Complete Sale & Generate Bill
                                 </span>
                             </template>
                         </button>
@@ -634,63 +776,274 @@
     >
         <div 
             @click.outside="resetSale()"
-            class="bg-white rounded-2xl shadow-2xl max-w-md w-full max-w-[calc(100vw-2rem)] p-5 sm:p-6 text-center space-y-4 sm:space-y-5 border border-gray-200 max-h-[90vh] overflow-y-auto"
+            class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-w-[calc(100vw-2rem)] p-5 sm:p-6 text-center space-y-4 border border-gray-200 max-h-[90vh] overflow-y-auto"
         >
-            <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
-                <svg class="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div class="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+                <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                 </svg>
             </div>
 
             <div>
                 <h3 class="text-xl font-black text-gray-900">Sale Completed!</h3>
-                <p class="text-xs text-gray-500 mt-1" x-text="completedSale?.message || 'Transaction successfully processed and inventory deducted.'"></p>
+                <p class="text-xs text-gray-500 mt-1" x-text="completedSale?.message || 'Payment recorded and Sales Bill generated successfully.'"></p>
             </div>
 
-            <div class="bg-slate-50 rounded-xl p-3.5 border border-gray-100 text-xs space-y-1.5 text-gray-700">
-                <div class="flex justify-between font-bold">
-                    <span>Invoice / Sale:</span>
-                    <span class="text-[#0B1849]" x-text="'#' + (completedSale?.sale_id || '')"></span>
+            <!-- Transaction Details Box -->
+            <div class="bg-slate-50 rounded-xl p-3.5 border border-gray-100 text-xs space-y-2 text-gray-700 text-left">
+                <div class="flex justify-between items-center font-bold">
+                    <span class="text-gray-500 uppercase text-[11px]">Bill Number:</span>
+                    <span class="text-[#0B1849] font-mono text-sm font-black" x-text="completedSale?.bill_number || ('#' + (completedSale?.sale_id || ''))"></span>
                 </div>
-                <div class="flex justify-between">
-                    <span>Payment Method:</span>
-                    <span class="uppercase font-semibold" x-text="paymentMethod"></span>
+                <div class="flex justify-between items-center font-semibold">
+                    <span class="text-gray-500 uppercase text-[11px]">Total Paid:</span>
+                    <span class="text-emerald-700 font-bold whitespace-nowrap text-sm" x-text="'LKR ' + (completedSale?.amount_paid != null ? parseFloat(completedSale.amount_paid).toFixed(2) : '0.00')"></span>
                 </div>
-                <div class="flex justify-between font-bold text-sm text-gray-900 pt-1 border-t border-gray-200">
-                    <span>Total Paid:</span>
-                    <span class="whitespace-nowrap" x-text="'LKR ' + (amountPaid ? parseFloat(amountPaid).toFixed(2) : grandTotal.toFixed(2))"></span>
+                <template x-if="completedSale?.balance > 0">
+                    <div class="flex justify-between items-center font-semibold">
+                        <span class="text-gray-500 uppercase text-[11px]">Balance Due:</span>
+                        <span class="text-red-600 font-bold whitespace-nowrap text-xs" x-text="'LKR ' + parseFloat(completedSale.balance).toFixed(2)"></span>
+                    </div>
+                </template>
+                <div class="flex justify-between items-center pt-1 border-t border-gray-200">
+                    <span class="text-gray-500 uppercase text-[11px] font-bold">Payment Status:</span>
+                    <span 
+                        class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-extrabold uppercase tracking-wide"
+                        :class="completedSale?.payment_status === 'Paid in Full' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-amber-100 text-amber-800 border border-amber-200'"
+                        x-text="completedSale?.payment_status || 'Paid in Full'"
+                    ></span>
                 </div>
-                <template x-if="changeAmount > 0">
-                    <div class="flex justify-between text-emerald-700 font-bold">
-                        <span>Change Returned:</span>
-                        <span class="whitespace-nowrap" x-text="'LKR ' + changeAmount.toFixed(2)"></span>
+                <template x-if="completedSale?.change_amount > 0">
+                    <div class="flex justify-between items-center text-emerald-700 font-bold pt-1 border-t border-gray-200">
+                        <span class="text-[11px]">Change Returned:</span>
+                        <span class="whitespace-nowrap" x-text="'LKR ' + parseFloat(completedSale.change_amount).toFixed(2)"></span>
                     </div>
                 </template>
             </div>
 
-            <div class="space-y-2 pt-1">
+            <!-- Action Buttons: 2-Column Responsive Desktop & Mobile -->
+            <div class="grid grid-cols-2 gap-2 pt-1">
+                <!-- Print Bill -->
                 <button 
                     type="button" 
-                    @click="window.AutoCarePrinter ? window.AutoCarePrinter.printUrl(completedSale?.thermal_url || completedSale?.receipt_url, { type: 'bill', title: 'POS Bill #' + (completedSale?.invoice_number || ''), documentNumber: completedSale?.invoice_number || '', fallbackUrl: completedSale?.thermal_url || completedSale?.receipt_url }) : window.open(completedSale?.thermal_url || completedSale?.receipt_url, '_blank')"
-                    class="w-full inline-flex items-center justify-center px-4 py-3 bg-[#0B1849] hover:bg-[#15286e] text-white font-bold text-sm rounded-xl shadow-xs transition cursor-pointer"
+                    @click="printBill()"
+                    class="inline-flex items-center justify-center px-3 py-2.5 bg-[#0B1849] hover:bg-[#15286e] text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer min-h-[42px]"
                 >
-                    <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg class="w-4 h-4 mr-1.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                     </svg>
-                    Print Bill
+                    <span>Print Bill</span>
                 </button>
 
+                <!-- View Bill -->
                 <a 
-                    :href="completedSale?.redirect_url" 
-                    class="w-full inline-flex items-center justify-center px-4 py-2.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-bold text-xs rounded-xl shadow-xs transition"
+                    :href="completedSale?.bill_url || completedSale?.thermal_url" 
+                    target="_blank"
+                    class="inline-flex items-center justify-center px-3 py-2.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-bold text-xs rounded-xl shadow-xs transition min-h-[42px]"
                 >
-                    View Full Invoice
+                    <svg class="w-4 h-4 mr-1.5 shrink-0 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    <span>View Bill</span>
                 </a>
 
+                <!-- Email Bill -->
+                <button 
+                    type="button" 
+                    @click="openEmailModal()"
+                    class="inline-flex items-center justify-center px-3 py-2.5 border font-bold text-xs rounded-xl shadow-xs transition cursor-pointer min-h-[42px]"
+                    :class="activeShareTab === 'email' ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-50 border-blue-200 hover:bg-blue-100 text-[#0B1849]'"
+                >
+                    <svg class="w-4 h-4 mr-1.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    <span>Email Bill</span>
+                </button>
+
+                <!-- WhatsApp -->
+                <button 
+                    type="button" 
+                    @click="openWhatsAppModal()"
+                    class="inline-flex items-center justify-center px-3 py-2.5 border font-bold text-xs rounded-xl shadow-xs transition cursor-pointer min-h-[42px]"
+                    :class="activeShareTab === 'whatsapp' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-emerald-50 border-emerald-200 hover:bg-emerald-100 text-emerald-800'"
+                >
+                    <svg class="w-4 h-4 mr-1.5 shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+                    </svg>
+                    <span>WhatsApp</span>
+                </button>
+            </div>
+
+            <!-- Inline Email Drawer -->
+            <div 
+                x-show="activeShareTab === 'email'" 
+                x-transition 
+                class="bg-blue-50/70 border border-blue-200 rounded-xl p-3.5 text-left space-y-3"
+            >
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-[#0B1849] uppercase tracking-wide flex items-center">
+                        <svg class="w-4 h-4 mr-1 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        Email Sales Bill (PDF Attached)
+                    </span>
+                    <button type="button" @click="activeShareTab = ''" class="text-gray-400 hover:text-gray-700 text-xs font-bold cursor-pointer">
+                        &times; Close
+                    </button>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="block text-[11px] font-semibold text-gray-700">Recipient Email Address:</label>
+                    <input 
+                        type="email" 
+                        x-model="emailRecipient" 
+                        placeholder="customer@example.com"
+                        class="w-full py-2 px-3 text-xs bg-white border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500"
+                    >
+                </div>
+
+                <template x-if="emailSuccessMessage">
+                    <div class="p-2.5 bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-lg text-xs font-semibold flex items-center">
+                        <svg class="w-4 h-4 mr-1.5 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span x-text="emailSuccessMessage"></span>
+                    </div>
+                </template>
+
+                <template x-if="emailErrorMessage">
+                    <div class="p-2.5 bg-red-100 border border-red-300 text-red-800 rounded-lg text-xs font-semibold flex items-center">
+                        <svg class="w-4 h-4 mr-1.5 text-red-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span x-text="emailErrorMessage"></span>
+                    </div>
+                </template>
+
+                <div class="flex items-center justify-end space-x-2 pt-1">
+                    <button 
+                        type="button" 
+                        @click="sendBillEmail()"
+                        :disabled="isSendingEmail || !emailRecipient"
+                        class="inline-flex items-center px-4 py-2 bg-[#0B1849] hover:bg-[#15286e] text-white text-xs font-bold rounded-lg shadow-xs transition disabled:opacity-50 cursor-pointer"
+                    >
+                        <template x-if="isSendingEmail">
+                            <span class="inline-flex items-center">
+                                <svg class="animate-spin -ml-0.5 mr-1.5 h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Sending PDF Bill...
+                            </span>
+                        </template>
+                        <template x-if="!isSendingEmail">
+                            <span>Send Email</span>
+                        </template>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Inline WhatsApp Drawer -->
+            <div 
+                x-show="activeShareTab === 'whatsapp'" 
+                x-transition 
+                class="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 text-left space-y-3"
+            >
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-emerald-900 uppercase tracking-wide flex items-center">
+                        <svg class="w-4 h-4 mr-1 text-emerald-600" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+                        </svg>
+                        Share via WhatsApp (Manual)
+                    </span>
+                    <button type="button" @click="activeShareTab = ''" class="text-gray-400 hover:text-gray-700 text-xs font-bold cursor-pointer">
+                        &times; Close
+                    </button>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="block text-[11px] font-semibold text-gray-700">Customer Mobile Number:</label>
+                    <input 
+                        type="text" 
+                        x-model="whatsappRecipientPhone" 
+                        placeholder="e.g. 077 123 4567"
+                        class="w-full py-2 px-3 text-xs bg-white border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-emerald-500"
+                    >
+                    <p class="text-[10px] text-gray-500">
+                        <template x-if="isValidWhatsAppPhone(whatsappRecipientPhone)">
+                            <span class="text-emerald-700 font-semibold">
+                                &bull; Normalized: +<span x-text="normalizePhone(whatsappRecipientPhone)"></span> (Ready to open WhatsApp)
+                            </span>
+                        </template>
+                        <template x-if="!isValidWhatsAppPhone(whatsappRecipientPhone) && whatsappRecipientPhone">
+                            <span class="text-amber-700 font-semibold">
+                                &bull; Enter standard 10-digit Sri Lankan number (e.g. 077 123 4567)
+                            </span>
+                        </template>
+                    </p>
+                </div>
+
+                <!-- Message Preview -->
+                <div class="space-y-1">
+                    <div class="flex justify-between items-center text-[11px] font-semibold text-gray-600">
+                        <span>Message Preview:</span>
+                        <button 
+                            type="button" 
+                            @click="copyWhatsAppText()"
+                            class="text-emerald-700 hover:underline cursor-pointer"
+                        >
+                            <span x-text="copiedWhatsApp ? 'Copied!' : 'Copy Text'"></span>
+                        </button>
+                    </div>
+                    <textarea 
+                        x-model="whatsappMessageText" 
+                        rows="6" 
+                        class="w-full p-2 text-[11px] bg-white border border-gray-200 rounded-lg font-mono text-gray-800"
+                    ></textarea>
+                </div>
+
+                <!-- Manual Sending Info Note -->
+                <p class="text-[10.5px] text-gray-500 italic">
+                    Note: WhatsApp click-to-chat opens WhatsApp Web or App with the prefilled message. Cashier must review and manually press Send.
+                </p>
+
+                <!-- Action Buttons in WhatsApp Drawer -->
+                <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-emerald-200">
+                    <!-- Download Bill PDF for manual WhatsApp attachment -->
+                    <a 
+                        :href="completedSale?.pdf_url" 
+                        download
+                        class="inline-flex items-center px-3 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-semibold rounded-lg shadow-2xs transition"
+                        title="Download PDF to manually attach in WhatsApp"
+                    >
+                        <svg class="w-3.5 h-3.5 mr-1 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Download Bill PDF
+                    </a>
+
+                    <!-- Open in WhatsApp Button -->
+                    <button 
+                        type="button" 
+                        @click="openWhatsApp()"
+                        :disabled="!isValidWhatsAppPhone(whatsappRecipientPhone)"
+                        class="inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition disabled:opacity-40 cursor-pointer"
+                    >
+                        <svg class="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+                        </svg>
+                        Open in WhatsApp &rarr;
+                    </button>
+                </div>
+            </div>
+
+            <!-- Start Next Sale Button -->
+            <div class="pt-2">
                 <button 
                     type="button" 
                     @click="resetSale()"
-                    class="w-full inline-flex items-center justify-center px-4 py-2 text-xs font-semibold text-gray-500 hover:text-gray-800 cursor-pointer"
+                    class="w-full inline-flex items-center justify-center px-4 py-2 text-xs font-semibold text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-xl transition cursor-pointer"
                 >
                     + Start Next Sale
                 </button>

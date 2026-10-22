@@ -23,7 +23,7 @@
                         name="search" 
                         id="search" 
                         value="{{ $search }}" 
-                        placeholder="e.g. INV-202610-0001 or DS-202610-0001" 
+                        placeholder="e.g. BILL-DS-202610-0028, INV-202610-0001, or DS-202610-0001" 
                         class="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-900 focus:bg-white focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] transition"
                         required
                         autofocus
@@ -70,6 +70,9 @@
                     <span class="text-xs font-bold uppercase tracking-wider text-gray-400">Sale Details</span>
                     <h2 class="text-lg font-bold text-gray-900 mt-0.5">
                         Sale #{{ $directSale->sale_number }}
+                        @if($directSale->bill_number)
+                            <span class="text-gray-400 font-normal">|</span> Bill #{{ $directSale->bill_number }}
+                        @endif
                         @if($directSale->invoice)
                             <span class="text-gray-400 font-normal">|</span> Invoice #{{ $directSale->invoice->invoice_number }}
                         @endif
