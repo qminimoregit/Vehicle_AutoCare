@@ -32,6 +32,7 @@ use App\Http\Controllers\Operations\JobCardController;
 use App\Http\Controllers\Operations\JobIssueController;
 use App\Http\Controllers\Operations\VehicleRegistrationController;
 use App\Http\Controllers\Payroll\AttendanceController;
+use App\Http\Controllers\Payroll\AttendanceReminderController;
 use App\Http\Controllers\Payroll\EmployeeController;
 use App\Http\Controllers\Payroll\SalaryController;
 use App\Http\Controllers\Reports\CreditManagementController;
@@ -212,6 +213,11 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/direct-sales', [DirectSaleController::class, 'index'])->name('direct-sales.index');
         Route::get('/direct-sales/search-products', [DirectSaleController::class, 'searchProducts'])->name('direct-sales.search-products');
         Route::post('/direct-sales', [DirectSaleController::class, 'store'])->name('direct-sales.store');
+        Route::get('/direct-sales/{directSale}/bill', [DirectSaleController::class, 'printBill'])->name('direct-sales.bill');
+        Route::get('/direct-sales/{directSale}/pdf', [DirectSaleController::class, 'downloadPdf'])->name('direct-sales.pdf');
+        Route::post('/direct-sales/{directSale}/email', [DirectSaleController::class, 'sendEmail'])->name('direct-sales.email');
+        Route::post('/direct-sales/{directSale}/update-contact', [DirectSaleController::class, 'updateContact'])->name('direct-sales.update-contact');
+        Route::post('/direct-sales/{directSale}/generate-invoice', [DirectSaleController::class, 'generateInvoice'])->name('direct-sales.generate-invoice');
 
         // Invoices (Operations legacy shortcuts)
         Route::get('/invoices', [InvoiceController::class, 'index'])->name('invoices.index');
@@ -298,6 +304,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         // Employee Attendance
         Route::get('/attendance', [AttendanceController::class, 'index'])->name('attendance.index');
         Route::post('/attendance', [AttendanceController::class, 'store'])->name('attendance.store');
+        Route::get('/attendance/reminder-status', [AttendanceReminderController::class, 'status'])->name('attendance.reminder.status');
+        Route::post('/attendance/reminder-dismiss', [AttendanceReminderController::class, 'dismiss'])->name('attendance.reminder.dismiss');
 
         // Employee Advances
         Route::post('/advances', [SalaryController::class, 'storeAdvance'])->name('advances.store');

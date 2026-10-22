@@ -226,7 +226,7 @@
                 <h3 class="text-sm font-bold text-gray-900">Salary Advances Deducted in this Payroll</h3>
                 <span class="text-xs text-gray-500 font-mono">Total: LKR {{ number_format($advances->sum('amount'), 2) }}</span>
             </div>
-            <div class="overflow-x-auto">
+            <div class="responsive-table-wrapper">
                 <table class="min-w-full divide-y divide-gray-200 text-xs">
                     <thead class="bg-gray-50">
                         <tr>
@@ -271,7 +271,7 @@
             @endif
         </div>
         @if($payrollItem->payments->count() > 0)
-            <div class="overflow-x-auto">
+            <div class="responsive-table-wrapper">
                 <table class="min-w-full divide-y divide-gray-200 text-xs">
                     <thead class="bg-gray-50">
                         <tr>
@@ -320,7 +320,7 @@
                 </svg>
             </div>
 
-            <div x-show="openBreakdown" x-cloak class="overflow-x-auto">
+            <div x-show="openBreakdown" x-cloak class="responsive-table-wrapper">
                 <table class="min-w-full divide-y divide-gray-200 text-xs">
                     <thead class="bg-gray-50">
                         <tr>

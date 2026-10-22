@@ -124,7 +124,7 @@
     </div>
 
     <!-- Structured Statement Card -->
-    <div class="bg-white rounded-xl border border-gray-200 shadow-xs p-6 md:p-8 max-w-4xl mx-auto space-y-6">
+    <div class="bg-white rounded-xl border border-gray-200 shadow-xs p-4 sm:p-6 md:p-8 max-w-4xl mx-auto space-y-6">
         <!-- Statement Title Block -->
         <div class="text-center border-b border-gray-200 pb-5">
             <h2 class="text-xl font-bold text-[#0B1849]">AutoCare Service Center</h2>

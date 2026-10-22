@@ -141,7 +141,7 @@
                 <span class="text-xs font-bold text-[#0B1849] uppercase tracking-wider">Product Valuation Summary</span>
                 <span class="text-xs text-gray-500">{{ $productWise->count() }} items listed</span>
             </div>
-            <div class="overflow-x-auto">
+            <div class="responsive-table-wrapper">
                 <table class="w-full text-left border-collapse text-xs">
                     <thead>
                         <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold uppercase tracking-wider">
@@ -222,7 +222,7 @@
                 <span class="text-xs font-bold text-[#0B1849] uppercase tracking-wider">Detailed FIFO Batch Valuation</span>
                 <span class="text-xs text-gray-500">{{ $batches->count() }} active lots</span>
             </div>
-            <div class="overflow-x-auto">
+            <div class="responsive-table-wrapper">
                 <table class="w-full text-left border-collapse text-xs">
                     <thead>
                         <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold uppercase tracking-wider">

@@ -134,7 +134,7 @@
 
     <!-- Main Stock Table -->
     <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="responsive-table-wrapper">
             <table class="w-full text-left border-collapse text-xs">
                 <thead>
                     <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold uppercase tracking-wider">
@@ -217,7 +217,7 @@
     >
         <div 
             @click.away="modalOpen = false" 
-            class="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-3xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+            class="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-[calc(100vw-2rem)] sm:max-w-3xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150"
         >
             <!-- Modal Header -->
             <div class="px-6 py-4 bg-[#0B1849] text-white flex items-center justify-between">
@@ -233,7 +233,7 @@
             </div>
 
             <!-- Modal Body -->
-            <div class="p-6">
+            <div class="p-4 sm:p-6 overflow-y-auto flex-1">
                 <template x-if="loading">
                     <div class="py-12 text-center text-gray-500 text-xs">
                         Loading active batches...
@@ -247,7 +247,7 @@
                 </template>
 
                 <template x-if="!loading && batchData.batches && batchData.batches.length > 0">
-                    <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                    <div class="responsive-table-wrapper border border-gray-200 rounded-lg">
                         <table class="w-full text-left text-xs">
                             <thead class="bg-gray-50 text-gray-600 font-semibold border-b border-gray-200">
                                 <tr>

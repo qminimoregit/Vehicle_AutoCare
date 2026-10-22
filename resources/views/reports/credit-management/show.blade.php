@@ -105,7 +105,7 @@
                 <span class="text-xs text-gray-500 block mt-0.5">Services performed on all fleet vehicles are unified under this credit account.</span>
             </div>
         </div>
-        <div class="overflow-x-auto">
+        <div class="responsive-table-wrapper">
             <table class="w-full text-left border-collapse text-xs">
                 <thead>
                     <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold uppercase tracking-wider">
@@ -162,7 +162,7 @@
             <span class="text-xs font-bold uppercase tracking-wider text-[#0B1849]">Invoices & Credit Charges</span>
             <span class="text-xs text-gray-500">{{ $invoices->count() }} invoices on record</span>
         </div>
-        <div class="overflow-x-auto">
+        <div class="responsive-table-wrapper">
             <table class="w-full text-left border-collapse text-xs">
                 <thead>
                     <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold uppercase tracking-wider">
@@ -232,7 +232,7 @@
             <span class="text-xs font-bold uppercase tracking-wider text-[#0B1849]">Payment History</span>
             <span class="text-xs text-gray-500">{{ $payments->count() }} settlements</span>
         </div>
-        <div class="overflow-x-auto">
+        <div class="responsive-table-wrapper">
             <table class="w-full text-left border-collapse text-xs">
                 <thead>
                     <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold uppercase tracking-wider">

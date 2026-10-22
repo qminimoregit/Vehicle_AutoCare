@@ -121,7 +121,7 @@
 
     <!-- Credit Accounts Table -->
     <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="responsive-table-wrapper">
             <table class="w-full text-left border-collapse text-xs">
                 <thead>
                     <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold uppercase tracking-wider">

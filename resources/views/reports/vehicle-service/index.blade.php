@@ -160,7 +160,7 @@
                 <span class="text-xs font-bold uppercase tracking-wider text-[#0B1849]">Maintenance & Service Log</span>
                 <span class="text-xs text-gray-500">{{ $serviceHistory->count() }} records found</span>
             </div>
-            <div class="overflow-x-auto">
+            <div class="responsive-table-wrapper">
                 <table class="w-full text-left border-collapse text-xs">
                     <thead>
                         <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold uppercase tracking-wider">

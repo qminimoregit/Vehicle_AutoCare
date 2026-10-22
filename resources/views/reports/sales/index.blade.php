@@ -145,7 +145,7 @@
 
     <!-- Sales Table -->
     <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="responsive-table-wrapper">
             <table class="w-full text-left border-collapse text-xs">
                 <thead>
                     <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold uppercase tracking-wider">
@@ -171,9 +171,15 @@
                                 {{ $inv->invoice_date?->format('d M Y') ?? '-' }}
                             </td>
                             <td class="py-3 px-4 font-mono font-bold text-[#0B1849]">
-                                <a href="{{ route('billing.invoices.show', $inv) }}" class="hover:underline">
-                                    {{ $inv->invoice_number }}
-                                </a>
+                                @if(isset($inv->is_bill) && $inv->is_bill)
+                                    <a href="{{ route('operations.direct-sales.bill', $inv->id) }}" target="_blank" class="hover:underline text-emerald-800" title="Sales Bill">
+                                        {{ $inv->invoice_number }}
+                                    </a>
+                                @else
+                                    <a href="{{ route('billing.invoices.show', $inv) }}" class="hover:underline">
+                                        {{ $inv->invoice_number }}
+                                    </a>
+                                @endif
                             </td>
                             <td class="py-3 px-4 font-medium text-gray-900">
                                 {{ $inv->customer?->display_name ?? 'Guest Customer' }}

@@ -141,7 +141,7 @@
             <span class="text-xs font-bold uppercase tracking-wider text-[#0B1849]">Customer Collections & Cash Receipts</span>
             <span class="text-xs text-gray-500">{{ $payments->count() }} transactions</span>
         </div>
-        <div class="overflow-x-auto">
+        <div class="responsive-table-wrapper">
             <table class="w-full text-left border-collapse text-xs">
                 <thead>
                     <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold uppercase tracking-wider">
@@ -176,6 +176,10 @@
                                     <a href="{{ route('operations.invoices.show', $p->invoice) }}" class="text-blue-600 hover:underline">
                                         {{ $p->invoice->invoice_number }}
                                     </a>
+                                @elseif($p->directSale)
+                                    <a href="{{ route('operations.direct-sales.bill', $p->directSale) }}" target="_blank" class="text-emerald-700 hover:underline font-semibold" title="Sales Bill">
+                                        {{ $p->directSale->bill_number }} <span class="text-xs text-emerald-600 font-bold">(Bill)</span>
+                                    </a>
                                 @elseif($p->jobCard)
                                     <a href="{{ route('operations.job-cards.show', $p->jobCard) }}" class="text-indigo-600 hover:underline font-semibold" title="Advance payment for Job Card">
                                         {{ $p->jobCard->job_number }} <span class="text-xs text-amber-600 font-bold">(Advance)</span>
@@ -185,7 +189,7 @@
                                 @endif
                             </td>
                             <td class="py-3 px-4 font-medium text-gray-900">
-                                {{ $p->invoice?->customer?->display_name ?? ($p->jobCard?->customer?->display_name ?? ($p->customer?->display_name ?? 'Guest')) }}
+                                {{ $p->invoice?->customer?->display_name ?? ($p->directSale?->customer?->display_name ?? ($p->jobCard?->customer?->display_name ?? ($p->customer?->display_name ?? 'Guest'))) }}
                             </td>
                             <td class="py-3 px-4">
                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold {{ $isCash ? 'bg-emerald-50 text-emerald-800' : ($isCard ? 'bg-blue-50 text-blue-800' : ($isBank ? 'bg-indigo-50 text-indigo-800' : 'bg-amber-50 text-amber-800')) }}">
@@ -231,18 +235,18 @@
         <div class="px-4 py-3 bg-purple-50/50 border-b border-purple-100 flex items-center justify-between">
             <div>
                 <span class="text-xs font-bold uppercase tracking-wider text-purple-900">New Credit Sales Created (Accounts Receivable)</span>
-                <span class="text-xs text-purple-700 block mt-0.5">Invoices issued during this period with unpaid or credit balances.</span>
+                <span class="text-xs text-purple-700 block mt-0.5">Invoices and Sales Bills issued during this period with unpaid or credit balances.</span>
             </div>
             <span class="text-xs font-bold text-purple-900">Total: LKR {{ number_format($creditSalesCreated, 2) }}</span>
         </div>
-        <div class="overflow-x-auto">
+        <div class="responsive-table-wrapper">
             <table class="w-full text-left border-collapse text-xs">
                 <thead>
                     <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold uppercase tracking-wider">
-                        <th class="py-2.5 px-4">Invoice Date</th>
-                        <th class="py-2.5 px-4">Invoice #</th>
+                        <th class="py-2.5 px-4">Date</th>
+                        <th class="py-2.5 px-4">Invoice / Bill #</th>
                         <th class="py-2.5 px-4">Customer / Company</th>
-                        <th class="py-2.5 px-4 text-right">Invoice Total</th>
+                        <th class="py-2.5 px-4 text-right">Total</th>
                         <th class="py-2.5 px-4 text-right">Paid Now</th>
                         <th class="py-2.5 px-4 text-right">Credit Balance</th>
                         <th class="py-2.5 px-4">Branch</th>
@@ -253,9 +257,15 @@
                         <tr class="hover:bg-slate-50 transition">
                             <td class="py-2.5 px-4 text-gray-600">{{ $cs->invoice_date?->format('d M Y') }}</td>
                             <td class="py-2.5 px-4 font-mono font-bold text-[#0B1849]">
-                                <a href="{{ route('billing.invoices.show', $cs) }}" class="hover:underline">
-                                    {{ $cs->invoice_number }}
-                                </a>
+                                @if(isset($cs->is_bill) && $cs->is_bill)
+                                    <a href="{{ route('operations.direct-sales.bill', $cs->id) }}" target="_blank" class="hover:underline text-emerald-800" title="Sales Bill">
+                                        {{ $cs->invoice_number }}
+                                    </a>
+                                @else
+                                    <a href="{{ route('billing.invoices.show', $cs) }}" class="hover:underline">
+                                        {{ $cs->invoice_number }}
+                                    </a>
+                                @endif
                             </td>
                             <td class="py-2.5 px-4 font-medium text-gray-900">{{ $cs->customer?->display_name ?? 'Customer' }}</td>
                             <td class="py-2.5 px-4 text-right font-medium text-gray-800">LKR {{ number_format($cs->grand_total, 2) }}</td>
@@ -277,7 +287,7 @@
 
     <!-- Expense Payments & Outflows (Actual cash/bank spent) -->
     <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
-        <div class="p-4 border-b border-gray-200 bg-gray-50/70 flex items-center justify-between">
+        <div class="p-4 border-b border-gray-200 bg-gray-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div class="flex items-center space-x-2">
                 <svg class="w-4 h-4 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -290,7 +300,7 @@
                 <span class="font-normal text-gray-500 ml-1">(Cash: LKR {{ number_format($expenseCashOutflow, 2) }}, Bank: LKR {{ number_format($expenseBankOutflow, 2) }})</span>
             </div>
         </div>
-        <div class="overflow-x-auto">
+        <div class="responsive-table-wrapper">
             <table class="w-full text-left border-collapse text-xs">
                 <thead>
                     <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold uppercase tracking-wider">

@@ -40,7 +40,7 @@
             <thead>
                 <tr class="bg-gray-100 border-b border-gray-300 font-bold text-gray-800">
                     <th class="p-2 border-r border-gray-300">Date</th>
-                    <th class="p-2 border-r border-gray-300">Invoice #</th>
+                    <th class="p-2 border-r border-gray-300">Invoice / Bill #</th>
                     <th class="p-2 border-r border-gray-300">Customer / Company</th>
                     <th class="p-2 border-r border-gray-300">Vehicle</th>
                     <th class="p-2 border-r border-gray-300">Type</th>
@@ -53,7 +53,8 @@
             <tbody class="divide-y divide-gray-200">
                 @foreach($invoices as $inv)
                     @php
-                        $isDirect = ($inv->invoice_type === 'direct_sale' || $inv->directSale !== null);
+                        $isDirect = ($inv->invoice_type === 'direct_sale' || ($inv->is_bill ?? false) || $inv->directSale !== null);
+                        $statusText = $inv->payment_status ?? ($inv->balance_amount <= 0.0001 ? 'Paid' : ($inv->amount_paid > 0 ? 'Partially Paid' : 'Unpaid'));
                     @endphp
                     <tr>
                         <td class="p-2 border-r border-gray-200">{{ $inv->invoice_date?->format('Y-m-d') }}</td>
@@ -64,7 +65,7 @@
                         <td class="p-2 border-r border-gray-200 text-right font-medium">LKR {{ number_format($inv->grand_total, 2) }}</td>
                         <td class="p-2 border-r border-gray-200 text-right text-emerald-700">LKR {{ number_format($inv->amount_paid, 2) }}</td>
                         <td class="p-2 border-r border-gray-200 text-right text-rose-600">LKR {{ number_format($inv->balance_amount, 2) }}</td>
-                        <td class="p-2 text-center">{{ $inv->payment_status }}</td>
+                        <td class="p-2 text-center">{{ $statusText }}</td>
                     </tr>
                 @endforeach
             </tbody>

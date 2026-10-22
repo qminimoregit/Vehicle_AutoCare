@@ -315,7 +315,7 @@
                 <h2>Payslip / Salary Slip</h2>
                 <div class="period">{{ $payrollItem->period->formatted_period }}</div>
                 <div style="font-size: 10px; color: #64748b; margin-top: 3px;">
-                    Date: {{ now()->format('d/m/Y') }}
+                    Date: {{ \Carbon\Carbon::now('Asia/Colombo')->format('d/m/Y') }}
                 </div>
             </div>
         </div>
