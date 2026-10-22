@@ -119,7 +119,7 @@
 
         <!-- Stock Report Table -->
         <div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
-            <div class="overflow-x-auto">
+            <div class="responsive-table-wrapper">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50/80">
                         <tr>
@@ -236,7 +236,7 @@
 
             <div 
                 x-show="batchModalOpen" 
-                class="relative bg-white rounded-xl shadow-xl max-w-4xl w-full border border-gray-200 z-10 overflow-hidden"
+                class="relative bg-white rounded-xl shadow-xl w-full max-w-[calc(100vw-2rem)] sm:max-w-4xl max-h-[88vh] overflow-y-auto border border-gray-200 z-10"
             >
                 <div class="px-6 py-4 bg-gray-50/80 border-b border-gray-200 flex items-center justify-between">
                     <div>
@@ -263,7 +263,7 @@
                         No purchase batches recorded yet for this product.
                     </div>
 
-                    <div x-show="!modalLoading && batches.length > 0" class="overflow-x-auto">
+                    <div x-show="!modalLoading && batches.length > 0" class="responsive-table-wrapper">
                         <table class="min-w-full divide-y divide-gray-200 text-sm">
                             <thead class="bg-gray-50 text-xs font-bold text-gray-600 uppercase">
                                 <tr>
@@ -326,7 +326,7 @@
 
             <div 
                 x-show="historyModalOpen" 
-                class="relative bg-white rounded-xl shadow-xl max-w-3xl w-full border border-gray-200 z-10 overflow-hidden"
+                class="relative bg-white rounded-xl shadow-xl w-full max-w-[calc(100vw-2rem)] sm:max-w-3xl max-h-[88vh] overflow-y-auto border border-gray-200 z-10"
             >
                 <div class="px-6 py-4 bg-gray-50/80 border-b border-gray-200 flex items-center justify-between">
                     <div>
@@ -354,7 +354,7 @@
                         No historical purchases recorded yet for this product.
                     </div>
 
-                    <div x-show="!modalLoading && history.length > 0" class="overflow-x-auto">
+                    <div x-show="!modalLoading && history.length > 0" class="responsive-table-wrapper">
                         <table class="min-w-full divide-y divide-gray-200 text-sm">
                             <thead class="bg-gray-50 text-xs font-bold text-gray-600 uppercase">
                                 <tr>

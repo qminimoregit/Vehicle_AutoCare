@@ -180,7 +180,7 @@
                 <span class="text-xs text-gray-500">{{ $grn->items->count() }} line items</span>
             </div>
 
-            <div class="overflow-x-auto">
+            <div class="responsive-table-wrapper">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50/50">
                         <tr>
@@ -251,7 +251,7 @@
                     </div>
                 </div>
 
-                <div class="overflow-x-auto">
+                <div class="responsive-table-wrapper">
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50/50">
                             <tr>
@@ -336,7 +336,7 @@
                 <div>
                     <h4 class="text-xs font-bold uppercase tracking-wider text-gray-700 mb-3">Payment History</h4>
                     @if($grn->payments->isNotEmpty())
-                        <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                        <div class="responsive-table-wrapper border border-gray-200 rounded-lg">
                             <table class="min-w-full divide-y divide-gray-200">
                                 <thead class="bg-gray-50/60">
                                     <tr class="text-left text-xs font-bold text-gray-600 uppercase">
@@ -547,7 +547,7 @@
             <div class="flex items-center justify-center min-h-screen px-4 py-6">
                 <div class="fixed inset-0 bg-gray-900/50 backdrop-blur-xs transition-opacity" @click="reversalModalOpen = false"></div>
 
-                <div class="relative bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-gray-200 space-y-4">
+                <div class="relative bg-white rounded-2xl w-full max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6 shadow-xl border border-gray-200 space-y-4">
                     <div class="flex items-center justify-between border-b border-gray-100 pb-3">
                         <div>
                             <h3 class="text-base font-bold text-gray-900">Reverse Supplier Payment</h3>

@@ -1290,22 +1290,78 @@ class JobCardController extends Controller
     }
 
     /**
-     * Print Bill from Job Card:
-     * If final invoice exists: 80mm thermal invoice bill.
-     * If advance received: 80mm thermal advance payment receipt.
+     * Print 80mm Sales Bill directly from Job Card:
+     * Generated directly from Job Card without requiring invoice or prior payment.
+     * Shows billable services/products, subtotal, discount, grand total, payments received, and balance.
+     * Does not create an invoice database record.
      */
-    public function printBill(JobCard $jobCard)
+    public function printBill(JobCard $jobCard): View|RedirectResponse
     {
-        if ($jobCard->invoice_id && $jobCard->invoice) {
-            return redirect()->route('operations.invoices.thermal', $jobCard->invoice_id);
+        $user = Auth::user();
+        if ($jobCard->branch_id && ! $user->isAdmin()) {
+            $accessible = BranchContext::getAccessibleBranches($user)->pluck('id')->toArray();
+            if (! in_array($jobCard->branch_id, $accessible)) {
+                abort(403, 'Unauthorized access to this branch.');
+            }
         }
 
-        $hasPayments = $jobCard->payments()->where('status', 'completed')->exists();
-        if ($hasPayments) {
-            return redirect()->route('operations.job-cards.advance-receipt', $jobCard);
+        $jobCard->load([
+            'customer',
+            'vehicle',
+            'vehicleType',
+            'branch',
+            'creator',
+            'services.service',
+            'products.product',
+            'payments' => function ($q) {
+                $q->where('status', 'completed')->orderBy('payment_date', 'asc');
+            },
+        ]);
+
+        $hasItems = ($jobCard->services->count() > 0 || $jobCard->products->count() > 0);
+        if (! $hasItems) {
+            return back()->with('error', 'Cannot print bill: No billable services or products have been added to this Job Card.');
         }
 
-        return back()->with('error', 'No payments or invoice generated yet to print.');
+        $company = CompanySetting::getSettings();
+
+        $serviceTotal = (float) $jobCard->service_total;
+        $productTotal = (float) $jobCard->product_total;
+        $subtotal = round($serviceTotal + $productTotal, 2);
+        $discount = (float) $jobCard->discount_amount;
+        $tax = (float) $jobCard->tax_amount;
+        $grandTotal = (float) $jobCard->grand_total;
+
+        // Cumulative payments for this Job Card
+        $totalPaid = (float) Payment::where(function ($q) use ($jobCard) {
+            $q->where('job_card_id', $jobCard->id);
+            if ($jobCard->invoice_id) {
+                $q->orWhere('invoice_id', $jobCard->invoice_id);
+            }
+        })->where('status', 'completed')->sum('amount');
+
+        $totalPaid = round($totalPaid, 2);
+        $balance = max(0, round($grandTotal - $totalPaid, 2));
+
+        if ($totalPaid <= 0.0001) {
+            $paymentStatus = 'Unpaid';
+        } elseif ($balance <= 0.0001) {
+            $paymentStatus = 'Paid in Full';
+        } else {
+            $paymentStatus = 'Partially Paid';
+        }
+
+        return view('operations.jobs.bill', compact(
+            'jobCard',
+            'company',
+            'subtotal',
+            'discount',
+            'tax',
+            'grandTotal',
+            'totalPaid',
+            'balance',
+            'paymentStatus'
+        ));
     }
 
     /**

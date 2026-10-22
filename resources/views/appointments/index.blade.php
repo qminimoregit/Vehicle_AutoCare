@@ -181,6 +181,17 @@
             this.showNewModal = true;
         },
 
+        // Mobile responsive day click handler
+        handleDayClick(day) {
+            let dayEvents = this.getEventsForDate(day.dateString);
+            if (window.innerWidth < 640 && dayEvents.length > 0) {
+                this.currentDate = new Date(day.date);
+                this.viewMode = 'day';
+            } else {
+                this.clickDate(day.dateString);
+            }
+        },
+
         // Click event to view details
         viewEvent(event) {
             this.selectedAppointment = event;
@@ -307,7 +318,7 @@
         </div>
 
         <!-- Appointment Table -->
-        <div class="overflow-x-auto">
+        <div class="responsive-table-wrapper">
             <table class="min-w-full divide-y divide-gray-100 text-left text-xs sm:text-sm">
                 <thead class="bg-gray-50/50 text-gray-500 font-bold uppercase text-[10px] tracking-wider">
                     <tr>
@@ -540,24 +551,24 @@
         </div>
 
         <!-- CALENDAR VIEW 1: MONTH VIEW -->
-        <div x-show="viewMode === 'month'" class="p-3 sm:p-5">
+        <div x-show="viewMode === 'month'" class="p-2 sm:p-5">
             <!-- Day of Week Headers -->
             <div class="grid grid-cols-7 gap-1 text-center font-bold text-xs uppercase tracking-wider text-gray-500 pb-2 border-b border-gray-100">
-                <div>Sun</div>
-                <div>Mon</div>
-                <div>Tue</div>
-                <div>Wed</div>
-                <div>Thu</div>
-                <div>Fri</div>
-                <div>Sat</div>
+                <div><span class="sm:hidden">S</span><span class="hidden sm:inline">Sun</span></div>
+                <div><span class="sm:hidden">M</span><span class="hidden sm:inline">Mon</span></div>
+                <div><span class="sm:hidden">T</span><span class="hidden sm:inline">Tue</span></div>
+                <div><span class="sm:hidden">W</span><span class="hidden sm:inline">Wed</span></div>
+                <div><span class="sm:hidden">T</span><span class="hidden sm:inline">Thu</span></div>
+                <div><span class="sm:hidden">F</span><span class="hidden sm:inline">Fri</span></div>
+                <div><span class="sm:hidden">S</span><span class="hidden sm:inline">Sat</span></div>
             </div>
 
             <!-- Month Calendar Grid -->
             <div class="grid grid-cols-7 gap-1 sm:gap-2 mt-2">
                 <template x-for="(day, idx) in getMonthDays()" :key="idx">
                     <div 
-                        @click="clickDate(day.dateString)"
-                        class="min-h-[90px] sm:min-h-[110px] p-1.5 sm:p-2 rounded-lg border transition flex flex-col justify-between cursor-pointer group"
+                        @click="handleDayClick(day)"
+                        class="min-h-[58px] sm:min-h-[110px] p-1 sm:p-2 rounded-lg border transition flex flex-col justify-between cursor-pointer group"
                         :class="[
                             day.isCurrentMonth ? 'bg-white hover:bg-slate-50/80 border-gray-100' : 'bg-slate-50/50 text-gray-400 border-gray-50',
                             day.isToday ? 'ring-2 ring-[#0B1849] bg-blue-50/30' : ''
@@ -566,17 +577,27 @@
                         <!-- Date Number & Add Button -->
                         <div class="flex items-center justify-between">
                             <span 
-                                class="text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full"
+                                class="text-[11px] sm:text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full"
                                 :class="day.isToday ? 'bg-[#0B1849] text-white' : (day.isCurrentMonth ? 'text-gray-800' : 'text-gray-400')"
                                 x-text="day.dayNumber"
                             ></span>
-                            <span class="opacity-0 group-hover:opacity-100 text-[10px] text-gray-400 hover:text-[#0B1849] font-bold transition">
+                            <span class="hidden sm:inline opacity-0 group-hover:opacity-100 text-[10px] text-gray-400 hover:text-[#0B1849] font-bold transition">
                                 + Add
                             </span>
                         </div>
 
-                        <!-- Event Chips for this day -->
-                        <div class="space-y-1 overflow-y-auto max-h-[75px] mt-1 thin-scrollbar">
+                        <!-- Mobile Event Indicator Dots (< sm) -->
+                        <div class="flex sm:hidden flex-wrap items-center justify-center gap-1 my-auto">
+                            <template x-for="event in getEventsForDate(day.dateString).slice(0, 3)" :key="event.id">
+                                <span class="w-1.5 h-1.5 rounded-full" :class="event.status === 'completed' ? 'bg-emerald-500' : (event.status === 'cancelled' ? 'bg-red-400' : 'bg-[#0B1849]')"></span>
+                            </template>
+                            <template x-if="getEventsForDate(day.dateString).length > 3">
+                                <span class="text-[8px] font-black text-gray-500" x-text="'+' + (getEventsForDate(day.dateString).length - 3)"></span>
+                            </template>
+                        </div>
+
+                        <!-- Desktop Event Chips (> sm) -->
+                        <div class="hidden sm:block space-y-1 overflow-y-auto max-h-[75px] mt-1 thin-scrollbar">
                             <template x-for="event in getEventsForDate(day.dateString)" :key="event.id">
                                 <div 
                                     @click.stop="viewEvent(event)"
@@ -666,15 +687,15 @@
                     <template x-for="event in getEventsForDate(formatYMD(currentDate))" :key="event.id">
                         <div 
                             @click="viewEvent(event)"
-                            class="p-4 rounded-xl border flex items-center justify-between cursor-pointer hover:shadow-xs transition"
+                            class="p-3 sm:p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 cursor-pointer hover:shadow-xs transition"
                             :class="getStatusClasses(event.status)"
                         >
-                            <div class="flex items-center space-x-3">
-                                <div class="text-center font-bold px-3 py-1.5 bg-white/80 rounded-lg border border-gray-200/50 shadow-2xs">
+                            <div class="flex items-start sm:items-center space-x-3">
+                                <div class="text-center font-bold px-2.5 sm:px-3 py-1.5 bg-white/80 rounded-lg border border-gray-200/50 shadow-2xs shrink-0">
                                     <span class="text-xs text-gray-900 block" x-text="event.time"></span>
                                 </div>
-                                <div>
-                                    <div class="font-bold text-sm text-gray-900 flex items-center space-x-2">
+                                <div class="min-w-0 flex-1">
+                                    <div class="font-bold text-sm text-gray-900 flex flex-wrap items-center gap-1.5">
                                         <span x-text="event.vehicle_number"></span>
                                         <span class="text-xs font-medium text-gray-500" x-text="'(' + event.vehicle_type_name + ')'"></span>
                                     </div>
@@ -690,7 +711,7 @@
                                 </div>
                             </div>
 
-                            <div class="text-right flex items-center space-x-2">
+                            <div class="flex items-center justify-between sm:justify-end space-x-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-black/5 shrink-0">
                                 <span class="px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider" x-text="event.status"></span>
                                 <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -717,7 +738,7 @@
         <div class="flex items-center justify-center min-h-screen px-4 py-6">
             <div class="fixed inset-0 bg-gray-900/50 backdrop-blur-xs transition-opacity" @click="showNewModal = false"></div>
 
-            <div class="relative bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-gray-200 space-y-4">
+            <div class="relative bg-white rounded-2xl w-full max-w-[calc(100vw-2rem)] sm:max-w-lg p-4 sm:p-6 shadow-xl border border-gray-200 space-y-4 max-h-[88vh] overflow-y-auto">
                 <div class="flex items-center justify-between border-b border-gray-100 pb-3">
                     <h3 class="text-base font-bold text-gray-900 flex items-center">
                         <svg class="w-5 h-5 mr-2 text-[#0B1849]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -942,7 +963,7 @@
         <div class="flex items-center justify-center min-h-screen px-4 py-6">
             <div class="fixed inset-0 bg-gray-900/50 backdrop-blur-xs transition-opacity" @click="showDetailsModal = false"></div>
 
-            <div class="relative bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-gray-200 space-y-4">
+            <div class="relative bg-white rounded-2xl w-full max-w-[calc(100vw-2rem)] sm:max-w-lg p-4 sm:p-6 shadow-xl border border-gray-200 space-y-4 max-h-[88vh] overflow-y-auto">
                 <!-- Header -->
                 <div class="flex items-center justify-between border-b border-gray-100 pb-3">
                     <div>

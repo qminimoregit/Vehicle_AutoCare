@@ -84,7 +84,7 @@
 
     <!-- Category List Table -->
     <div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="responsive-table-wrapper">
             <table class="min-w-full divide-y divide-gray-200 text-left text-sm">
                 <thead class="bg-gray-50/80 text-xs font-bold text-gray-600 uppercase tracking-wider">
                     <tr>
@@ -210,7 +210,7 @@
                 x-transition:leave="ease-in duration-200"
                 x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
                 x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-                class="inline-block w-full max-w-md p-6 my-8 text-left align-middle transition-all transform bg-white shadow-xl rounded-2xl border border-gray-100"
+                class="inline-block w-full max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6 my-8 text-left align-middle transition-all transform bg-white shadow-xl rounded-2xl border border-gray-100"
             >
                 <div class="flex items-center justify-between pb-3 border-b border-gray-100">
                     <h3 class="text-lg font-bold text-gray-900">Add Expense Category</h3>
@@ -278,7 +278,7 @@
 
             <div 
                 x-show="showEditModal"
-                class="inline-block w-full max-w-md p-6 my-8 text-left align-middle transition-all transform bg-white shadow-xl rounded-2xl border border-gray-100"
+                class="inline-block w-full max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6 my-8 text-left align-middle transition-all transform bg-white shadow-xl rounded-2xl border border-gray-100"
             >
                 <div class="flex items-center justify-between pb-3 border-b border-gray-100">
                     <h3 class="text-lg font-bold text-gray-900">Edit Category</h3>

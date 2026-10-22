@@ -90,7 +90,7 @@
                 @endif
             </div>
 
-            <div class="overflow-x-auto">
+            <div class="responsive-table-wrapper">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50/50">
                         <tr>

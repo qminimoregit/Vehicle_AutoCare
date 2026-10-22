@@ -280,7 +280,7 @@
             @endif
         </div>
 
-        <div class="overflow-x-auto">
+        <div class="responsive-table-wrapper">
             <table class="min-w-full divide-y divide-gray-200 text-left text-sm">
                 <thead class="bg-gray-50/80 text-xs font-bold text-gray-600 uppercase tracking-wider">
                     <tr>
@@ -350,7 +350,7 @@
 
             <div 
                 x-show="showPayModal"
-                class="inline-block w-full max-w-lg p-6 my-8 text-left align-middle transition-all transform bg-white shadow-xl rounded-2xl border border-gray-100"
+                class="inline-block w-full max-w-[calc(100vw-2rem)] sm:max-w-lg max-h-[88vh] overflow-y-auto p-4 sm:p-6 my-8 text-left align-middle transition-all transform bg-white shadow-xl rounded-2xl border border-gray-100"
             >
                 <div class="flex items-center justify-between pb-3 border-b border-gray-100">
                     <h3 class="text-lg font-bold text-[#0B1849] flex items-center">
@@ -528,7 +528,7 @@
 
             <div 
                 x-show="showVoidModal"
-                class="inline-block w-full max-w-md p-6 my-8 text-left align-middle transition-all transform bg-white shadow-xl rounded-2xl border border-gray-100"
+                class="inline-block w-full max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6 my-8 text-left align-middle transition-all transform bg-white shadow-xl rounded-2xl border border-gray-100"
             >
                 <div class="flex items-center justify-between pb-3 border-b border-gray-100">
                     <h3 class="text-lg font-bold text-rose-700 flex items-center">
