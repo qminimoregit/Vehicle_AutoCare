@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Reports;
 
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
+use App\Models\DirectSale;
 use App\Models\Expense;
 use App\Models\ExpensePayment;
 use App\Models\Invoice;
@@ -50,7 +51,7 @@ class MoneyBookController extends Controller
         $methodFilter = $request->input('payment_method', 'all');
 
         // Query payments received on payment_date between dateFrom and dateTo
-        $paymentQuery = Payment::with(['invoice.customer', 'invoice.branch', 'customer', 'receipt', 'jobCard.customer', 'jobCard.branch'])
+        $paymentQuery = Payment::with(['invoice.customer', 'invoice.branch', 'customer', 'receipt', 'jobCard.customer', 'jobCard.branch', 'directSale.customer', 'directSale.branch'])
             ->whereDate('payment_date', '>=', $dateFrom)
             ->whereDate('payment_date', '<=', $dateTo);
 
@@ -58,7 +59,8 @@ class MoneyBookController extends Controller
             $paymentQuery->where(function ($q) use ($branchId) {
                 $q->whereHas('invoice', fn ($iq) => $iq->where('branch_id', $branchId))
                   ->orWhereHas('jobCard', fn ($jq) => $jq->where('branch_id', $branchId))
-                  ->orWhereHas('receipt', fn ($rq) => $rq->where('branch_id', $branchId));
+                  ->orWhereHas('receipt', fn ($rq) => $rq->where('branch_id', $branchId))
+                  ->orWhereHas('directSale', fn ($dq) => $dq->where('branch_id', $branchId));
             });
         }
 
@@ -111,6 +113,28 @@ class MoneyBookController extends Controller
         }
 
         $creditSales = $creditSalesQuery->get();
+
+        // Include unbilled Direct Sales with remaining credit balances
+        $directCreditSalesQuery = DirectSale::with(['customer', 'branch'])
+            ->whereNull('invoice_id')
+            ->where('status', '!=', 'cancelled')
+            ->whereRaw('grand_total > amount_paid')
+            ->whereDate('sale_date', '>=', $dateFrom)
+            ->whereDate('sale_date', '<=', $dateTo);
+
+        if ($branchId && $branchId !== 'all') {
+            $directCreditSalesQuery->where('branch_id', $branchId);
+        }
+
+        $directCreditSales = $directCreditSalesQuery->get();
+        foreach ($directCreditSales as $dcs) {
+            $dcs->invoice_date = $dcs->sale_date;
+            $dcs->invoice_number = $dcs->bill_number;
+            $dcs->balance_amount = max(0, (float) $dcs->grand_total - (float) $dcs->amount_paid);
+            $dcs->is_bill = true;
+        }
+
+        $creditSales = $creditSales->concat($directCreditSales);
 
         // Calculate summary cards
         $cashReceived = 0.0;
@@ -308,7 +332,7 @@ class MoneyBookController extends Controller
         $dateFrom = $request->input('date_from', Carbon::today()->format('Y-m-d'));
         $dateTo = $request->input('date_to', Carbon::today()->format('Y-m-d'));
 
-        $paymentQuery = Payment::with(['invoice.customer', 'invoice.branch', 'customer', 'jobCard.customer', 'jobCard.branch'])
+        $paymentQuery = Payment::with(['invoice.customer', 'invoice.branch', 'customer', 'receipt', 'jobCard.customer', 'jobCard.branch', 'directSale.customer', 'directSale.branch'])
             ->whereDate('payment_date', '>=', $dateFrom)
             ->whereDate('payment_date', '<=', $dateTo);
 
@@ -316,7 +340,8 @@ class MoneyBookController extends Controller
             $paymentQuery->where(function ($q) use ($branchId) {
                 $q->whereHas('invoice', fn ($iq) => $iq->where('branch_id', $branchId))
                   ->orWhereHas('jobCard', fn ($jq) => $jq->where('branch_id', $branchId))
-                  ->orWhereHas('receipt', fn ($rq) => $rq->where('branch_id', $branchId));
+                  ->orWhereHas('receipt', fn ($rq) => $rq->where('branch_id', $branchId))
+                  ->orWhereHas('directSale', fn ($dq) => $dq->where('branch_id', $branchId));
             });
         }
 
@@ -362,7 +387,7 @@ class MoneyBookController extends Controller
             fputcsv($file, [
                 'Payment Date',
                 'Payment / Receipt #',
-                'Invoice #',
+                'Invoice / Bill #',
                 'Customer / Company',
                 'Payment Method',
                 'Reference / Cheque Details',
@@ -372,8 +397,8 @@ class MoneyBookController extends Controller
             ]);
 
             foreach ($payments as $p) {
-                $invOrJob = $p->invoice?->invoice_number ?? ($p->jobCard ? "Job #{$p->jobCard->job_number} (Advance)" : 'Multiple Invoices');
-                $cust = $p->invoice?->customer?->display_name ?? ($p->jobCard?->customer?->display_name ?? ($p->customer?->display_name ?? 'Guest Customer'));
+                $invOrJob = $p->invoice?->invoice_number ?? ($p->directSale ? "Bill #{$p->directSale->bill_number}" : ($p->jobCard ? "Job #{$p->jobCard->job_number} (Advance)" : 'Multiple Invoices'));
+                $cust = $p->invoice?->customer?->display_name ?? ($p->directSale?->customer?->display_name ?? ($p->jobCard?->customer?->display_name ?? ($p->customer?->display_name ?? 'Guest Customer')));
                 fputcsv($file, [
                     $p->payment_date?->format('Y-m-d') ?? '-',
                     $p->payment_number,
