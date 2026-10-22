@@ -138,6 +138,18 @@ class CompanySetting extends Model
     }
 
     /**
+     * Get accessible public URL for the 80mm thermal printing logo (trimmed copy with minimum whitespace).
+     */
+    public function getThermalLogoUrl(): string
+    {
+        if (file_exists(public_path('images/branding/viran_auto_care_logo_thermal.png'))) {
+            return asset('images/branding/viran_auto_care_logo_thermal.png');
+        }
+
+        return $this->getLogoUrl();
+    }
+
+    /**
      * Resolve base64 data URI for logo to ensure 100% reliable DomPDF rendering.
      */
     public function getLogoBase64(): ?string

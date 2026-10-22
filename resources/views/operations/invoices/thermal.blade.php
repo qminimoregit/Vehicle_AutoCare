@@ -89,11 +89,11 @@
         }
 
         .logo-img {
-            max-height: 48px;
-            max-width: 140px;
-            width: auto;
+            width: 60mm;
+            max-width: 65mm;
             height: auto;
-            margin: 0 auto 5px auto;
+            max-height: 85px;
+            margin: 0 auto 6px auto;
             display: block;
             object-fit: contain;
             filter: grayscale(100%) contrast(150%);
@@ -324,7 +324,18 @@
                 break-inside: avoid !important;
             }
 
-            .logo-img, .signature-img {
+            .logo-img {
+                width: 60mm !important;
+                max-width: 65mm !important;
+                height: auto !important;
+                max-height: 85px !important;
+                margin: 0 auto 2mm auto !important;
+                display: block !important;
+                filter: grayscale(100%) contrast(150%) !important;
+                -webkit-filter: grayscale(100%) contrast(150%) !important;
+            }
+
+            .signature-img {
                 filter: grayscale(100%) contrast(150%) !important;
                 -webkit-filter: grayscale(100%) contrast(150%) !important;
             }
@@ -339,8 +350,8 @@
             &larr; Back
         </a>
         <div style="display: flex; gap: 6px;">
-            <button onclick="handlePrint()" class="btn btn-primary" id="btn-print-bill">
-                Print Bill
+            <button onclick="handlePrint()" class="btn btn-primary" id="btn-print-invoice">
+                Print Invoice
             </button>
         </div>
     </div>
@@ -351,10 +362,10 @@
         <!-- 1. Company Logo & 2. Company Name & 3. Address and Phone -->
         <div class="company-header">
             @php
-                $hasLogo = !empty($company->logo_path) && (file_exists(public_path('storage/' . $company->logo_path)) || \Illuminate\Support\Facades\Storage::disk('public')->exists($company->logo_path));
+                $logoUrl = $company->getLogoUrl();
             @endphp
-            @if($hasLogo)
-                <img src="{{ asset('storage/' . $company->logo_path) }}" alt="{{ $company->company_name ?? 'Company Logo' }}" class="logo-img">
+            @if(!empty($logoUrl))
+                <img src="{{ $logoUrl }}" alt="{{ $company->company_name ?? 'Company Logo' }}" class="logo-img">
             @endif
             <div class="company-name">{{ strtoupper($company->company_name ?? 'VIRAN AUTO CARE') }}</div>
             @if($invoice->branch?->address || $company->address)
@@ -368,8 +379,8 @@
         <div class="divider"></div>
 
         <!-- 4. Invoice Title -->
-        <div class="receipt-title" data-doc-type="SALES BILL">
-            SALES INVOICE
+        <div class="receipt-title" data-doc-type="INVOICE">
+            INVOICE
         </div>
 
         <div class="divider"></div>

@@ -88,11 +88,15 @@
         }
 
         .logo-img {
-            max-height: 52px;
-            max-width: 160px;
-            margin: 0 auto 4px auto;
+            width: 60mm;
+            max-width: 65mm;
+            height: auto;
+            max-height: 85px;
+            margin: 0 auto 6px auto;
             display: block;
             object-fit: contain;
+            filter: grayscale(100%) contrast(150%);
+            -webkit-filter: grayscale(100%) contrast(150%);
         }
 
         .company-name {
@@ -259,6 +263,17 @@
                 box-shadow: none !important;
                 border: none !important;
             }
+
+            .logo-img {
+                width: 60mm !important;
+                max-width: 65mm !important;
+                height: auto !important;
+                max-height: 85px !important;
+                margin: 0 auto 2mm auto !important;
+                display: block !important;
+                filter: grayscale(100%) contrast(150%) !important;
+                -webkit-filter: grayscale(100%) contrast(150%) !important;
+            }
         }
     </style>
 </head>
@@ -288,8 +303,11 @@
         
         <!-- Header: Actual Company Logo & Name -->
         <div class="company-header">
-            @if(!empty($company->logo) && file_exists(public_path('storage/' . $company->logo)))
-                <img src="{{ asset('storage/' . $company->logo) }}" alt="{{ $company->company_name ?? 'Logo' }}" class="logo-img">
+            @php
+                $logoUrl = $company->getLogoUrl();
+            @endphp
+            @if(!empty($logoUrl))
+                <img src="{{ $logoUrl }}" alt="{{ $company->company_name ?? 'Logo' }}" class="logo-img">
             @endif
             <div class="company-name">{{ $jobCard->branch?->name ?? ($company->company_name ?? 'Viran Auto Care') }}</div>
             @if($jobCard->branch?->address || $company->address)

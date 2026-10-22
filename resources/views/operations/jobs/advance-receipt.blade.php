@@ -87,12 +87,15 @@
         }
 
         .logo-img {
-            max-height: 42px;
-            max-width: 160px;
+            width: 60mm;
+            max-width: 65mm;
+            height: auto;
+            max-height: 85px;
             margin: 0 auto 6px auto;
             display: block;
             object-fit: contain;
             filter: grayscale(100%) contrast(150%);
+            -webkit-filter: grayscale(100%) contrast(150%);
         }
 
         .company-name {
@@ -243,6 +246,17 @@
                 box-shadow: none !important;
                 border: none !important;
             }
+
+            .logo-img {
+                width: 60mm !important;
+                max-width: 65mm !important;
+                height: auto !important;
+                max-height: 85px !important;
+                margin: 0 auto 2mm auto !important;
+                display: block !important;
+                filter: grayscale(100%) contrast(150%) !important;
+                -webkit-filter: grayscale(100%) contrast(150%) !important;
+            }
         }
     </style>
 </head>
@@ -255,7 +269,7 @@
         </a>
         <div style="display: flex; gap: 6px;">
             <button onclick="handleAdvancePrint()" class="btn btn-primary" id="btn-print-advance">
-                Print Bill
+                Print Advance Receipt
             </button>
         </div>
     </div>
@@ -265,8 +279,11 @@
         
         <!-- Header: Company & Branch -->
         <div class="company-header">
-            @if(!empty($company->logo) && file_exists(public_path('storage/' . $company->logo)))
-                <img src="{{ asset('storage/' . $company->logo) }}" alt="Logo" class="logo-img">
+            @php
+                $logoUrl = $company->getLogoUrl();
+            @endphp
+            @if(!empty($logoUrl))
+                <img src="{{ $logoUrl }}" alt="{{ $company->company_name ?? 'Company Logo' }}" class="logo-img">
             @endif
             <div class="company-name">{{ $company->company_name ?? 'AutoCare Service Center' }}</div>
             <div class="branch-name">{{ $jobCard->branch?->name ?? 'Main Service Branch' }}</div>

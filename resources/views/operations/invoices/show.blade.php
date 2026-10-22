@@ -85,13 +85,13 @@
     <!-- Top Action Bar -->
     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-            <div class="flex items-center space-x-3">
-                <a href="{{ route('operations.invoices.index') }}" class="text-gray-400 hover:text-gray-600 transition" title="Back to Invoices">
+            <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                <a href="{{ route('operations.invoices.index') }}" class="text-gray-400 hover:text-gray-600 transition p-1 -ml-1" title="Back to Invoices">
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                     </svg>
                 </a>
-                <h1 class="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
+                <h1 class="text-lg sm:text-2xl font-black text-gray-900 tracking-tight">
                     Invoice #{{ $invoice->invoice_number }}
                 </h1>
                 
@@ -303,7 +303,7 @@
         </div>
 
         <!-- Items Table -->
-        <div class="overflow-x-auto">
+        <div class="responsive-table-wrapper">
             <table class="min-w-full divide-y divide-gray-200 text-left text-xs sm:text-sm">
                 <thead class="bg-gray-50 text-gray-600 font-bold uppercase text-[10px] tracking-wider">
                     <tr>
@@ -431,7 +431,7 @@
             </div>
 
             @if($invoice->payments->count() > 0)
-                <div class="overflow-x-auto border border-gray-200/80 rounded-xl">
+                <div class="responsive-table-wrapper border border-gray-200/80 rounded-xl">
                     <table class="min-w-full divide-y divide-gray-100 text-xs">
                         <thead class="bg-slate-50 text-gray-500 font-semibold uppercase text-[10px]">
                             <tr>
@@ -562,7 +562,7 @@
         <div class="flex items-center justify-center min-h-screen px-4 py-6">
             <div class="fixed inset-0 bg-gray-900/50 backdrop-blur-xs transition-opacity" @click="showPaymentModal = false"></div>
 
-            <div class="relative bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-gray-200 space-y-4">
+            <div class="relative bg-white rounded-2xl w-full max-w-[calc(100vw-2rem)] sm:max-w-md p-4 sm:p-6 shadow-xl border border-gray-200 space-y-4 max-h-[88vh] overflow-y-auto">
                 <div class="flex items-center justify-between border-b border-gray-100 pb-3">
                     <div>
                         <h3 class="text-base font-bold text-gray-900">Record Payment</h3>
@@ -726,7 +726,7 @@
             <div class="flex items-center justify-center min-h-screen px-4 py-6">
                 <div class="fixed inset-0 bg-gray-900/50 backdrop-blur-xs transition-opacity" @click="showReverseModal = false"></div>
 
-                <div class="relative bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-gray-200 space-y-4">
+                <div class="relative bg-white rounded-2xl w-full max-w-[calc(100vw-2rem)] sm:max-w-md p-4 sm:p-6 shadow-xl border border-gray-200 space-y-4 max-h-[88vh] overflow-y-auto">
                     <div class="flex items-center justify-between border-b border-gray-100 pb-3">
                         <h3 class="text-base font-bold text-gray-900">Reverse Payment</h3>
                         <button type="button" @click="showReverseModal = false" class="text-gray-400 hover:text-gray-600">
@@ -790,7 +790,7 @@
         <div class="flex items-center justify-center min-h-screen px-4 py-6">
             <div class="fixed inset-0 bg-gray-900/50 backdrop-blur-xs transition-opacity" @click="showWhatsAppModal = false"></div>
 
-            <div class="relative bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-gray-200 space-y-4">
+            <div class="relative bg-white rounded-2xl w-full max-w-[calc(100vw-2rem)] sm:max-w-lg p-4 sm:p-6 shadow-xl border border-gray-200 space-y-4 max-h-[88vh] overflow-y-auto">
                 <div class="flex items-center justify-between border-b border-gray-100 pb-3">
                     <div class="flex items-center space-x-2">
                         <span class="p-2 bg-emerald-100 text-emerald-800 rounded-lg">
