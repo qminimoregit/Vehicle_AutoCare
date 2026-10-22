@@ -88,7 +88,7 @@
     <!-- Desktop Employee Table -->
     <div class="hidden md:block bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
         @if($employees->count() > 0)
-            <div class="overflow-x-auto">
+            <div class="responsive-table-wrapper">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50/80">
                         <tr>
