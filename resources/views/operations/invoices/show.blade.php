@@ -152,6 +152,7 @@
             <!-- 80mm Thermal Bill Button -->
             <a 
                 href="{{ route('operations.invoices.thermal', $invoice) }}" 
+                @click.prevent="AutoCarePrinter.printUrl('{{ route('operations.invoices.thermal', $invoice) }}', { type: 'bill', title: 'Bill #{{ $invoice->invoice_number }}', documentId: {{ $invoice->id }}, documentNumber: '{{ $invoice->invoice_number }}', fallbackUrl: '{{ route('operations.invoices.thermal', $invoice) }}' })"
                 target="_blank"
                 class="inline-flex items-center justify-center px-3 py-2.5 bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold text-xs rounded-lg hover:bg-indigo-100 shadow-xs transition min-h-[44px]"
                 title="Print 80mm Thermal Bill"
@@ -491,6 +492,7 @@
 
                                         <a 
                                             href="{{ route('billing.payments.thermal', $pay) }}" 
+                                            @click.prevent="AutoCarePrinter.printUrl('{{ route('billing.payments.thermal', $pay) }}', { type: 'payment_receipt', title: 'Payment Receipt #{{ $pay->payment_number }}', documentId: {{ $pay->id }}, documentNumber: '{{ $pay->payment_number }}', fallbackUrl: '{{ route('billing.payments.thermal', $pay) }}' })"
                                             target="_blank"
                                             class="inline-flex items-center px-2 py-1 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 rounded text-[11px] font-bold transition"
                                             title="Print 80mm Thermal Payment Receipt"

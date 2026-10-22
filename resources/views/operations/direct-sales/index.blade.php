@@ -630,7 +630,7 @@
             <div class="space-y-2 pt-1">
                 <button 
                     type="button" 
-                    @click="window.open(completedSale?.thermal_url || completedSale?.receipt_url, '_blank')"
+                    @click="window.AutoCarePrinter ? window.AutoCarePrinter.printUrl(completedSale?.thermal_url || completedSale?.receipt_url, { type: 'bill', title: 'POS Bill #' + (completedSale?.invoice_number || ''), documentNumber: completedSale?.invoice_number || '', fallbackUrl: completedSale?.thermal_url || completedSale?.receipt_url }) : window.open(completedSale?.thermal_url || completedSale?.receipt_url, '_blank')"
                     class="w-full inline-flex items-center justify-center px-4 py-3 bg-[#0B1849] hover:bg-[#15286e] text-white font-bold text-sm rounded-xl shadow-xs transition cursor-pointer"
                 >
                     <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">

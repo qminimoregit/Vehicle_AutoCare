@@ -254,7 +254,7 @@
             &larr; Back to Job
         </a>
         <div style="display: flex; gap: 6px;">
-            <button onclick="window.print()" class="btn btn-primary">
+            <button onclick="handleAdvancePrint()" class="btn btn-primary" id="btn-print-advance">
                 Print Bill
             </button>
         </div>
@@ -403,5 +403,24 @@
 
     </div>
 
+    <!-- Universal QZ Tray Printer Support -->
+    <script src="{{ asset('vendor/qz/qz-tray.js') }}"></script>
+    <script src="{{ asset('js/autocare-printer.js') }}"></script>
+    <script>
+        function handleAdvancePrint() {
+            if (window.AutoCarePrinter && window.AutoCarePrinter.isConnected) {
+                window.AutoCarePrinter.printDocument({
+                    type: 'advance_receipt',
+                    html: document.querySelector('.thermal-receipt').outerHTML,
+                    title: 'AdvanceReceipt_{{ $jobCard->job_number }}',
+                    documentId: {{ $jobCard->id }},
+                    documentNumber: '{{ $jobCard->job_number }}',
+                    fallbackUrl: window.location.href
+                });
+            } else {
+                window.print();
+            }
+        }
+    </script>
 </body>
 </html>

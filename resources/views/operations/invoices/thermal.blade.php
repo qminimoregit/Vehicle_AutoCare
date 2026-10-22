@@ -266,7 +266,7 @@
             &larr; Back
         </a>
         <div style="display: flex; gap: 6px;">
-            <button onclick="window.print()" class="btn btn-primary">
+            <button onclick="handlePrint()" class="btn btn-primary" id="btn-print-bill">
                 Print Bill
             </button>
         </div>
@@ -426,5 +426,24 @@
         </div>
     </div>
 
+    <!-- Universal QZ Tray Printer Support -->
+    <script src="{{ asset('vendor/qz/qz-tray.js') }}"></script>
+    <script src="{{ asset('js/autocare-printer.js') }}"></script>
+    <script>
+        function handlePrint() {
+            if (window.AutoCarePrinter && window.AutoCarePrinter.isConnected) {
+                window.AutoCarePrinter.printDocument({
+                    type: 'bill',
+                    html: document.querySelector('.thermal-receipt').outerHTML,
+                    title: 'Bill_{{ $invoice->invoice_number }}',
+                    documentId: {{ $invoice->id }},
+                    documentNumber: '{{ $invoice->invoice_number }}',
+                    fallbackUrl: window.location.href
+                });
+            } else {
+                window.print();
+            }
+        }
+    </script>
 </body>
 </html>

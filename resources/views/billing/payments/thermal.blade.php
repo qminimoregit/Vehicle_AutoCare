@@ -231,7 +231,7 @@
             &larr; Back to Invoice
         </a>
         <div style="display: flex; gap: 6px;">
-            <button onclick="window.print()" class="btn btn-primary">
+            <button onclick="handlePaymentPrint()" class="btn btn-primary" id="btn-print-payment">
                 Print Bill
             </button>
         </div>
@@ -374,5 +374,24 @@
         </div>
     </div>
 
+    <!-- Universal QZ Tray Printer Support -->
+    <script src="{{ asset('vendor/qz/qz-tray.js') }}"></script>
+    <script src="{{ asset('js/autocare-printer.js') }}"></script>
+    <script>
+        function handlePaymentPrint() {
+            if (window.AutoCarePrinter && window.AutoCarePrinter.isConnected) {
+                window.AutoCarePrinter.printDocument({
+                    type: 'payment_receipt',
+                    html: document.querySelector('.thermal-receipt').outerHTML,
+                    title: 'Receipt_{{ $payment->payment_number }}',
+                    documentId: {{ $payment->id }},
+                    documentNumber: '{{ $payment->payment_number }}',
+                    fallbackUrl: window.location.href
+                });
+            } else {
+                window.print();
+            }
+        }
+    </script>
 </body>
 </html>

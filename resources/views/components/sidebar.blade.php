@@ -829,6 +829,19 @@
                         </svg>
                         <span class="truncate">Activity Logs</span>
                     </a>
+
+                    <!-- Printer Settings -->
+                    @php $isPrinters = request()->routeIs('admin.printer-settings.*'); @endphp
+                    <a 
+                        href="{{ route('admin.printer-settings.index') }}" 
+                        @click="if (window.innerWidth < 768) sidebarOpen = false"
+                        class="group flex items-center px-3 py-2 text-[13px] rounded-lg transition {{ $isPrinters ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                    >
+                        <svg class="mr-2.5 h-4 w-4 shrink-0 {{ $isPrinters ? 'text-[#0B1849]' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                        </svg>
+                        <span class="truncate">Printer Settings</span>
+                    </a>
                 </nav>
             </div>
         @endif

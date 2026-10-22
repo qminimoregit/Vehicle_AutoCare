@@ -97,6 +97,7 @@
             <!-- 1. Print Job Card (Directly visible outside dropdown) -->
             <a 
                 href="{{ route('operations.job-cards.print', $jobCard) }}" 
+                @click.prevent="AutoCarePrinter.printUrl('{{ route('operations.job-cards.print', $jobCard) }}', { type: 'job_card', title: 'Job Card #{{ $jobCard->job_number }}', documentId: {{ $jobCard->id }}, documentNumber: '{{ $jobCard->job_number }}', fallbackUrl: '{{ route('operations.job-cards.print', $jobCard) }}' })"
                 target="_blank"
                 class="inline-flex items-center justify-center px-3.5 py-2.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-bold text-xs sm:text-sm rounded-lg shadow-xs transition min-h-[44px]"
                 title="Print Job Card"
@@ -140,6 +141,7 @@
                 @if($paidAmount > 0)
                     <a 
                         href="{{ route('operations.job-cards.print-bill', $jobCard) }}" 
+                        @click.prevent="AutoCarePrinter.printUrl('{{ route('operations.job-cards.print-bill', $jobCard) }}', { type: 'bill', title: 'Advance Receipt - Job #{{ $jobCard->job_number }}', documentId: {{ $jobCard->id }}, documentNumber: '{{ $jobCard->job_number }}', fallbackUrl: '{{ route('operations.job-cards.print-bill', $jobCard) }}' })"
                         target="_blank"
                         class="inline-flex items-center justify-center px-3.5 py-2.5 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-bold text-xs sm:text-sm rounded-lg shadow-xs transition min-h-[44px]"
                         title="Print Advance Payment Receipt"
@@ -218,6 +220,7 @@
                 @if($paidAmount > 0)
                     <a 
                         href="{{ route('operations.job-cards.print-bill', $jobCard) }}" 
+                        @click.prevent="AutoCarePrinter.printUrl('{{ route('operations.job-cards.print-bill', $jobCard) }}', { type: 'bill', title: 'Advance Receipt - Job #{{ $jobCard->job_number }}', documentId: {{ $jobCard->id }}, documentNumber: '{{ $jobCard->job_number }}', fallbackUrl: '{{ route('operations.job-cards.print-bill', $jobCard) }}' })"
                         target="_blank"
                         class="inline-flex items-center justify-center px-3.5 py-2.5 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-bold text-xs sm:text-sm rounded-lg shadow-xs transition min-h-[44px]"
                         title="Print Advance Payment Receipt"
@@ -302,6 +305,7 @@
                 <!-- Print Bill Button -->
                 <a 
                     href="{{ route('operations.job-cards.print-bill', $jobCard) }}" 
+                    @click.prevent="AutoCarePrinter.printUrl('{{ route('operations.job-cards.print-bill', $jobCard) }}', { type: 'bill', title: 'Bill - Job #{{ $jobCard->job_number }}', documentId: {{ $jobCard->id }}, documentNumber: '{{ $jobCard->job_number }}', fallbackUrl: '{{ route('operations.job-cards.print-bill', $jobCard) }}' })"
                     target="_blank"
                     class="inline-flex items-center justify-center px-3.5 py-2.5 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-bold text-xs sm:text-sm rounded-lg shadow-xs transition min-h-[44px]"
                     title="Print Bill"
@@ -1104,6 +1108,7 @@
                 @if($paidAmount > 0)
                     <a 
                         href="{{ route('operations.job-cards.print-bill', $jobCard) }}" 
+                        @click.prevent="AutoCarePrinter.printUrl('{{ route('operations.job-cards.print-bill', $jobCard) }}', { type: 'bill', title: 'Bill - Job #{{ $jobCard->job_number }}', documentId: {{ $jobCard->id }}, documentNumber: '{{ $jobCard->job_number }}', fallbackUrl: '{{ route('operations.job-cards.print-bill', $jobCard) }}' })"
                         target="_blank"
                         class="inline-flex items-center px-3 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-bold text-xs rounded-lg shadow-xs transition"
                     >
@@ -1208,6 +1213,7 @@
                                 @if($paymentItem->invoice_id)
                                     <a 
                                         href="{{ route('billing.payments.thermal', $paymentItem) }}" 
+                                        @click.prevent="AutoCarePrinter.printUrl('{{ route('billing.payments.thermal', $paymentItem) }}', { type: 'payment_receipt', title: 'Payment Receipt #{{ $paymentItem->payment_number }}', documentId: {{ $paymentItem->id }}, documentNumber: '{{ $paymentItem->payment_number }}', fallbackUrl: '{{ route('billing.payments.thermal', $paymentItem) }}' })"
                                         target="_blank"
                                         class="inline-flex items-center px-2 py-1 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded text-[11px] font-semibold transition"
                                         title="Print Receipt"
@@ -1220,6 +1226,7 @@
                                 @else
                                     <a 
                                         href="{{ route('operations.job-cards.advance-receipt', $jobCard) }}" 
+                                        @click.prevent="AutoCarePrinter.printUrl('{{ route('operations.job-cards.advance-receipt', $jobCard) }}', { type: 'advance_receipt', title: 'Advance Receipt - Job #{{ $jobCard->job_number }}', documentId: {{ $jobCard->id }}, documentNumber: '{{ $jobCard->job_number }}', fallbackUrl: '{{ route('operations.job-cards.advance-receipt', $jobCard) }}' })"
                                         target="_blank"
                                         class="inline-flex items-center px-2 py-1 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded text-[11px] font-semibold transition"
                                         title="Print Advance Receipt"
@@ -2547,7 +2554,18 @@
                 if (this.includeCarpetsInPrint) {
                     params.append('carpets', '1');
                 }
-                window.open(config.printBaseUrl + '?' + params.toString(), '_blank');
+                const targetUrl = config.printBaseUrl + '?' + params.toString();
+                if (window.AutoCarePrinter && window.AutoCarePrinter.currentConfig?.auto_route) {
+                    window.AutoCarePrinter.printUrl(targetUrl, {
+                        type: 'job_card',
+                        title: 'Selected Items - Job #' + (config.jobNumber || ''),
+                        documentId: config.jobCardId,
+                        documentNumber: config.jobNumber,
+                        fallbackUrl: targetUrl
+                    });
+                } else {
+                    window.open(targetUrl, '_blank');
+                }
             }
         };
     };

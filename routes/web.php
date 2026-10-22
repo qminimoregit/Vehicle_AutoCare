@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ActivityLogController;
+use App\Http\Controllers\Admin\PrinterSettingController;
 use App\Http\Controllers\Admin\StaffManagementController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Billing\AvoidDirectSaleController;
@@ -395,5 +396,20 @@ Route::middleware(['auth', 'active'])->group(function () {
 
         // Activity Logs
         Route::get('/activity-logs', [ActivityLogController::class, 'index'])->name('activity-logs.index');
+
+        // Printer Settings (Administration)
+        Route::get('/printer-settings', [PrinterSettingController::class, 'index'])->name('printer-settings.index');
+        Route::post('/printer-settings', [PrinterSettingController::class, 'store'])->name('printer-settings.store');
+        Route::put('/printer-settings/{printerSetting}', [PrinterSettingController::class, 'update'])->name('printer-settings.update');
+        Route::delete('/printer-settings/{printerSetting}', [PrinterSettingController::class, 'destroy'])->name('printer-settings.destroy');
+        Route::get('/printer-settings/certificate', [PrinterSettingController::class, 'getCertificate'])->name('printer-settings.certificate');
+        Route::post('/printer-settings/sign', [PrinterSettingController::class, 'sign'])->name('printer-settings.sign');
+        Route::post('/printer-settings/test-print', [PrinterSettingController::class, 'testPrint'])->name('printer-settings.test-print');
     });
+
+    // General Printing API & Workstation Config (Accessible by Admin and Staff for printing)
+    Route::get('/print/config', [PrinterSettingController::class, 'getActiveConfig'])->name('print.config');
+    Route::post('/print/log', [PrinterSettingController::class, 'logStatus'])->name('print.log');
+    Route::get('/print/certificate', [PrinterSettingController::class, 'getCertificate'])->name('print.certificate');
+    Route::post('/print/sign', [PrinterSettingController::class, 'sign'])->name('print.sign');
 });

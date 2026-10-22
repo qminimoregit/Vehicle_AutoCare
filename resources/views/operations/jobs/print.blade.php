@@ -277,7 +277,7 @@
             >
                 A4 PDF
             </a>
-            <button onclick="window.print()" class="btn btn-primary">
+            <button onclick="handleJobPrint()" class="btn btn-primary" id="btn-print-job">
                 Print 80mm
             </button>
         </div>
@@ -503,5 +503,24 @@
 
     </div>
 
+    <!-- Universal QZ Tray Printer Support -->
+    <script src="{{ asset('vendor/qz/qz-tray.js') }}"></script>
+    <script src="{{ asset('js/autocare-printer.js') }}"></script>
+    <script>
+        function handleJobPrint() {
+            if (window.AutoCarePrinter && window.AutoCarePrinter.isConnected) {
+                window.AutoCarePrinter.printDocument({
+                    type: 'job_card',
+                    html: document.querySelector('.thermal-receipt').outerHTML,
+                    title: 'JobCard_{{ $jobCard->job_number }}',
+                    documentId: {{ $jobCard->id }},
+                    documentNumber: '{{ $jobCard->job_number }}',
+                    fallbackUrl: window.location.href
+                });
+            } else {
+                window.print();
+            }
+        }
+    </script>
 </body>
 </html>

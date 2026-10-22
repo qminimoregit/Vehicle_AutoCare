@@ -45,6 +45,10 @@
         </div>
     </div>
 
+    <!-- QZ Tray & AutoCare Universal Printer Subsystem -->
+    <script src="{{ asset('vendor/qz/qz-tray.js') }}"></script>
+    <script src="{{ asset('js/autocare-printer.js') }}"></script>
+
     @stack('scripts')
 </body>
 </html>
