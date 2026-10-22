@@ -6,8 +6,22 @@
 @php
     $invoice = $jobCard->invoice;
     $invoiceTotal = $invoice ? (float)$invoice->grand_total : (float)$jobCard->grand_total;
-    $advancesAmount = (float) $jobCard->payments()->where('status', 'completed')->sum('amount');
-    $paidAmount = $invoice ? (float)$invoice->payments()->where('status', 'completed')->sum('amount') : $advancesAmount;
+
+    // Payments: query all completed payments linked to this Job Card or its Invoice
+    $paymentsList = \App\Models\Payment::with('creator')
+        ->where(function($q) use ($jobCard, $invoice) {
+            $q->where('job_card_id', $jobCard->id);
+            if ($invoice) {
+                $q->orWhere('invoice_id', $invoice->id);
+            }
+        })
+        ->where('status', 'completed')
+        ->orderBy('payment_date', 'asc')
+        ->orderBy('id', 'asc')
+        ->get();
+
+    $advancesAmount = (float) $paymentsList->where('is_advance', true)->sum('amount');
+    $paidAmount = (float) $paymentsList->sum('amount');
     $balanceDue = max(0, round($invoiceTotal - $paidAmount, 2));
     $isPaid = ($invoiceTotal > 0 && $balanceDue <= 0.0001);
 
@@ -41,9 +55,175 @@
     $normPhone = \App\Services\PhoneNumberHelper::normalizeForWhatsApp($rawPhone) ?? '';
 @endphp
 
+<script>
+    window.jobCardController = function(config) {
+        return {
+            // Modals
+            showAddServiceModal: false,
+            showAddProductModal: false,
+            showCancelModal: false,
+            showEditModal: false,
+            showAddIssueModal: false,
+            showApprovalModal: false,
+            showDeliveryOverrideModal: false,
+            showWhatsAppModal: false,
+            showPayModal: {{ request()->query('action') === 'pay' ? 'true' : 'false' }},
+            showEditCarpetsModal: false,
+
+            // Payment modal state
+            paymentAmount: '{{ $balanceDue > 0 ? $balanceDue : "" }}',
+            paymentMethod: 'cash',
+            isSubmittingPayment: false,
+
+            // WhatsApp state
+            whatsappPhone: config.whatsappPhone || '',
+            whatsappText: config.whatsappText || '',
+            copiedWhatsApp: false,
+
+            copyWhatsAppText() {
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(this.whatsappText).then(() => {
+                        this.copiedWhatsApp = true;
+                        setTimeout(() => { this.copiedWhatsApp = false; }, 2000);
+                    });
+                }
+            },
+
+            openWhatsApp() {
+                if (!this.whatsappPhone) {
+                    alert('Please enter or verify the customer mobile phone number.');
+                    return;
+                }
+                let url = 'https://wa.me/' + encodeURIComponent(this.whatsappPhone) + '?text=' + encodeURIComponent(this.whatsappText);
+                window.open(url, '_blank');
+            },
+
+            // Issue Approval state
+            selectedIssueId: null,
+            selectedIssueDescription: '',
+            approvalDecision: 'approved',
+            approvalMethod: 'verbal',
+            approvalContact: config.customerPhone || '',
+            approvalRemarks: '',
+
+            openApprovalModal(issue) {
+                this.selectedIssueId = issue.id;
+                this.selectedIssueDescription = issue.description;
+                this.approvalDecision = 'approved';
+                this.approvalMethod = 'verbal';
+                this.approvalContact = config.customerPhone || '';
+                this.approvalRemarks = '';
+                this.showApprovalModal = true;
+            },
+
+            // Service selection state
+            selectedServiceId: '',
+            servicePrice: null,
+            serviceCost: null,
+            serviceConfigured: false,
+            serviceStatusMessage: '',
+            customPrice: '',
+            serviceQty: 1,
+            technicianName: config.technicianName || '',
+
+            // Product selection state
+            productSearch: '',
+            selectedProductId: '',
+            productAvailableStock: 0,
+            productSellingPrice: 0,
+            productQty: 1,
+
+            isProductVisible(name, sku) {
+                if (!this.productSearch.trim()) return true;
+                const q = this.productSearch.toLowerCase().trim();
+                return name.includes(q) || sku.includes(q);
+            },
+
+            async onServiceChange() {
+                if (!this.selectedServiceId) {
+                    this.servicePrice = null;
+                    this.serviceConfigured = false;
+                    this.serviceStatusMessage = '';
+                    return;
+                }
+
+                try {
+                    let url = config.servicePriceUrl.replace('__SERVICE_ID__', this.selectedServiceId);
+                    let res = await fetch(url);
+                    let data = await res.json();
+
+                    this.serviceConfigured = data.configured;
+                    if (data.configured) {
+                        this.servicePrice = data.price;
+                        this.customPrice = data.price;
+                        this.serviceStatusMessage = '';
+                    } else {
+                        this.servicePrice = null;
+                        this.customPrice = '';
+                        this.serviceStatusMessage = data.message || 'Price not configured for this vehicle type.';
+                    }
+                } catch (err) {
+                    console.error(err);
+                    this.serviceStatusMessage = 'Error fetching service price.';
+                }
+            },
+
+            onProductChange(event) {
+                let select = event.target;
+                let opt = select.options[select.selectedIndex];
+                if (opt && opt.value) {
+                    this.productAvailableStock = parseFloat(opt.dataset.stock) || 0;
+                    this.productSellingPrice = parseFloat(opt.dataset.price) || 0;
+                    this.productQty = 1;
+                } else {
+                    this.productAvailableStock = 0;
+                    this.productSellingPrice = 0;
+                }
+            },
+
+            // Print selection state
+            selectedServices: config.selectedServices || [],
+            selectedProducts: config.selectedProducts || [],
+            selectedIssues: [],
+            includeCarpetsInPrint: config.hasCarpets || false,
+            totalItemsCount: config.totalItems || 0,
+
+            printSelectedItems() {
+                const hasSelected = this.selectedServices.length > 0 || this.selectedProducts.length > 0 || this.selectedIssues.length > 0 || this.includeCarpetsInPrint;
+                if (!hasSelected) {
+                    alert('Please select at least one item or carpet section to print.');
+                    return;
+                }
+                const params = new URLSearchParams();
+                params.append('selected', '1');
+                this.selectedServices.forEach(id => params.append('services[]', id));
+                this.selectedProducts.forEach(id => params.append('products[]', id));
+                this.selectedIssues.forEach(id => params.append('issues[]', id));
+                if (this.includeCarpetsInPrint) {
+                    params.append('carpets', '1');
+                }
+                const targetUrl = config.printBaseUrl + '?' + params.toString();
+                if (window.AutoCarePrinter && window.AutoCarePrinter.currentConfig?.auto_route) {
+                    window.AutoCarePrinter.printUrl(targetUrl, {
+                        type: 'job_card',
+                        title: 'Selected Items - Job #' + (config.jobNumber || ''),
+                        documentId: config.jobCardId,
+                        documentNumber: config.jobNumber,
+                        fallbackUrl: targetUrl
+                    });
+                } else {
+                    window.open(targetUrl, '_blank');
+                }
+            }
+        };
+    };
+</script>
+
 <div 
     x-data="jobCardController({{ json_encode([
         'printBaseUrl' => route('operations.job-cards.print', $jobCard),
+        'jobCardId' => $jobCard->id,
+        'jobNumber' => $jobCard->job_number,
         'customerPhone' => $jobCard->customer?->phone ?? '',
         'whatsappPhone' => $normPhone,
         'whatsappText' => $waMessage,
@@ -85,15 +265,16 @@
     @endif
 
     <!-- Top Action Bar -->
-    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
+    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <!-- Left Side: Job Card Details -->
+        <div class="shrink-0">
             <div class="flex flex-wrap items-center gap-2 sm:gap-3">
-                <a href="{{ route('operations.job-cards.index') }}" class="text-gray-400 hover:text-gray-600 transition p-1 -ml-1">
+                <a href="{{ route('operations.job-cards.index') }}" class="text-gray-400 hover:text-gray-600 transition p-1 -ml-1" title="Back to Job Cards">
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                     </svg>
                 </a>
-                <h1 class="text-lg sm:text-2xl font-black text-gray-900 tracking-tight flex items-center">
+                <h1 class="text-lg sm:text-2xl font-black text-gray-900 tracking-tight whitespace-nowrap">
                     Job Card #{{ $jobCard->job_number }}
                 </h1>
                 
@@ -120,183 +301,123 @@
             </p>
         </div>
 
-        <!-- Primary Action Buttons (Job Card Actions) -->
-        <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            <!-- 1. Print Job Card -->
-            <a 
-                href="{{ route('operations.job-cards.print', $jobCard) }}" 
-                @click.prevent="AutoCarePrinter.printUrl('{{ route('operations.job-cards.print', $jobCard) }}', { type: 'job_card', title: 'Job Card #{{ $jobCard->job_number }}', documentId: {{ $jobCard->id }}, documentNumber: '{{ $jobCard->job_number }}', fallbackUrl: '{{ route('operations.job-cards.print', $jobCard) }}' })"
-                target="_blank"
-                class="hidden sm:inline-flex items-center justify-center px-3.5 py-2.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-bold text-xs sm:text-sm rounded-lg shadow-xs transition min-h-[44px]"
-                title="Print Job Card"
-            >
-                <svg class="w-4 h-4 mr-1.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                </svg>
-                Print Job Card
-            </a>
-
-            <!-- 2. Print Selected Items -->
-            <button 
-                type="button" 
-                @click="printSelectedItems()" 
-                :disabled="totalItemsCount === 0"
-                class="hidden sm:inline-flex items-center justify-center px-3.5 py-2.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-bold text-xs sm:text-sm rounded-lg shadow-xs transition min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                title="Print only selected services, products, or issues"
-            >
-                <svg class="w-4 h-4 mr-1.5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                </svg>
-                Print Selected Items
-            </button>
-
-            <!-- 3. Pay Button -->
-            @if($jobCard->status !== 'cancelled')
-                <button 
-                    type="button" 
-                    @click="showPayModal = true"
-                    class="inline-flex items-center justify-center px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm rounded-lg shadow-xs transition cursor-pointer min-h-[44px] flex-1 sm:flex-initial"
-                    title="Record customer payment, advance, or deposit"
-                >
-                    <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                    Pay
-                </button>
-            @endif
-
-            <!-- 4. Print Bill (Directly generates 80mm Sales Bill without invoice dependency) -->
-            <a 
-                href="{{ route('operations.job-cards.print-bill', $jobCard) }}" 
-                @click.prevent="AutoCarePrinter.printUrl('{{ route('operations.job-cards.print-bill', $jobCard) }}', { type: 'bill', title: 'Sales Bill - Job #{{ $jobCard->job_number }}', documentId: {{ $jobCard->id }}, documentNumber: '{{ $jobCard->job_number }}', fallbackUrl: '{{ route('operations.job-cards.print-bill', $jobCard) }}' })"
-                target="_blank"
-                class="inline-flex items-center justify-center px-3.5 py-2.5 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-bold text-xs sm:text-sm rounded-lg shadow-xs transition min-h-[44px] flex-1 sm:flex-initial"
-                title="Print 80mm Sales Bill"
-            >
-                <svg class="w-4 h-4 mr-1.5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Print Bill
-            </a>
-
-            <!-- 5. Generate Invoice (Independent official billing document) -->
-            @if(!$jobCard->invoice_id)
-                <form action="{{ route('operations.job-cards.generate-invoice', $jobCard) }}" method="POST" class="hidden sm:inline">
-                    @csrf
-                    <button 
-                        type="submit" 
-                        class="inline-flex items-center justify-center px-4 py-2.5 bg-[#0B1849] hover:bg-[#15286e] text-white font-bold text-xs sm:text-sm rounded-lg shadow-xs transition cursor-pointer min-h-[44px]"
-                        title="Generate official invoice"
-                    >
-                        <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        Generate Invoice
-                    </button>
-                </form>
-            @else
+        <!-- Right Side: Action Buttons (Two Right-Aligned Rows on Desktop) -->
+        <div class="flex flex-col items-start lg:items-end gap-2 w-full lg:w-auto">
+            <!-- Row 1: [Print Job Card] [Print Selected Items] [Pay] [Print Bill] -->
+            <div class="flex flex-wrap items-center justify-start lg:justify-end gap-2 w-full sm:w-auto">
+                <!-- 1. Print Job Card -->
                 <a 
-                    href="{{ route('operations.invoices.show', $jobCard->invoice) }}" 
-                    class="hidden sm:inline-flex items-center justify-center px-3.5 py-2.5 bg-white border border-gray-300 text-gray-800 font-bold text-xs sm:text-sm rounded-lg hover:bg-gray-50 shadow-xs transition min-h-[44px]"
-                    title="View Official Invoice"
+                    href="{{ route('operations.job-cards.print', $jobCard) }}" 
+                    @click.prevent="AutoCarePrinter.printUrl('{{ route('operations.job-cards.print', $jobCard) }}', { type: 'job_card', title: 'Job Card #{{ $jobCard->job_number }}', documentId: {{ $jobCard->id }}, documentNumber: '{{ $jobCard->job_number }}', fallbackUrl: '{{ route('operations.job-cards.print', $jobCard) }}' })"
+                    target="_blank"
+                    class="inline-flex items-center justify-center h-10 px-3.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-bold text-xs sm:text-sm rounded-lg shadow-xs transition cursor-pointer whitespace-nowrap"
+                    title="Print Job Card"
                 >
-                    <svg class="w-4 h-4 mr-1.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <svg class="w-4 h-4 mr-1.5 text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                     </svg>
-                    Invoice ({{ $jobCard->invoice->invoice_number }})
+                    Print Job Card
                 </a>
-            @endif
 
-            <!-- Workflow Status Actions -->
-            @if($jobCard->status === 'pending')
-                <form action="{{ route('operations.job-cards.status', $jobCard) }}" method="POST" class="inline flex-1 sm:flex-initial">
-                    @csrf
-                    @method('PATCH')
-                    <input type="hidden" name="action" value="start_work">
+                <!-- 2. Print Selected Items -->
+                <button 
+                    type="button" 
+                    @click="printSelectedItems()" 
+                    :disabled="totalItemsCount === 0"
+                    class="inline-flex items-center justify-center h-10 px-3.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-bold text-xs sm:text-sm rounded-lg shadow-xs transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
+                    title="Print only selected services, products, or issues"
+                >
+                    <svg class="w-4 h-4 mr-1.5 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                    </svg>
+                    Print Selected Items
+                </button>
+
+                <!-- 3. Pay Button -->
+                @if($jobCard->status !== 'cancelled')
                     <button 
-                        type="submit" 
-                        class="w-full sm:w-auto inline-flex items-center justify-center px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm rounded-lg shadow-xs transition cursor-pointer min-h-[44px]"
+                        type="button" 
+                        @click="showPayModal = true"
+                        class="inline-flex items-center justify-center h-10 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm rounded-lg shadow-xs transition cursor-pointer whitespace-nowrap"
+                        title="Record customer payment, advance, or deposit"
                     >
-                        <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        <svg class="w-4 h-4 mr-1.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                         </svg>
-                        Start Work
+                        Pay
                     </button>
-                </form>
-            @elseif(in_array($jobCard->status, ['in_progress', 'additional_work']))
-                <button 
-                    type="button" 
-                    @click="showAddServiceModal = true"
-                    class="hidden sm:inline-flex items-center justify-center px-3 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-bold text-xs sm:text-sm rounded-lg shadow-xs transition min-h-[44px]"
+                @endif
+
+                <!-- 4. Print Bill -->
+                <a 
+                    href="{{ route('operations.job-cards.print-bill', $jobCard) }}" 
+                    @click.prevent="AutoCarePrinter.printUrl('{{ route('operations.job-cards.print-bill', $jobCard) }}', { type: 'bill', title: 'Sales Bill - Job #{{ $jobCard->job_number }}', documentId: {{ $jobCard->id }}, documentNumber: '{{ $jobCard->job_number }}', fallbackUrl: '{{ route('operations.job-cards.print-bill', $jobCard) }}' })"
+                    target="_blank"
+                    class="inline-flex items-center justify-center h-10 px-3.5 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-bold text-xs sm:text-sm rounded-lg shadow-xs transition cursor-pointer whitespace-nowrap"
+                    title="Print 80mm Sales Bill"
                 >
-                    <svg class="w-4 h-4 mr-1 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    <svg class="w-4 h-4 mr-1.5 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    Service
-                </button>
-                <button 
-                    type="button" 
-                    @click="showAddProductModal = true"
-                    class="hidden sm:inline-flex items-center justify-center px-3 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-bold text-xs sm:text-sm rounded-lg shadow-xs transition min-h-[44px]"
-                >
-                    <svg class="w-4 h-4 mr-1 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                    </svg>
-                    Product
-                </button>
-                @if($jobCard->status === 'in_progress')
-                    <form action="{{ route('operations.job-cards.status', $jobCard) }}" method="POST" class="inline flex-1 sm:flex-initial">
+                    Print Bill
+                </a>
+            </div>
+
+            <!-- Row 2: [Invoice] [WhatsApp] [Mark Delivered] [More] -->
+            <div class="flex flex-wrap items-center justify-start lg:justify-end gap-2 w-full sm:w-auto">
+                <!-- 1. Invoice -->
+                @if(!$jobCard->invoice_id)
+                    <form action="{{ route('operations.job-cards.generate-invoice', $jobCard) }}" method="POST" class="inline m-0">
                         @csrf
-                        @method('PATCH')
-                        <input type="hidden" name="action" value="complete_job">
                         <button 
                             type="submit" 
-                            class="w-full sm:w-auto inline-flex items-center justify-center px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm rounded-lg shadow-xs transition cursor-pointer min-h-[44px]"
+                            class="inline-flex items-center justify-center h-10 px-4 bg-[#0B1849] hover:bg-[#15286e] text-white font-bold text-xs sm:text-sm rounded-lg shadow-xs transition cursor-pointer whitespace-nowrap"
+                            title="Generate official invoice"
                         >
-                            <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                            <svg class="w-4 h-4 mr-1.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
-                            Complete Job
+                            Invoice
                         </button>
                     </form>
                 @else
-                    <form action="{{ route('operations.job-cards.additional-work.complete', $jobCard) }}" method="POST" class="inline flex-1 sm:flex-initial">
-                        @csrf
-                        <button 
-                            type="submit" 
-                            class="w-full sm:w-auto inline-flex items-center justify-center px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm rounded-lg shadow-xs transition cursor-pointer min-h-[44px]"
-                        >
-                            <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                            </svg>
-                            Complete Job
-                        </button>
-                    </form>
+                    <a 
+                        href="{{ route('operations.invoices.show', $jobCard->invoice) }}" 
+                        class="inline-flex items-center justify-center h-10 px-3.5 bg-white border border-gray-300 text-gray-800 font-bold text-xs sm:text-sm rounded-lg hover:bg-gray-50 shadow-xs transition whitespace-nowrap"
+                        title="View Official Invoice"
+                    >
+                        <svg class="w-4 h-4 mr-1.5 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Invoice ({{ $jobCard->invoice->invoice_number }})
+                    </a>
                 @endif
-            @elseif(in_array($jobCard->status, ['completed', 'delivered']))
+
+                <!-- 2. WhatsApp -->
                 <button 
                     type="button" 
                     @click="showWhatsAppModal = true"
-                    class="hidden sm:inline-flex items-center px-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-semibold text-xs sm:text-sm rounded-lg shadow-xs transition min-h-[44px]"
-                    title="Prepare manual WhatsApp message for customer"
+                    class="inline-flex items-center justify-center h-10 px-3.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs sm:text-sm rounded-lg shadow-xs transition cursor-pointer whitespace-nowrap"
+                    title="Open WhatsApp message workflow"
                 >
-                    <svg class="w-4 h-4 mr-1 text-emerald-600" fill="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-4 h-4 mr-1.5 text-emerald-600 shrink-0" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
                     </svg>
                     WhatsApp
                 </button>
+
+                <!-- 3. Mark Delivered / Workflow Status Action -->
                 @if($jobCard->status === 'completed')
                     @if($canDeliver)
-                        <form action="{{ route('operations.job-cards.status', $jobCard) }}" method="POST" class="inline flex-1 sm:flex-initial">
+                        <form action="{{ route('operations.job-cards.status', $jobCard) }}" method="POST" class="inline m-0">
                             @csrf
                             @method('PATCH')
                             <input type="hidden" name="action" value="mark_delivered">
                             <button 
                                 type="submit" 
-                                class="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs sm:text-sm rounded-lg shadow-xs transition cursor-pointer min-h-[44px]"
+                                class="inline-flex items-center justify-center h-10 px-4 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs sm:text-sm rounded-lg shadow-xs transition cursor-pointer whitespace-nowrap"
                             >
-                                <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <svg class="w-4 h-4 mr-1.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                                 </svg>
                                 Mark Delivered
@@ -306,10 +427,10 @@
                         <button 
                             type="button" 
                             @click="showDeliveryOverrideModal = true"
-                            class="inline-flex items-center justify-center px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs sm:text-sm rounded-lg shadow-xs transition cursor-pointer min-h-[44px] flex-1 sm:flex-initial"
+                            class="inline-flex items-center justify-center h-10 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs sm:text-sm rounded-lg shadow-xs transition cursor-pointer whitespace-nowrap"
                             title="Outstanding balance LKR {{ number_format($balanceDue, 2) }}. Admin override required."
                         >
-                            <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg class="w-4 h-4 mr-1.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                             </svg>
                             Deliver (Admin Override)
@@ -318,87 +439,90 @@
                         <button 
                             type="button" 
                             disabled
-                            class="inline-flex items-center justify-center px-4 py-2.5 bg-gray-200 text-gray-500 font-bold text-xs sm:text-sm rounded-lg shadow-xs cursor-not-allowed min-h-[44px] flex-1 sm:flex-initial"
+                            class="inline-flex items-center justify-center h-10 px-4 bg-gray-200 text-gray-500 font-bold text-xs sm:text-sm rounded-lg shadow-xs cursor-not-allowed whitespace-nowrap"
                             title="Unpaid balance LKR {{ number_format($balanceDue, 2) }}. Delivery requires full payment or Admin override."
                         >
-                            <svg class="w-4 h-4 mr-1.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg class="w-4 h-4 mr-1.5 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                             </svg>
                             Delivery Locked
                         </button>
                     @endif
-                @endif
-            @endif
-        </div>
-
-            <!-- Secondary Actions Dropdown or Menu Button -->
-            <div class="relative" x-data="{ openMenu: false }">
-                <button 
-                    type="button" 
-                    @click="openMenu = !openMenu" 
-                    class="inline-flex items-center justify-center px-3 py-2.5 bg-white border border-gray-300 text-gray-700 font-semibold text-xs sm:text-sm rounded-lg hover:bg-gray-50 shadow-xs transition min-h-[44px]"
-                    title="More actions"
-                >
-                    <span>More</span>
-                    <svg class="w-4 h-4 ml-1 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                </button>
-
-                <div 
-                    x-show="openMenu" 
-                    @click.away="openMenu = false"
-                    class="absolute right-0 mt-2 w-56 sm:w-60 bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 z-40 text-xs"
-                    style="display: none;"
-                >
-                    <!-- Mobile-only secondary quick actions (< sm) -->
-                    <div class="sm:hidden border-b border-gray-100 pb-1 mb-1">
-                        <!-- Print Job Card -->
-                        <a 
-                            href="{{ route('operations.job-cards.print', $jobCard) }}" 
-                            @click="openMenu = false; AutoCarePrinter.printUrl('{{ route('operations.job-cards.print', $jobCard) }}', { type: 'job_card', title: 'Job Card #{{ $jobCard->job_number }}', documentId: {{ $jobCard->id }}, documentNumber: '{{ $jobCard->job_number }}', fallbackUrl: '{{ route('operations.job-cards.print', $jobCard) }}' })"
-                            target="_blank"
-                            class="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700 flex items-center"
-                        >
-                            <svg class="w-4 h-4 mr-2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                            </svg>
-                            Print Job Card
-                        </a>
-
-                        <!-- Print Selected Items -->
+                @elseif($jobCard->status === 'pending')
+                    <form action="{{ route('operations.job-cards.status', $jobCard) }}" method="POST" class="inline m-0">
+                        @csrf
+                        @method('PATCH')
+                        <input type="hidden" name="action" value="start_work">
                         <button 
-                            type="button" 
-                            @click="openMenu = false; printSelectedItems()" 
-                            :disabled="totalItemsCount === 0"
-                            class="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700 flex items-center disabled:opacity-50"
+                            type="submit" 
+                            class="inline-flex items-center justify-center h-10 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm rounded-lg shadow-xs transition cursor-pointer whitespace-nowrap"
                         >
-                            <svg class="w-4 h-4 mr-2 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                            <svg class="w-4 h-4 mr-1.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                            Print Selected Items
+                            Start Work
                         </button>
-
-                        <!-- Invoice -->
-                        @if(!$jobCard->invoice_id)
-                            <form action="{{ route('operations.job-cards.generate-invoice', $jobCard) }}" method="POST">
-                                @csrf
-                                <button type="submit" class="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700 flex items-center">
-                                    <svg class="w-4 h-4 mr-2 text-[#0B1849]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                    </svg>
-                                    Generate Invoice
-                                </button>
-                            </form>
-                        @else
-                            <a href="{{ route('operations.invoices.show', $jobCard->invoice) }}" class="w-full text-left px-4 py-2 hover:bg-gray-50 text-emerald-700 flex items-center font-medium">
-                                <svg class="w-4 h-4 mr-2 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </form>
+                @elseif(in_array($jobCard->status, ['in_progress', 'additional_work']))
+                    @if($jobCard->status === 'in_progress')
+                        <form action="{{ route('operations.job-cards.status', $jobCard) }}" method="POST" class="inline m-0">
+                            @csrf
+                            @method('PATCH')
+                            <input type="hidden" name="action" value="complete_job">
+                            <button 
+                                type="submit" 
+                                class="inline-flex items-center justify-center h-10 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm rounded-lg shadow-xs transition cursor-pointer whitespace-nowrap"
+                            >
+                                <svg class="w-4 h-4 mr-1.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                                 </svg>
-                                View Invoice
-                            </a>
-                        @endif
+                                Complete Job
+                            </button>
+                        </form>
+                    @else
+                        <form action="{{ route('operations.job-cards.additional-work.complete', $jobCard) }}" method="POST" class="inline m-0">
+                            @csrf
+                            <button 
+                                type="submit" 
+                                class="inline-flex items-center justify-center h-10 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm rounded-lg shadow-xs transition cursor-pointer whitespace-nowrap"
+                            >
+                                <svg class="w-4 h-4 mr-1.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                </svg>
+                                Complete Job
+                            </button>
+                        </form>
+                    @endif
+                @elseif($jobCard->status === 'delivered')
+                    <div class="inline-flex items-center justify-center h-10 px-4 bg-purple-50 text-purple-700 border border-purple-200 font-bold text-xs sm:text-sm rounded-lg whitespace-nowrap">
+                        <svg class="w-4 h-4 mr-1.5 shrink-0 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        Delivered
+                    </div>
+                @endif
 
+                <!-- 4. More Button & Dropdown -->
+                <div class="relative inline-block text-left" x-data="{ openMenu: false }">
+                    <button 
+                        type="button" 
+                        @click="openMenu = !openMenu" 
+                        class="inline-flex items-center justify-center h-10 px-3.5 bg-white border border-gray-300 text-gray-700 font-bold text-xs sm:text-sm rounded-lg hover:bg-gray-50 shadow-xs transition cursor-pointer whitespace-nowrap"
+                        title="More actions"
+                    >
+                        <span>More</span>
+                        <svg class="w-4 h-4 ml-1 text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+
+                    <div 
+                        x-show="openMenu" 
+                        @click.away="openMenu = false"
+                        class="absolute right-0 mt-2 w-56 sm:w-60 bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 z-40 text-xs"
+                        style="display: none;"
+                    >
                         @if(in_array($jobCard->status, ['in_progress', 'additional_work']))
                             <button type="button" @click="showAddServiceModal = true; openMenu = false" class="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700 flex items-center">
                                 <svg class="w-4 h-4 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -414,70 +538,62 @@
                             </button>
                         @endif
 
-                        @if(in_array($jobCard->status, ['completed', 'delivered']))
-                            <button type="button" @click="showWhatsAppModal = true; openMenu = false" class="w-full text-left px-4 py-2 hover:bg-gray-50 text-emerald-700 flex items-center">
-                                <svg class="w-4 h-4 mr-2 text-emerald-600" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
-                                </svg>
-                                WhatsApp Customer
-                            </button>
-                        @endif
-                    </div>
-
-                    <!-- Assign / Change Tech -->
-                    <button 
-                        type="button" 
-                        @click="showEditModal = true; openMenu = false" 
-                        class="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700 flex items-center"
-                    >
-                        <svg class="w-4 h-4 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                        {{ $jobCard->assigned_to ? 'Change Technician' : 'Assign Technician' }}
-                    </button>
-                    <!-- Edit Info -->
-                    @if($jobCard->status !== 'cancelled')
+                        <!-- Assign / Change Tech -->
                         <button 
                             type="button" 
                             @click="showEditModal = true; openMenu = false" 
                             class="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700 flex items-center"
                         >
-                            <svg class="w-4 h-4 mr-2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            <svg class="w-4 h-4 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                             </svg>
-                            Edit Job Details
+                            {{ $jobCard->assigned_to ? 'Change Technician' : 'Assign Technician' }}
                         </button>
-                    @endif
 
-                    @if($jobCard->status === 'delivered')
-                        <form action="{{ route('operations.job-cards.follow-up', $jobCard) }}" method="POST">
-                            @csrf
+                        <!-- Edit Info -->
+                        @if($jobCard->status !== 'cancelled')
                             <button 
-                                type="submit" 
+                                type="button" 
+                                @click="showEditModal = true; openMenu = false" 
                                 class="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700 flex items-center"
                             >
-                                <svg class="w-4 h-4 mr-2 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                <svg class="w-4 h-4 mr-2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                 </svg>
-                                Follow-up Job Card
+                                Edit Job Details
                             </button>
-                        </form>
-                    @endif
+                        @endif
 
-                    <!-- Cancel Job Button -->
-                    @if($jobCard->status !== 'cancelled' && $jobCard->status !== 'delivered' && (Auth::user()->isAdmin() || Auth::user()->hasPermission('cancel_jobs')))
-                        <div class="border-t border-gray-100 my-1"></div>
-                        <button 
-                            type="button" 
-                            @click="showCancelModal = true; openMenu = false" 
-                            class="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 flex items-center"
-                        >
-                            <svg class="w-4 h-4 mr-2 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                            Cancel Job Card
-                        </button>
-                    @endif
+                        @if($jobCard->status === 'delivered')
+                            <form action="{{ route('operations.job-cards.follow-up', $jobCard) }}" method="POST">
+                                @csrf
+                                <button 
+                                    type="submit" 
+                                    class="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700 flex items-center"
+                                >
+                                    <svg class="w-4 h-4 mr-2 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                    Follow-up Job Card
+                                </button>
+                            </form>
+                        @endif
+
+                        <!-- Cancel Job Button -->
+                        @if($jobCard->status !== 'cancelled' && $jobCard->status !== 'delivered' && (Auth::user()->isAdmin() || Auth::user()->hasPermission('cancel_jobs')))
+                            <div class="border-t border-gray-100 my-1"></div>
+                            <button 
+                                type="button" 
+                                @click="showCancelModal = true; openMenu = false" 
+                                class="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 flex items-center"
+                            >
+                                <svg class="w-4 h-4 mr-2 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                                Cancel Job Card
+                            </button>
+                        @endif
+                    </div>
                 </div>
             </div>
         </div>
@@ -1137,41 +1253,16 @@
 
     <!-- 4. PAYMENTS & ADVANCES SECTION -->
     <div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
-        <div class="px-5 py-4 border-b border-gray-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-gray-50/50">
-            <div>
-                <div class="flex items-center space-x-2">
-                    <span class="p-1.5 bg-emerald-100 text-emerald-800 rounded-md">
-                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                    </span>
-                    <h3 class="text-base font-bold text-gray-900">Payments & Advances Received</h3>
-                </div>
-                <p class="text-xs text-gray-500 mt-0.5">Record customer advance deposits before work, progress payments, or final balance settlements.</p>
-            </div>
-            <div class="flex items-center gap-2">
-                <a 
-                    href="{{ route('operations.job-cards.print-bill', $jobCard) }}" 
-                    @click.prevent="AutoCarePrinter.printUrl('{{ route('operations.job-cards.print-bill', $jobCard) }}', { type: 'bill', title: 'Sales Bill - Job #{{ $jobCard->job_number }}', documentId: {{ $jobCard->id }}, documentNumber: '{{ $jobCard->job_number }}', fallbackUrl: '{{ route('operations.job-cards.print-bill', $jobCard) }}' })"
-                    target="_blank"
-                    class="inline-flex items-center px-3 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-bold text-xs rounded-lg shadow-xs transition"
-                >
-                    <svg class="w-3.5 h-3.5 mr-1 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+        <div class="px-5 py-4 border-b border-gray-200 bg-gray-50/50">
+            <div class="flex items-center space-x-2">
+                <span class="p-1.5 bg-emerald-100 text-emerald-800 rounded-md">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
-                    Print Bill
-                </a>
-                <button 
-                    type="button" 
-                    @click="showPayModal = true"
-                    class="inline-flex items-center px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-xs transition cursor-pointer"
-                >
-                    <svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    Pay
-                </button>
+                </span>
+                <h3 class="text-base font-bold text-gray-900">Payments & Advances Received</h3>
             </div>
+            <p class="text-xs text-gray-500 mt-1 ml-7">Record customer advance deposits before work, progress payments, or final balance settlements.</p>
         </div>
 
         <!-- Financial Status Cards -->
@@ -1199,9 +1290,7 @@
         </div>
 
         <!-- Payments Table -->
-        @php
-            $paymentsList = $jobCard->payments()->with('creator')->orderBy('id', 'asc')->get();
-        @endphp
+        {{-- $paymentsList is loaded at top to include both Job Card advances and Invoice payments --}}
         <div class="overflow-x-auto">
             <table class="w-full text-left border-collapse text-xs">
                 <thead>
@@ -2435,167 +2524,4 @@
     @endif
 </div>
 
-<script>
-    window.jobCardController = function(config) {
-        return {
-            // Modals
-            showAddServiceModal: false,
-            showAddProductModal: false,
-            showCancelModal: false,
-            showEditModal: false,
-            showAddIssueModal: false,
-            showApprovalModal: false,
-            showDeliveryOverrideModal: false,
-            showWhatsAppModal: false,
-            showPayModal: false,
-            showEditCarpetsModal: false,
-
-            // Payment modal state
-            paymentAmount: '{{ $balanceDue > 0 ? $balanceDue : "" }}',
-            paymentMethod: 'cash',
-            isSubmittingPayment: false,
-
-            // WhatsApp state
-            whatsappPhone: config.whatsappPhone || '',
-            whatsappText: config.whatsappText || '',
-            copiedWhatsApp: false,
-
-            copyWhatsAppText() {
-                if (navigator.clipboard) {
-                    navigator.clipboard.writeText(this.whatsappText).then(() => {
-                        this.copiedWhatsApp = true;
-                        setTimeout(() => { this.copiedWhatsApp = false; }, 2000);
-                    });
-                }
-            },
-
-            openWhatsApp() {
-                if (!this.whatsappPhone) {
-                    alert('Please enter or verify the customer mobile phone number.');
-                    return;
-                }
-                let url = 'https://wa.me/' + encodeURIComponent(this.whatsappPhone) + '?text=' + encodeURIComponent(this.whatsappText);
-                window.open(url, '_blank');
-            },
-
-            // Issue Approval state
-            selectedIssueId: null,
-            selectedIssueDescription: '',
-            approvalDecision: 'approved',
-            approvalMethod: 'verbal',
-            approvalContact: config.customerPhone || '',
-            approvalRemarks: '',
-
-            openApprovalModal(issue) {
-                this.selectedIssueId = issue.id;
-                this.selectedIssueDescription = issue.description;
-                this.approvalDecision = 'approved';
-                this.approvalMethod = 'verbal';
-                this.approvalContact = config.customerPhone || '';
-                this.approvalRemarks = '';
-                this.showApprovalModal = true;
-            },
-
-            // Service selection state
-            selectedServiceId: '',
-            servicePrice: null,
-            serviceCost: null,
-            serviceConfigured: false,
-            serviceStatusMessage: '',
-            customPrice: '',
-            serviceQty: 1,
-            technicianName: config.technicianName || '',
-
-            // Product selection state
-            productSearch: '',
-            selectedProductId: '',
-            productAvailableStock: 0,
-            productSellingPrice: 0,
-            productQty: 1,
-
-            isProductVisible(name, sku) {
-                if (!this.productSearch.trim()) return true;
-                const q = this.productSearch.toLowerCase().trim();
-                return name.includes(q) || sku.includes(q);
-            },
-
-            async onServiceChange() {
-                if (!this.selectedServiceId) {
-                    this.servicePrice = null;
-                    this.serviceConfigured = false;
-                    this.serviceStatusMessage = '';
-                    return;
-                }
-
-                try {
-                    let url = config.servicePriceUrl.replace('__SERVICE_ID__', this.selectedServiceId);
-                    let res = await fetch(url);
-                    let data = await res.json();
-
-                    this.serviceConfigured = data.configured;
-                    if (data.configured) {
-                        this.servicePrice = data.price;
-                        this.customPrice = data.price;
-                        this.serviceStatusMessage = '';
-                    } else {
-                        this.servicePrice = null;
-                        this.customPrice = '';
-                        this.serviceStatusMessage = data.message || 'Price not configured for this vehicle type.';
-                    }
-                } catch (err) {
-                    console.error(err);
-                    this.serviceStatusMessage = 'Error fetching service price.';
-                }
-            },
-
-            onProductChange(event) {
-                let select = event.target;
-                let opt = select.options[select.selectedIndex];
-                if (opt && opt.value) {
-                    this.productAvailableStock = parseFloat(opt.dataset.stock) || 0;
-                    this.productSellingPrice = parseFloat(opt.dataset.price) || 0;
-                    this.productQty = 1;
-                } else {
-                    this.productAvailableStock = 0;
-                    this.productSellingPrice = 0;
-                }
-            },
-
-            // Print selection state
-            selectedServices: config.selectedServices || [],
-            selectedProducts: config.selectedProducts || [],
-            selectedIssues: [],
-            includeCarpetsInPrint: config.hasCarpets || false,
-            totalItemsCount: config.totalItems || 0,
-
-            printSelectedItems() {
-                const hasSelected = this.selectedServices.length > 0 || this.selectedProducts.length > 0 || this.selectedIssues.length > 0 || this.includeCarpetsInPrint;
-                if (!hasSelected) {
-                    alert('Please select at least one item or carpet section to print.');
-                    return;
-                }
-                const params = new URLSearchParams();
-                params.append('selected', '1');
-                this.selectedServices.forEach(id => params.append('services[]', id));
-                this.selectedProducts.forEach(id => params.append('products[]', id));
-                this.selectedIssues.forEach(id => params.append('issues[]', id));
-                if (this.includeCarpetsInPrint) {
-                    params.append('carpets', '1');
-                }
-                const targetUrl = config.printBaseUrl + '?' + params.toString();
-                if (window.AutoCarePrinter && window.AutoCarePrinter.currentConfig?.auto_route) {
-                    window.AutoCarePrinter.printUrl(targetUrl, {
-                        type: 'job_card',
-                        title: 'Selected Items - Job #' + (config.jobNumber || ''),
-                        documentId: config.jobCardId,
-                        documentNumber: config.jobNumber,
-                        fallbackUrl: targetUrl
-                    });
-                } else {
-                    window.open(targetUrl, '_blank');
-                }
-            }
-        };
-    };
-</script>
 @endsection

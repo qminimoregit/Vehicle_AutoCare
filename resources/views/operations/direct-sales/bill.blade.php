@@ -502,38 +502,12 @@
             </div>
         @endif
 
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
-            <a href="{{ route('operations.direct-sales.index') }}" class="btn btn-secondary">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+            <a href="{{ route('operations.direct-sales.index') }}" class="btn btn-secondary" id="btn-pos-terminal">
                 &larr; POS Terminal
             </a>
-            <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-                @if($directSale->invoice)
-                    <a href="{{ route('operations.invoices.show', $directSale->invoice) }}" class="btn btn-secondary" style="color: #0B1849;">
-                        View Invoice
-                    </a>
-                @elseif(Auth::user()?->isAdmin() || Auth::user()?->hasPermission('create_invoices'))
-                    <form action="{{ route('operations.direct-sales.generate-invoice', $directSale) }}" method="POST" onsubmit="return confirm('Generate an official tax/commercial Invoice for this Direct Sale?');" style="display:inline;">
-                        @csrf
-                        <button type="submit" class="btn btn-secondary" title="Convert to official invoice upon request">
-                            Generate Invoice
-                        </button>
-                    </form>
-                @endif
-                <a href="{{ route('operations.direct-sales.pdf', $directSale) }}" class="btn btn-secondary" download title="Download Sales Bill PDF">
-                    PDF
-                </a>
-                <button onclick="handlePrint()" class="btn btn-primary" id="btn-print-bill">
-                    Print Bill
-                </button>
-            </div>
-        </div>
-
-        <div style="display: flex; gap: 6px; border-top: 1px solid #f3f4f6; padding-top: 8px;">
-            <button type="button" onclick="openEmailModal()" class="btn btn-email" style="flex: 1; justify-content: center;">
-                &#9993; Email Bill
-            </button>
-            <button type="button" onclick="openWhatsAppModal()" class="btn btn-whatsapp" style="flex: 1; justify-content: center;">
-                &#128172; WhatsApp
+            <button onclick="handlePrint()" class="btn btn-primary" id="btn-print-bill">
+                Print Bill
             </button>
         </div>
     </div>

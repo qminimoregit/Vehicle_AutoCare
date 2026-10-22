@@ -1183,7 +1183,7 @@ class JobCardController extends Controller
         $amount = round((float) $validated['amount'], 2);
         $method = $validated['payment_method'];
 
-        // Handle Approved Company Credit
+        // Handle Approved Company Credit validation
         if ($method === 'credit') {
             $customer = $jobCard->customer;
             $creditAccount = $customer?->creditAccount()->where('status', 'active')->first();
@@ -1195,15 +1195,6 @@ class JobCardController extends Controller
             if ($creditAccount->wouldExceedLimit($amount) && ! $user->isAdmin()) {
                 return back()->with('error', 'Company credit limit exceeded. Available credit: LKR '.number_format($creditAccount->available_credit, 2).'. Admin override required.');
             }
-
-            ActivityLog::log(
-                action: 'company_credit_arranged',
-                description: 'Approved Company Credit of LKR '.number_format($amount, 2)." verified for Job #{$jobCard->job_number} (Customer: ".($customer->company_name ?? $customer->customer_name).').',
-                module: 'Operations',
-                userId: $user->id
-            );
-
-            return back()->with('success', 'Approved Company Credit arrangement verified for LKR '.number_format($amount, 2).'. Final billing will post to company monthly statement upon invoice generation.');
         }
 
         try {
@@ -1256,6 +1247,18 @@ class JobCardController extends Controller
                     ]);
                 } else {
                     // Advance payment before final invoice is generated
+                    $existingAdvances = (float) Payment::where('job_card_id', $lockedJobCard->id)
+                        ->whereNull('invoice_id')
+                        ->where('status', 'completed')
+                        ->sum('amount');
+                    $estimatedTotal = (float) $lockedJobCard->grand_total;
+                    if ($estimatedTotal > 0) {
+                        $remaining = max(0, round($estimatedTotal - $existingAdvances, 2));
+                        if ($amount > $remaining) {
+                            throw new Exception('Advance payment amount (LKR '.number_format($amount, 2).') cannot exceed the remaining estimated job balance of LKR '.number_format($remaining, 2).'.');
+                        }
+                    }
+
                     $payment = Payment::create([
                         'invoice_id' => null,
                         'job_card_id' => $lockedJobCard->id,

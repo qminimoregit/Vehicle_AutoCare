@@ -467,6 +467,7 @@ class InvoiceController extends Controller
 
                 $payment = Payment::create([
                     'invoice_id' => $freshInvoice->id,
+                    'job_card_id' => $freshInvoice->job_card_id,
                     'customer_id' => $freshInvoice->customer_id,
                     'payment_number' => $paymentNumber,
                     'payment_date' => $validated['payment_date'] ?? now()->toDateString(),
