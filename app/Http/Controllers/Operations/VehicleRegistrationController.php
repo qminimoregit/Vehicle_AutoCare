@@ -13,6 +13,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class VehicleRegistrationController extends Controller
@@ -98,6 +99,20 @@ class VehicleRegistrationController extends Controller
                 ];
             });
 
+        // Saved carpets from most recent job card with carpets (if any)
+        $latestJobWithCarpets = JobCard::where('vehicle_id', $vehicle->id)
+            ->whereHas('carpets')
+            ->with('carpets')
+            ->latest('id')
+            ->first();
+
+        $savedCarpets = [];
+        if ($latestJobWithCarpets && $latestJobWithCarpets->carpets->isNotEmpty()) {
+            foreach ($latestJobWithCarpets->carpets as $c) {
+                $savedCarpets[(string) $c->carpet_category_id] = (int) $c->quantity;
+            }
+        }
+
         return response()->json([
             'exists' => true,
             'message' => 'Existing Vehicle Found – Customer Details Loaded',
@@ -121,6 +136,7 @@ class VehicleRegistrationController extends Controller
                     'id' => $c->id,
                     'name' => $c->name,
                 ]),
+                'saved_carpets' => $savedCarpets,
             ],
             'customer' => [
                 'id' => $vehicle->customer->id,
@@ -147,6 +163,53 @@ class VehicleRegistrationController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        // 1. Resolve vehicle type and allowed carpet categories
+        $vehicleTypeId = $request->input('vehicle_type_id');
+        $selectedVehicleType = $vehicleTypeId ? VehicleType::with('carpetCategories')->find($vehicleTypeId) : null;
+        $allowedCarpetCatIds = ($selectedVehicleType && $selectedVehicleType->enable_carpets)
+            ? $selectedVehicleType->carpetCategories->pluck('id')->all()
+            : [];
+
+        // 2. Normalize and filter optional carpet entries before validation
+        $rawCarpets = $request->input('carpets');
+        if (is_array($rawCarpets)) {
+            if ($selectedVehicleType && ! $selectedVehicleType->enable_carpets) {
+                // If vehicle type does not support carpets, ignore carpets payload
+                $request->request->remove('carpets');
+            } else {
+                $normalizedCarpets = [];
+                foreach ($rawCarpets as $key => $item) {
+                    if (! is_array($item)) {
+                        continue;
+                    }
+
+                    // If explicitly marked as unselected, filter out
+                    if (array_key_exists('selected', $item) && ! filter_var($item['selected'], FILTER_VALIDATE_BOOLEAN)) {
+                        continue;
+                    }
+
+                    $catId = $item['category_id'] ?? (is_numeric($key) ? (int) $key : null);
+                    $qty = $item['quantity'] ?? null;
+
+                    // If neither 'selected' flag nor quantity was provided, it was an unchecked entry
+                    if (! array_key_exists('selected', $item) && ($qty === null || $qty === '')) {
+                        continue;
+                    }
+
+                    $normalizedCarpets[] = [
+                        'category_id' => ($catId !== null && $catId !== '') ? (int) $catId : null,
+                        'quantity' => ($qty !== null && $qty !== '') ? (is_numeric($qty) ? (int) $qty : $qty) : null,
+                    ];
+                }
+
+                if (empty($normalizedCarpets)) {
+                    $request->request->remove('carpets');
+                } else {
+                    $request->merge(['carpets' => $normalizedCarpets]);
+                }
+            }
+        }
+
         $validated = $request->validate([
             'vehicle_number' => ['required', 'string', 'max:50'],
             'customer_name' => ['required', 'string', 'max:150'],
@@ -166,8 +229,17 @@ class VehicleRegistrationController extends Controller
             'customer_notes' => ['nullable', 'string'],
             'ignore_active_job' => ['nullable', 'boolean'],
             'carpets' => ['nullable', 'array'],
-            'carpets.*.category_id' => ['required_with:carpets', 'exists:carpet_categories,id'],
-            'carpets.*.quantity' => ['required_with:carpets', 'integer', 'min:1'],
+            'carpets.*.category_id' => [
+                'required',
+                'integer',
+                'exists:carpet_categories,id',
+                ! empty($allowedCarpetCatIds) ? Rule::in($allowedCarpetCatIds) : 'prohibited',
+            ],
+            'carpets.*.quantity' => ['required', 'integer', 'min:1'],
+        ], [
+            'carpets.*.quantity.required' => 'Please specify a quantity for each selected carpet.',
+            'carpets.*.quantity.min' => 'Carpet quantity must be at least 1.',
+            'carpets.*.category_id.in' => 'Selected carpet category is not allowed for this vehicle type.',
         ]);
 
         $normalized = Vehicle::normalizeNumber($validated['vehicle_number']);
