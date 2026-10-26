@@ -581,56 +581,44 @@
                         </label>
                         <div class="space-y-2">
                             <!-- Option 1: Permanently Delete Job -->
-                            <label 
-                                class="flex items-start p-3 border rounded-xl cursor-pointer transition"
-                                :class="manageAction === 'permanently_delete' ? 'border-red-500 bg-red-50/40 ring-1 ring-red-500' : 'border-gray-200 hover:bg-gray-50'"
-                            >
+                            <label class="flex items-center p-2.5 border rounded-lg cursor-pointer transition" :class="manageAction === 'permanently_delete' ? 'border-red-500 bg-red-50/30' : 'border-gray-200 hover:bg-gray-50'">
                                 <input 
                                     type="radio" 
                                     name="manage_action" 
                                     value="permanently_delete" 
                                     x-model="manageAction" 
-                                    class="mt-0.5 text-red-600 focus:ring-red-500"
+                                    class="text-red-600 focus:ring-red-500"
                                 >
-                                <div class="ml-3">
-                                    <div class="text-sm font-bold text-gray-900">Option 1 — Permanently Delete Job</div>
-                                    <div class="text-xs text-gray-500 mt-0.5">Remove this completed job and its eligible associated records permanently.</div>
-                                </div>
+                                <span class="ml-2.5 text-sm font-semibold text-gray-900">Option 1 — Permanently Delete Job</span>
                             </label>
 
                             <!-- Option 2: Recreate Job for Editing -->
-                            <label 
-                                class="flex items-start p-3 border rounded-xl cursor-pointer transition"
-                                :class="manageAction === 'recreate_for_editing' ? 'border-blue-500 bg-blue-50/40 ring-1 ring-blue-500' : 'border-gray-200 hover:bg-gray-50'"
-                            >
+                            <label class="flex items-center p-2.5 border rounded-lg cursor-pointer transition" :class="manageAction === 'recreate_for_editing' ? 'border-blue-500 bg-blue-50/30' : 'border-gray-200 hover:bg-gray-50'">
                                 <input 
                                     type="radio" 
                                     name="manage_action" 
                                     value="recreate_for_editing" 
                                     x-model="manageAction" 
-                                    class="mt-0.5 text-blue-600 focus:ring-blue-500"
+                                    class="text-blue-600 focus:ring-blue-500"
                                 >
-                                <div class="ml-3">
-                                    <div class="text-sm font-bold text-gray-900">Option 2 — Recreate Job for Editing</div>
-                                    <div class="text-xs text-gray-500 mt-0.5">Reopen this job using the same job number and previous items. The old invoice will be removed from active billing.</div>
-                                </div>
+                                <span class="ml-2.5 text-sm font-semibold text-gray-900">Option 2 — Recreate Job for Editing</span>
                             </label>
                         </div>
                     </div>
 
-                    <!-- Mandatory Reason Dropdown -->
-                    <div>
+                    <!-- Reason for Deletion (Option 1 Only) -->
+                    <div x-show="manageAction === 'permanently_delete'">
                         <label for="delete_reason" class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
-                            Reason for Action <span class="text-red-500">*</span>
+                            Reason for Deletion <span class="text-red-500">*</span>
                         </label>
                         <select 
                             name="reason" 
                             id="delete_reason" 
                             x-model="deleteReason" 
-                            required 
-                            class="block w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                            :required="manageAction === 'permanently_delete'" 
+                            class="block w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
                         >
-                            <option value="" disabled selected>-- Select reason --</option>
+                            <option value="" disabled selected>Select Reason</option>
                             <option value="Incorrect services added">Incorrect services added</option>
                             <option value="Incorrect products added">Incorrect products added</option>
                             <option value="Wrong vehicle selected">Wrong vehicle selected</option>
@@ -640,44 +628,6 @@
                             <option value="Other">Other</option>
                         </select>
                     </div>
-
-                    <!-- Additional Explanation Textarea -->
-                    <div>
-                        <label for="delete_explanation" class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
-                            Additional Explanation <span x-show="deleteReason === 'Other'" class="text-red-500">*</span>
-                        </label>
-                        <textarea 
-                            name="explanation" 
-                            id="delete_explanation" 
-                            x-model="deleteExplanation" 
-                            rows="2" 
-                            :required="deleteReason === 'Other'" 
-                            placeholder="Provide additional details or justification..."
-                            class="block w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-gray-400 bg-white"
-                        ></textarea>
-                        <p x-show="deleteReason === 'Other'" class="text-[11px] text-red-600 mt-1 font-medium">
-                            An explanation is required when selecting 'Other'.
-                        </p>
-                    </div>
-
-                    <!-- Contextual Notice/Warning Banner -->
-                    <template x-if="manageAction === 'permanently_delete'">
-                        <div class="flex items-start p-3 bg-red-50 border border-red-200 rounded-lg text-red-900 text-xs">
-                            <svg class="w-4 h-4 mr-2 mt-0.5 text-red-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                            <span><strong>Warning:</strong> Permanent deletion cannot be undone. Eligible linked invoice and item records will be removed, and deducted FIFO stock will be restored to original batches.</span>
-                        </div>
-                    </template>
-
-                    <template x-if="manageAction === 'recreate_for_editing'">
-                        <div class="flex items-start p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-900 text-xs">
-                            <svg class="w-4 h-4 mr-2 mt-0.5 text-blue-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <span><strong>Notice:</strong> This job will be reopened in Pending status with the SAME Job ID and Job Number. Existing services, products, and vehicle details will be retained for editing. The old invoice will be removed from active billing.</span>
-                        </div>
-                    </template>
 
                     <!-- Modal Actions -->
                     <div class="pt-2 flex items-center justify-end space-x-3">
@@ -713,6 +663,7 @@
                             </button>
                         </template>
                     </div>
+
                 </form>
             </div>
     </div>
