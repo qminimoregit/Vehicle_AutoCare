@@ -143,11 +143,26 @@ class PaymentController extends Controller
 
         $validated = $request->validate([
             'amount' => ['required', 'numeric', 'min:0.01'],
-            'payment_method' => ['required', 'in:cash,card,bank_transfer,cheque'],
+            'payment_method' => ['required', 'in:cash,card,bank_transfer,cheque,credit'],
             'payment_date' => ['required', 'date', 'before_or_equal:today'],
             'reference_number' => ['nullable', 'string', 'max:100'],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
+
+        // Handle Approved Company Credit validation
+        if ($validated['payment_method'] === 'credit') {
+            $customer = $invoice->customer;
+            $creditAccount = $customer?->creditAccount()->where('status', 'active')->first();
+
+            if (! $creditAccount) {
+                return back()->with('error', 'Customer does not have an active approved credit account.');
+            }
+
+            $payAmount = round((float) $validated['amount'], 2);
+            if ($creditAccount->wouldExceedLimit($payAmount) && ! $user->isAdmin()) {
+                return back()->with('error', 'Company credit limit exceeded. Available credit: LKR '.number_format($creditAccount->available_credit, 2).'. Admin override required.');
+            }
+        }
 
         try {
             $payment = DB::transaction(function () use ($invoice, $validated, $user) {
@@ -218,7 +233,8 @@ class PaymentController extends Controller
                 return $payment;
             });
 
-            return back()->with('success', "Payment {$payment->payment_number} of LKR ".number_format($payment->amount, 2).' recorded successfully.');
+            return back()->with('success', "Payment {$payment->payment_number} of LKR ".number_format($payment->amount, 2).' recorded successfully.')
+                ->with('recent_payment_id', $payment->id);
         } catch (Exception $e) {
             return back()->withInput()->with('error', "Payment failed: {$e->getMessage()}");
         }
@@ -292,7 +308,7 @@ class PaymentController extends Controller
         $jobCard = $payment->jobCard ?? $payment->invoice?->jobCard;
         $invoice = $payment->invoice;
 
-        $jobTotal = $jobCard ? (float)$jobCard->grand_total : ($invoice ? (float)$invoice->grand_total : (float)$payment->amount);
+        $jobTotal = $jobCard ? (float) $jobCard->grand_total : ($invoice ? (float) $invoice->grand_total : (float) $payment->amount);
 
         if ($jobCard) {
             $totalPaidToDate = (float) Payment::where('job_card_id', $jobCard->id)
@@ -423,5 +439,3 @@ class PaymentController extends Controller
         }
     }
 }
-
-
