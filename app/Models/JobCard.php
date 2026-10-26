@@ -38,6 +38,7 @@ class JobCard extends Model
         'completed_at',
         'delivered_at',
         'created_by',
+        'completed_by',
     ];
 
     protected $casts = [
@@ -107,9 +108,49 @@ class JobCard extends Model
         return $this->belongsTo(User::class, 'cancelled_by');
     }
 
+    public function completedBy()
+    {
+        return $this->belongsTo(User::class, 'completed_by');
+    }
+
     public function invoice()
     {
         return $this->belongsTo(Invoice::class);
+    }
+
+    public function generatedInvoice()
+    {
+        return $this->hasOne(Invoice::class, 'job_card_id');
+    }
+
+    /**
+     * Retrieve the linked invoice, or find by job_card_id and repair the relation if needed.
+     */
+    public function getResolvedInvoice(): ?Invoice
+    {
+        if ($this->invoice_id && $this->relationLoaded('invoice') && $this->invoice) {
+            return $this->invoice;
+        }
+
+        if ($this->invoice_id) {
+            $invoice = Invoice::find($this->invoice_id);
+            if ($invoice) {
+                return $invoice;
+            }
+        }
+
+        // Check whether an invoice already exists for the job_card_id
+        $found = Invoice::where('job_card_id', $this->id)->latest('id')->first();
+        if ($found) {
+            // Safely repair the missing foreign key link
+            if (! $this->invoice_id) {
+                $this->update(['invoice_id' => $found->id]);
+            }
+
+            return $found;
+        }
+
+        return null;
     }
 
     public function services()
@@ -210,4 +251,3 @@ class JobCard extends Model
         return max(0, round($total - $paid, 2));
     }
 }
-

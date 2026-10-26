@@ -24,6 +24,7 @@ class EmployeeAttendance extends Model
 
     protected $fillable = [
         'employee_id',
+        'branch_id',
         'attendance_date',
         'status',
         'payable_day_fraction',
@@ -46,6 +47,11 @@ class EmployeeAttendance extends Model
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
     }
 
     public function recorder(): BelongsTo
