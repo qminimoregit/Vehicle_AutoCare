@@ -132,6 +132,24 @@ class Product extends Model
         return $query->where('is_active', true);
     }
 
+    public function scopeStatus($query, string $status)
+    {
+        if ($status === 'active') {
+            return $query->where('is_active', true);
+        }
+
+        if ($status === 'inactive') {
+            return $query->where('is_active', false);
+        }
+
+        return $query;
+    }
+
+    public function getStatusAttribute(): string
+    {
+        return $this->is_active ? 'active' : 'inactive';
+    }
+
     public function scopeSearch($query, ?string $term)
     {
         if (empty($term)) {

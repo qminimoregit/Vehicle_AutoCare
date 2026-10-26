@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Operations;
 
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
+use App\Models\Appointment;
 use App\Models\CarpetCategory;
 use App\Models\CompanySetting;
 use App\Models\Invoice;
@@ -12,6 +13,7 @@ use App\Models\JobCard;
 use App\Models\JobCardProduct;
 use App\Models\JobCardService;
 use App\Models\Payment;
+use App\Models\PaymentAllocation;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\ServiceVehiclePrice;
@@ -22,12 +24,14 @@ use App\Services\InvoiceNumberService;
 use App\Services\QuantityFormatter;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Exception;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class JobCardController extends Controller
@@ -48,11 +52,13 @@ class JobCardController extends Controller
         $query = JobCard::with(['vehicle', 'customer', 'vehicleType', 'assignedTechnician', 'invoice'])
             ->orderBy('id', 'desc');
 
+        $today = now('Asia/Colombo')->toDateString();
+
         // Apply Tab / Status Filters
         if ($dateFilter === 'today') {
-            $query->whereDate('date', now()->toDateString());
+            $query->whereDate('date', $today);
         } elseif ($dateFilter === 'previous_pending') {
-            $query->where('status', 'pending')->whereDate('date', '<', now()->toDateString());
+            $query->where('status', 'pending')->whereDate('date', '<', $today);
         } elseif ($status !== 'all' && in_array($status, ['pending', 'in_progress', 'completed', 'delivered', 'cancelled'])) {
             $query->where('status', $status);
         }
@@ -77,11 +83,11 @@ class JobCardController extends Controller
         // Counters for Quick Status Tabs
         $counts = [
             'all' => JobCard::count(),
-            'today' => JobCard::whereDate('date', now()->toDateString())->count(),
+            'today' => JobCard::whereDate('date', $today)->count(),
             'pending' => JobCard::where('status', 'pending')->count(),
             'in_progress' => JobCard::where('status', 'in_progress')->count(),
             'completed' => JobCard::where('status', 'completed')->count(),
-            'previous_pending' => JobCard::where('status', 'pending')->whereDate('date', '<', now()->toDateString())->count(),
+            'previous_pending' => JobCard::where('status', 'pending')->whereDate('date', '<', $today)->count(),
         ];
 
         return view('operations.jobs.index', compact('jobs', 'status', 'search', 'dateFilter', 'counts'));
@@ -108,7 +114,9 @@ class JobCardController extends Controller
             'payments.creator',
         ]);
 
-        $availableServices = Service::active()->orderBy('name')->get();
+        $resolvedInvoice = $jobCard->getResolvedInvoice();
+
+        $availableServices = Service::active()->with('vehiclePrices')->orderBy('name')->get();
 
         // Products with stock availability
         $availableProducts = Product::active()->orderBy('name')->get()->map(function ($product) {
@@ -120,7 +128,7 @@ class JobCardController extends Controller
         // Technicians for assignment
         $technicians = User::where('status', 'active')->orderBy('name')->get();
 
-        return view('operations.jobs.show', compact('jobCard', 'availableServices', 'availableProducts', 'technicians'));
+        return view('operations.jobs.show', compact('jobCard', 'resolvedInvoice', 'availableServices', 'availableProducts', 'technicians'));
     }
 
     /**
@@ -133,9 +141,11 @@ class JobCardController extends Controller
             ->first();
 
         if (! $pricing || $pricing->service_price === null) {
+            $vtName = $jobCard->vehicleType?->name ?? 'this vehicle type';
+
             return response()->json([
                 'configured' => false,
-                'message' => "Price not configured for {$jobCard->vehicleType->name}.",
+                'message' => "Price not configured for {$vtName}.",
                 'price' => null,
             ]);
         }
@@ -148,12 +158,16 @@ class JobCardController extends Controller
     }
 
     /**
-     * Add a service to the job card.
+     * Add a service to the job card (supports direct-add and AJAX).
      */
-    public function addService(Request $request, JobCard $jobCard): RedirectResponse
+    public function addService(Request $request, JobCard $jobCard): JsonResponse|RedirectResponse
     {
         if (in_array($jobCard->status, ['completed', 'delivered', 'cancelled'])) {
-            return back()->with('error', 'Cannot modify services on a finished or cancelled job.');
+            $msg = 'Cannot modify services on a finished or cancelled job.';
+
+            return $request->wantsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->with('error', $msg);
         }
 
         $validated = $request->validate([
@@ -165,106 +179,365 @@ class JobCardController extends Controller
             'job_issue_id' => ['nullable', 'exists:job_issues,id'],
         ]);
 
-        $service = Service::findOrFail($validated['service_id']);
+        try {
+            $service = Service::findOrFail($validated['service_id']);
 
-        // Check if price is configured for this vehicle type
-        $pricing = ServiceVehiclePrice::where('service_id', $service->id)
-            ->where('vehicle_type_id', $jobCard->vehicle_type_id)
-            ->first();
+            // Check if price is configured for this vehicle type
+            $pricing = ServiceVehiclePrice::where('service_id', $service->id)
+                ->where('vehicle_type_id', $jobCard->vehicle_type_id)
+                ->first();
 
-        $user = Auth::user();
-        $isPriceCustom = false;
-        $unitPrice = 0.0;
+            $user = Auth::user();
+            $isPriceCustom = false;
+            $isPricePending = false;
+            $unitPrice = 0.0;
 
-        if (! empty($validated['custom_price']) && ($user->isAdmin() || $user->hasPermission('override_prices'))) {
-            $unitPrice = (float) $validated['custom_price'];
-            $isPriceCustom = true;
-        } elseif ($pricing && $pricing->service_price !== null) {
-            $unitPrice = (float) $pricing->service_price;
-        } else {
-            return back()->with('error', "Price not configured for '{$service->name}' on {$jobCard->vehicleType->name}. Please configure it under Master Data → Manage Service Payment, or request an Admin override.");
+            if (isset($validated['custom_price']) && $validated['custom_price'] !== null && $validated['custom_price'] !== '' && ($user->isAdmin() || $user->hasPermission('override_prices'))) {
+                $unitPrice = (float) $validated['custom_price'];
+                $isPriceCustom = true;
+                $isPricePending = false;
+            } elseif ($pricing && $pricing->service_price !== null && (float) $pricing->service_price > 0) {
+                $unitPrice = (float) $pricing->service_price;
+                $isPricePending = false;
+            } else {
+                // If not configured, allow adding with pending price
+                $unitPrice = 0.0;
+                $isPricePending = true;
+            }
+
+            $qty = ! empty($validated['quantity']) ? (float) $validated['quantity'] : 1.0;
+            $technicianName = ! empty($validated['technician_name'])
+                ? $validated['technician_name']
+                : ($jobCard->assignedTechnician?->name ?? null);
+
+            // If the service already exists in the Job Cart and does not have custom pricing, increment its quantity
+            $existingItem = $jobCard->services()
+                ->where('service_id', $service->id)
+                ->whereNull('invoice_id')
+                ->first();
+
+            if ($existingItem && ! $isPriceCustom) {
+                $newQty = (float) $existingItem->quantity + $qty;
+                $existingItem->update([
+                    'quantity' => $newQty,
+                    'line_total' => $existingItem->is_price_pending ? 0.0 : round($existingItem->unit_price * $newQty, 2),
+                ]);
+                $jobCard->recalculateTotals();
+
+                $msg = "Quantity for service '{$service->name}' increased to {$newQty}.";
+
+                if ($request->wantsJson()) {
+                    return response()->json([
+                        'success' => true,
+                        'message' => $msg,
+                        'cart' => $this->getJobCardCartPayload($jobCard),
+                        'item_id' => $existingItem->id,
+                    ]);
+                }
+
+                return back()->with('success', $msg)->with('newly_added_service_id', $existingItem->id);
+            }
+
+            $lineTotal = $isPricePending ? 0.0 : round($unitPrice * $qty, 2);
+            $isAdditional = ($jobCard->status === 'additional_work') || ($jobCard->invoice_id !== null);
+
+            $serviceItem = $jobCard->services()->create([
+                'service_id' => $service->id,
+                'service_code' => $service->code,
+                'service_name' => $service->name,
+                'unit_price' => $unitPrice,
+                'quantity' => $qty,
+                'line_total' => $lineTotal,
+                'is_price_custom' => $isPriceCustom,
+                'is_price_pending' => $isPricePending,
+                'is_additional' => $isAdditional,
+                'job_issue_id' => $validated['job_issue_id'] ?? null,
+                'technician_name' => $technicianName,
+                'notes' => $validated['notes'] ?? null,
+            ]);
+
+            $jobCard->recalculateTotals();
+
+            $msg = $isPricePending
+                ? "Service '{$service->name}' added (Price Pending)."
+                : "Service '{$service->name}' added to Job Card.";
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $msg,
+                    'cart' => $this->getJobCardCartPayload($jobCard),
+                    'item_id' => $serviceItem->id,
+                ]);
+            }
+
+            return back()->with('success', $msg)->with('newly_added_service_id', $serviceItem->id);
+        } catch (\Throwable $e) {
+            $msg = $this->handleOperationException($e, 'add service', $jobCard);
+
+            return $request->wantsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->with('error', $msg);
         }
-
-        $qty = ! empty($validated['quantity']) ? (float) $validated['quantity'] : 1.0;
-        $lineTotal = round($unitPrice * $qty, 2);
-        $isAdditional = ($jobCard->status === 'additional_work') || ($jobCard->invoice_id !== null);
-
-        $serviceItem = $jobCard->services()->create([
-            'service_id' => $service->id,
-            'service_code' => $service->code,
-            'service_name' => $service->name,
-            'unit_price' => $unitPrice,
-            'quantity' => $qty,
-            'line_total' => $lineTotal,
-            'is_price_custom' => $isPriceCustom,
-            'is_additional' => $isAdditional,
-            'job_issue_id' => $validated['job_issue_id'] ?? null,
-            'technician_name' => $validated['technician_name'] ?? null,
-            'notes' => $validated['notes'] ?? null,
-        ]);
-
-        $jobCard->recalculateTotals();
-
-        return back()->with('success', "Service '{$service->name}' added to Job Card.")
-            ->with('newly_added_service_id', $serviceItem->id);
     }
 
     /**
-     * Remove a service from the job card.
+     * Update service quantity (increment / decrement).
      */
-    public function removeService(JobCard $jobCard, JobCardService $serviceItem): RedirectResponse
+    public function updateServiceQuantity(Request $request, JobCard $jobCard, JobCardService $serviceItem): JsonResponse|RedirectResponse
     {
         if (in_array($jobCard->status, ['completed', 'delivered', 'cancelled'])) {
-            return back()->with('error', 'Cannot modify services on a finished or cancelled job.');
+            $msg = 'Cannot modify services on a finished or cancelled job.';
+
+            return $request->wantsJson() ? response()->json(['success' => false, 'message' => $msg], 422) : back()->with('error', $msg);
         }
 
         if ($serviceItem->invoice_id) {
-            return back()->with('error', 'Cannot remove a service that has already been invoiced.');
+            $msg = 'Cannot modify a service that has already been invoiced.';
+
+            return $request->wantsJson() ? response()->json(['success' => false, 'message' => $msg], 422) : back()->with('error', $msg);
         }
 
         if ($serviceItem->job_card_id !== $jobCard->id) {
             abort(403);
         }
 
-        $serviceName = $serviceItem->service_name;
-        $serviceItem->delete();
-        $jobCard->recalculateTotals();
+        try {
+            $action = $request->input('action');
+            $currentQty = (float) $serviceItem->quantity;
 
-        return back()->with('success', "Service '{$serviceName}' removed from Job Card.");
+            if ($action === 'increase') {
+                $newQty = $currentQty + 1;
+            } elseif ($action === 'decrease') {
+                $newQty = $currentQty - 1;
+            } elseif ($request->has('quantity')) {
+                $newQty = (float) $request->input('quantity');
+            } else {
+                $newQty = $currentQty;
+            }
+
+            if ($newQty <= 0) {
+                $serviceName = $serviceItem->service_name;
+                $serviceItem->delete();
+                $jobCard->recalculateTotals();
+                $msg = "Service '{$serviceName}' removed from Job Card.";
+            } else {
+                $serviceItem->update([
+                    'quantity' => $newQty,
+                    'line_total' => $serviceItem->is_price_pending ? 0.0 : round($serviceItem->unit_price * $newQty, 2),
+                ]);
+                $jobCard->recalculateTotals();
+                $msg = "Service '{$serviceItem->service_name}' quantity updated to {$newQty}.";
+            }
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $msg,
+                    'cart' => $this->getJobCardCartPayload($jobCard),
+                ]);
+            }
+
+            return back()->with('success', $msg);
+        } catch (\Throwable $e) {
+            $msg = $this->handleOperationException($e, 'update service quantity', $jobCard);
+
+            return $request->wantsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->with('error', $msg);
+        }
     }
 
     /**
-     * Add product/part to job card and confirm stock deduction using FIFO.
+     * Update service item details (technician, price override, notes).
      */
-    public function addProduct(Request $request, JobCard $jobCard): RedirectResponse
+    public function updateServiceItem(Request $request, JobCard $jobCard, JobCardService $serviceItem): JsonResponse|RedirectResponse
     {
         if (in_array($jobCard->status, ['completed', 'delivered', 'cancelled'])) {
-            return back()->with('error', 'Cannot add products to a finished or cancelled job.');
+            $msg = 'Cannot modify services on a finished or cancelled job.';
+
+            return $request->wantsJson() ? response()->json(['success' => false, 'message' => $msg], 422) : back()->with('error', $msg);
+        }
+
+        if ($serviceItem->invoice_id) {
+            $msg = 'Cannot modify a service that has already been invoiced.';
+
+            return $request->wantsJson() ? response()->json(['success' => false, 'message' => $msg], 422) : back()->with('error', $msg);
+        }
+
+        if ($serviceItem->job_card_id !== $jobCard->id) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'technician_name' => ['nullable', 'string', 'max:100'],
+            'notes' => ['nullable', 'string', 'max:255'],
+            'custom_price' => ['nullable', 'numeric', 'min:0'],
+            'quantity' => ['nullable', 'numeric', 'min:0.01'],
+        ]);
+
+        try {
+            $user = Auth::user();
+            $updateData = [
+                'technician_name' => $validated['technician_name'] ?? $serviceItem->technician_name,
+                'notes' => $validated['notes'] ?? $serviceItem->notes,
+            ];
+
+            if (isset($validated['quantity']) && (float) $validated['quantity'] > 0) {
+                $updateData['quantity'] = (float) $validated['quantity'];
+            }
+
+            $canOverride = $user->isAdmin() || $user->hasPermission('override_prices');
+            if (isset($validated['custom_price']) && ($canOverride || $serviceItem->is_price_pending)) {
+                $oldPrice = (float) $serviceItem->unit_price;
+                $newPrice = (float) $validated['custom_price'];
+                $qty = $updateData['quantity'] ?? (float) $serviceItem->quantity;
+                $updateData['unit_price'] = $newPrice;
+                $updateData['line_total'] = round($newPrice * $qty, 2);
+                $updateData['is_price_custom'] = true;
+                $updateData['is_price_pending'] = false;
+
+                ActivityLog::log(
+                    action: 'price_updated',
+                    description: "Updated price for service '{$serviceItem->service_name}' on Job #{$jobCard->job_number} from LKR {$oldPrice} to LKR {$newPrice} by {$user->name}.",
+                    module: 'Job Cards'
+                );
+            } elseif (isset($updateData['quantity'])) {
+                $price = (float) $serviceItem->unit_price;
+                $updateData['line_total'] = $serviceItem->is_price_pending ? 0.0 : round($price * $updateData['quantity'], 2);
+            }
+
+            $serviceItem->update($updateData);
+            $jobCard->recalculateTotals();
+
+            $msg = "Service '{$serviceItem->service_name}' updated successfully.";
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $msg,
+                    'cart' => $this->getJobCardCartPayload($jobCard),
+                ]);
+            }
+
+            return back()->with('success', $msg);
+        } catch (\Throwable $e) {
+            $msg = $this->handleOperationException($e, 'update service', $jobCard);
+
+            return $request->wantsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->with('error', $msg);
+        }
+    }
+
+    /**
+     * Remove a service from the job card.
+     */
+    public function removeService(Request $request, JobCard $jobCard, JobCardService $serviceItem): JsonResponse|RedirectResponse
+    {
+        if (in_array($jobCard->status, ['completed', 'delivered', 'cancelled'])) {
+            $msg = 'Cannot modify services on a finished or cancelled job.';
+
+            return $request->wantsJson() ? response()->json(['success' => false, 'message' => $msg], 422) : back()->with('error', $msg);
+        }
+
+        if ($serviceItem->invoice_id) {
+            $msg = 'Cannot remove a service that has already been invoiced.';
+
+            return $request->wantsJson() ? response()->json(['success' => false, 'message' => $msg], 422) : back()->with('error', $msg);
+        }
+
+        if ($serviceItem->job_card_id !== $jobCard->id) {
+            abort(403);
+        }
+
+        try {
+            $serviceName = $serviceItem->service_name;
+            $serviceItem->delete();
+            $jobCard->recalculateTotals();
+
+            $msg = "Service '{$serviceName}' removed from Job Card.";
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $msg,
+                    'cart' => $this->getJobCardCartPayload($jobCard),
+                ]);
+            }
+
+            return back()->with('success', $msg);
+        } catch (\Throwable $e) {
+            $msg = $this->handleOperationException($e, 'remove service', $jobCard);
+
+            return $request->wantsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->with('error', $msg);
+        }
+    }
+
+    /**
+     * Add product/part to job card and confirm stock deduction using FIFO (supports direct-add and AJAX).
+     */
+    public function addProduct(Request $request, JobCard $jobCard): JsonResponse|RedirectResponse
+    {
+        if (in_array($jobCard->status, ['completed', 'delivered', 'cancelled'])) {
+            $msg = 'Cannot add products to a finished or cancelled job.';
+
+            return $request->wantsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->with('error', $msg);
         }
 
         $validated = $request->validate([
             'product_id' => ['required', 'exists:products,id'],
-            'quantity' => ['required', 'numeric', 'min:0.01'],
+            'quantity' => ['nullable', 'numeric', 'min:0.01'],
             'unit_price' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string', 'max:255'],
             'job_issue_id' => ['nullable', 'exists:job_issues,id'],
         ]);
 
         $product = Product::with('uom')->findOrFail($validated['product_id']);
-        $quantity = (float) $validated['quantity'];
+        $quantity = ! empty($validated['quantity']) ? (float) $validated['quantity'] : 1.0;
 
         if (! $product->allowsFractionalQuantity() && floor($quantity) != $quantity) {
-            return back()->with('error', "Product '{$product->product_name}' ({$product->uom?->name}) requires a whole-number quantity.")->withInput();
+            $msg = "Product '{$product->product_name}' ({$product->uom?->name}) requires a whole-number quantity.";
+
+            return $request->wantsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->with('error', $msg)->withInput();
         }
 
-        // Selling price defaults to product selling price
-        $unitPrice = ! empty($validated['unit_price']) ? (float) $validated['unit_price'] : (float) $product->selling_price;
-        $lineTotal = round($unitPrice * $quantity, 2);
+        $availableStock = $this->stockService->getAvailableStock($product);
+        if ($availableStock < $quantity) {
+            $msg = "Insufficient stock for '{$product->product_name}'. Requested: {$quantity}, Available: {$availableStock}.";
+
+            return $request->wantsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->with('error', $msg);
+        }
+
+        // Selling price defaults to product selling price, or pending if not set
+        $user = Auth::user();
+        $isPricePending = false;
+        $unitPrice = 0.0;
+
+        if (isset($validated['unit_price']) && $validated['unit_price'] !== null && $validated['unit_price'] !== '' && ($user->isAdmin() || $user->hasPermission('override_prices'))) {
+            $unitPrice = (float) $validated['unit_price'];
+            $isPricePending = false;
+        } elseif ($product->selling_price !== null && (float) $product->selling_price > 0) {
+            $unitPrice = (float) $product->selling_price;
+            $isPricePending = false;
+        } else {
+            $unitPrice = 0.0;
+            $isPricePending = true;
+        }
+
         $isAdditional = ($jobCard->status === 'additional_work') || ($jobCard->invoice_id !== null);
 
         $productItem = null;
         try {
-            DB::transaction(function () use ($jobCard, $product, $quantity, $unitPrice, $lineTotal, $validated, $isAdditional, &$productItem) {
+            DB::transaction(function () use ($jobCard, $product, $quantity, $unitPrice, $isPricePending, $validated, $isAdditional, &$productItem) {
                 // Deduct stock using FIFO atomically
                 $issueResult = $this->stockService->issueStockFifo(
                     $product,
@@ -274,46 +547,311 @@ class JobCardController extends Controller
                     Auth::user()
                 );
 
-                $unitCost = $quantity > 0 ? round($issueResult['total_cost'] / $quantity, 4) : 0.0;
+                // If already exists in cart without invoice, merge quantity
+                $existingItem = $jobCard->products()
+                    ->where('product_id', $product->id)
+                    ->whereNull('invoice_id')
+                    ->first();
 
-                $productItem = $jobCard->products()->create([
-                    'product_id' => $product->id,
-                    'product_sku' => $product->sku,
-                    'product_name' => $product->product_name,
-                    'quantity' => $quantity,
-                    'unit_price' => $unitPrice,
-                    'unit_cost' => $unitCost,
-                    'line_total' => $lineTotal,
-                    'is_stock_deducted' => true,
-                    'is_additional' => $isAdditional,
-                    'job_issue_id' => $validated['job_issue_id'] ?? null,
-                    'batch_allocations' => $issueResult['batches'],
-                    'notes' => $validated['notes'] ?? null,
-                ]);
+                if ($existingItem) {
+                    $existingAllocations = $existingItem->batch_allocations ?? [];
+                    $mergedAllocations = array_merge($existingAllocations, $issueResult['batches']);
+
+                    $newQty = (float) $existingItem->quantity + $quantity;
+                    $newTotalCost = ((float) $existingItem->unit_cost * (float) $existingItem->quantity) + $issueResult['total_cost'];
+                    $newUnitCost = $newQty > 0 ? round($newTotalCost / $newQty, 4) : 0.0;
+                    $newLineTotal = $existingItem->is_price_pending ? 0.0 : round($existingItem->unit_price * $newQty, 2);
+
+                    $existingItem->update([
+                        'quantity' => $newQty,
+                        'unit_cost' => $newUnitCost,
+                        'line_total' => $newLineTotal,
+                        'batch_allocations' => $mergedAllocations,
+                    ]);
+
+                    $productItem = $existingItem;
+                } else {
+                    $unitCost = $quantity > 0 ? round($issueResult['total_cost'] / $quantity, 4) : 0.0;
+                    $lineTotal = $isPricePending ? 0.0 : round($unitPrice * $quantity, 2);
+
+                    $productItem = $jobCard->products()->create([
+                        'product_id' => $product->id,
+                        'product_sku' => $product->sku,
+                        'product_name' => $product->product_name,
+                        'quantity' => $quantity,
+                        'unit_price' => $unitPrice,
+                        'unit_cost' => $unitCost,
+                        'line_total' => $lineTotal,
+                        'is_stock_deducted' => true,
+                        'is_price_pending' => $isPricePending,
+                        'is_additional' => $isAdditional,
+                        'job_issue_id' => $validated['job_issue_id'] ?? null,
+                        'batch_allocations' => $issueResult['batches'],
+                        'notes' => $validated['notes'] ?? null,
+                    ]);
+                }
 
                 $jobCard->recalculateTotals();
             });
 
             $fmtQty = QuantityFormatter::format($quantity);
+            $msg = $isPricePending
+                ? "Product '{$product->product_name}' (Qty: {$fmtQty}) added (Price Pending)."
+                : "Product '{$product->product_name}' (Qty: {$fmtQty}) added to Job Card.";
 
-            return back()->with('success', "Product '{$product->product_name}' (Qty: {$fmtQty}) issued to Job Card.")
-                ->with('newly_added_product_id', $productItem?->id);
-        } catch (Exception $e) {
-            return back()->with('error', $e->getMessage());
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $msg,
+                    'cart' => $this->getJobCardCartPayload($jobCard),
+                    'item_id' => $productItem?->id,
+                ]);
+            }
+
+            return back()->with('success', $msg)->with('newly_added_product_id', $productItem?->id);
+        } catch (\Throwable $e) {
+            $msg = $this->handleOperationException($e, 'add product', $jobCard);
+
+            return $request->wantsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->with('error', $msg);
+        }
+    }
+
+    /**
+     * Update product quantity (increment with FIFO issue / decrement with LIFO reversal).
+     */
+    public function updateProductQuantity(Request $request, JobCard $jobCard, JobCardProduct $productItem): JsonResponse|RedirectResponse
+    {
+        if (in_array($jobCard->status, ['completed', 'delivered', 'cancelled'])) {
+            $msg = 'Cannot modify products on a finished or cancelled job.';
+
+            return $request->wantsJson() ? response()->json(['success' => false, 'message' => $msg], 422) : back()->with('error', $msg);
+        }
+
+        if ($productItem->invoice_id) {
+            $msg = 'Cannot modify a product that has already been invoiced.';
+
+            return $request->wantsJson() ? response()->json(['success' => false, 'message' => $msg], 422) : back()->with('error', $msg);
+        }
+
+        if ($productItem->job_card_id !== $jobCard->id) {
+            abort(403);
+        }
+
+        $action = $request->input('action');
+        $product = Product::findOrFail($productItem->product_id);
+        $step = 1.0;
+
+        try {
+            DB::transaction(function () use ($jobCard, $productItem, $product, $action, $step) {
+                if ($action === 'increase') {
+                    $available = $this->stockService->getAvailableStock($product);
+                    if ($available < $step) {
+                        throw new Exception("Product '{$product->product_name}' is out of stock (Available: {$available}).");
+                    }
+
+                    $issueResult = $this->stockService->issueStockFifo(
+                        $product,
+                        $step,
+                        'job_card_issue',
+                        $jobCard,
+                        Auth::user()
+                    );
+
+                    $existingAllocations = $productItem->batch_allocations ?? [];
+                    $mergedAllocations = array_merge($existingAllocations, $issueResult['batches']);
+
+                    $newQty = (float) $productItem->quantity + $step;
+                    $newTotalCost = ((float) $productItem->unit_cost * (float) $productItem->quantity) + $issueResult['total_cost'];
+                    $newUnitCost = $newQty > 0 ? round($newTotalCost / $newQty, 4) : 0.0;
+                    $newLineTotal = $productItem->is_price_pending ? 0.0 : round($productItem->unit_price * $newQty, 2);
+
+                    $productItem->update([
+                        'quantity' => $newQty,
+                        'unit_cost' => $newUnitCost,
+                        'line_total' => $newLineTotal,
+                        'batch_allocations' => $mergedAllocations,
+                    ]);
+                } elseif ($action === 'decrease') {
+                    $currentQty = (float) $productItem->quantity;
+
+                    if ($currentQty <= $step) {
+                        // Full removal
+                        if ($productItem->is_stock_deducted && ! empty($productItem->batch_allocations)) {
+                            $this->stockService->reverseStockFifo(
+                                $productItem->batch_allocations,
+                                $jobCard,
+                                Auth::user(),
+                                "Quantity decreased to 0 on Job Card #{$jobCard->job_number}"
+                            );
+                        }
+                        $productItem->delete();
+                    } else {
+                        // Partial reversal: reverse 1 unit from allocations in LIFO order
+                        $remainingToReverse = $step;
+                        $reversedAllocations = [];
+                        $keptAllocations = [];
+                        $allocations = $productItem->batch_allocations ?? [];
+
+                        for ($i = count($allocations) - 1; $i >= 0; $i--) {
+                            $alloc = $allocations[$i];
+                            $allocQty = (float) ($alloc['quantity'] ?? 0);
+                            $batchId = $alloc['batch_id'] ?? null;
+                            $unitCost = $alloc['unit_cost'] ?? 0;
+
+                            if ($remainingToReverse <= 0) {
+                                array_unshift($keptAllocations, $alloc);
+
+                                continue;
+                            }
+
+                            if ($allocQty <= $remainingToReverse) {
+                                $reversedAllocations[] = $alloc;
+                                $remainingToReverse -= $allocQty;
+                            } else {
+                                $reversedAllocations[] = [
+                                    'batch_id' => $batchId,
+                                    'quantity' => $remainingToReverse,
+                                    'unit_cost' => $unitCost,
+                                ];
+                                $keptAllocations = array_merge([[
+                                    'batch_id' => $batchId,
+                                    'quantity' => $allocQty - $remainingToReverse,
+                                    'unit_cost' => $unitCost,
+                                ]], $keptAllocations);
+                                $remainingToReverse = 0;
+                            }
+                        }
+
+                        if (! empty($reversedAllocations)) {
+                            $this->stockService->reverseStockFifo(
+                                $reversedAllocations,
+                                $jobCard,
+                                Auth::user(),
+                                "Quantity decreased on Job Card #{$jobCard->job_number}"
+                            );
+                        }
+
+                        $newQty = max(0, $currentQty - $step);
+                        $newLineTotal = $productItem->is_price_pending ? 0.0 : round($productItem->unit_price * $newQty, 2);
+
+                        $productItem->update([
+                            'quantity' => $newQty,
+                            'line_total' => $newLineTotal,
+                            'batch_allocations' => $keptAllocations,
+                        ]);
+                    }
+                }
+
+                $jobCard->recalculateTotals();
+            });
+
+            $msg = "Quantity updated for '{$productItem->product_name}'.";
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $msg,
+                    'cart' => $this->getJobCardCartPayload($jobCard),
+                ]);
+            }
+
+            return back()->with('success', $msg);
+        } catch (\Throwable $e) {
+            $msg = $this->handleOperationException($e, 'update product quantity', $jobCard);
+
+            return $request->wantsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->with('error', $msg);
+        }
+    }
+
+    /**
+     * Update product item details (notes, unit price override).
+     */
+    public function updateProductItem(Request $request, JobCard $jobCard, JobCardProduct $productItem): JsonResponse|RedirectResponse
+    {
+        if (in_array($jobCard->status, ['completed', 'delivered', 'cancelled'])) {
+            $msg = 'Cannot modify products on a finished or cancelled job.';
+
+            return $request->wantsJson() ? response()->json(['success' => false, 'message' => $msg], 422) : back()->with('error', $msg);
+        }
+
+        if ($productItem->invoice_id) {
+            $msg = 'Cannot modify a product that has already been invoiced.';
+
+            return $request->wantsJson() ? response()->json(['success' => false, 'message' => $msg], 422) : back()->with('error', $msg);
+        }
+
+        if ($productItem->job_card_id !== $jobCard->id) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'notes' => ['nullable', 'string', 'max:255'],
+            'unit_price' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        try {
+            $user = Auth::user();
+            $updateData = [
+                'notes' => $validated['notes'] ?? $productItem->notes,
+            ];
+
+            $canOverride = $user->isAdmin() || $user->hasPermission('override_prices');
+            if (isset($validated['unit_price']) && ($canOverride || $productItem->is_price_pending)) {
+                $oldPrice = (float) $productItem->unit_price;
+                $newPrice = (float) $validated['unit_price'];
+                $updateData['unit_price'] = $newPrice;
+                $updateData['line_total'] = round($newPrice * (float) $productItem->quantity, 2);
+                $updateData['is_price_pending'] = false;
+
+                ActivityLog::log(
+                    action: 'price_updated',
+                    description: "Updated selling price for product '{$productItem->product_name}' on Job #{$jobCard->job_number} from LKR {$oldPrice} to LKR {$newPrice} by {$user->name}.",
+                    module: 'Job Cards'
+                );
+            }
+
+            $productItem->update($updateData);
+            $jobCard->recalculateTotals();
+
+            $msg = "Part '{$productItem->product_name}' updated successfully.";
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $msg,
+                    'cart' => $this->getJobCardCartPayload($jobCard),
+                ]);
+            }
+
+            return back()->with('success', $msg);
+        } catch (\Throwable $e) {
+            $msg = $this->handleOperationException($e, 'update product', $jobCard);
+
+            return $request->wantsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->with('error', $msg);
         }
     }
 
     /**
      * Remove a product from job card and reverse allocated FIFO stock back into batches.
      */
-    public function removeProduct(JobCard $jobCard, JobCardProduct $productItem): RedirectResponse
+    public function removeProduct(Request $request, JobCard $jobCard, JobCardProduct $productItem): JsonResponse|RedirectResponse
     {
         if (in_array($jobCard->status, ['completed', 'delivered', 'cancelled'])) {
-            return back()->with('error', 'Cannot remove products from a finished or cancelled job.');
+            $msg = 'Cannot remove products from a finished or cancelled job.';
+
+            return $request->wantsJson() ? response()->json(['success' => false, 'message' => $msg], 422) : back()->with('error', $msg);
         }
 
         if ($productItem->invoice_id) {
-            return back()->with('error', 'Cannot remove a product that has already been invoiced.');
+            $msg = 'Cannot remove a product that has already been invoiced.';
+
+            return $request->wantsJson() ? response()->json(['success' => false, 'message' => $msg], 422) : back()->with('error', $msg);
         }
 
         if ($productItem->job_card_id !== $jobCard->id) {
@@ -336,10 +874,113 @@ class JobCardController extends Controller
                 $jobCard->recalculateTotals();
             });
 
-            return back()->with('success', 'Product removed and stock returned to inventory.');
-        } catch (Exception $e) {
-            return back()->with('error', "Failed to remove product: {$e->getMessage()}");
+            $msg = 'Product removed and stock returned to inventory.';
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $msg,
+                    'cart' => $this->getJobCardCartPayload($jobCard),
+                ]);
+            }
+
+            return back()->with('success', $msg);
+        } catch (\Throwable $e) {
+            $msg = $this->handleOperationException($e, 'remove product', $jobCard);
+
+            return $request->wantsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->with('error', $msg);
         }
+    }
+
+    /**
+     * Get updated cart payload for frontend reactive rendering.
+     */
+    protected function getJobCardCartPayload(JobCard $jobCard): array
+    {
+        $jobCard->load([
+            'services',
+            'products',
+        ]);
+
+        $services = $jobCard->services->map(function ($s) {
+            return [
+                'id' => $s->id,
+                'service_id' => $s->service_id,
+                'service_name' => $s->service_name,
+                'service_code' => $s->service_code,
+                'technician_name' => $s->technician_name,
+                'quantity' => (float) $s->quantity,
+                'unit_price' => (float) $s->unit_price,
+                'line_total' => (float) $s->line_total,
+                'is_price_custom' => (bool) $s->is_price_custom,
+                'is_price_pending' => (bool) $s->is_price_pending,
+                'notes' => $s->notes,
+            ];
+        })->values()->all();
+
+        $products = $jobCard->products->map(function ($p) {
+            return [
+                'id' => $p->id,
+                'product_id' => $p->product_id,
+                'product_name' => $p->product_name,
+                'product_sku' => $p->product_sku,
+                'quantity' => (float) $p->quantity,
+                'formatted_quantity' => QuantityFormatter::format((float) $p->quantity),
+                'unit_price' => (float) $p->unit_price,
+                'unit_cost' => (float) $p->unit_cost,
+                'line_total' => (float) $p->line_total,
+                'is_price_pending' => (bool) $p->is_price_pending,
+                'notes' => $p->notes,
+            ];
+        })->values()->all();
+
+        $productStocks = [];
+        try {
+            $activeProducts = Product::where('is_active', true)->select('id')->get();
+            foreach ($activeProducts as $p) {
+                $productStocks[$p->id] = (float) $this->stockService->getAvailableStock($p->id);
+            }
+        } catch (\Throwable $e) {
+            Log::error("Failed to load product stocks for cart payload on Job Card #{$jobCard->id}: ".$e->getMessage(), [
+                'exception' => $e,
+                'job_card_id' => $jobCard->id,
+            ]);
+        }
+
+        $totalCount = count($services) + count($products);
+
+        return [
+            'services' => $services,
+            'products' => $products,
+            'totals' => [
+                'service_total' => (float) $jobCard->service_total,
+                'product_total' => (float) $jobCard->product_total,
+                'discount_amount' => (float) $jobCard->discount_amount,
+                'tax_amount' => (float) $jobCard->tax_amount,
+                'grand_total' => (float) $jobCard->grand_total,
+                'total_count' => $totalCount,
+            ],
+            'product_stocks' => $productStocks,
+        ];
+    }
+
+    /**
+     * Format a safe, user-friendly error message while logging the full exception.
+     */
+    protected function handleOperationException(\Throwable $e, string $actionDescription, ?JobCard $jobCard = null): string
+    {
+        Log::error("Failed to {$actionDescription}".($jobCard ? " for Job Card #{$jobCard->job_number} (ID: {$jobCard->id})" : '').': '.$e->getMessage(), [
+            'exception' => $e,
+            'job_card_id' => $jobCard?->id,
+        ]);
+
+        if ($e instanceof QueryException || str_contains($e->getMessage(), 'SQLSTATE')) {
+            return "A system error occurred while processing {$actionDescription}. Please try again.";
+        }
+
+        return $e->getMessage();
     }
 
     /**
@@ -449,7 +1090,7 @@ class JobCardController extends Controller
 
             ActivityLog::log(
                 action: 'updated_carpets',
-                description: "Updated carpet details for Job #{$jobCard->job_number} by " . Auth::user()->name . ".",
+                description: "Updated carpet details for Job #{$jobCard->job_number} by ".Auth::user()->name.'.',
                 module: 'Job Cards'
             );
         });
@@ -479,7 +1120,7 @@ class JobCardController extends Controller
 
             ActivityLog::log(
                 action: 'started_work',
-                description: "Started work on Job #{$jobCard->job_number} by " . Auth::user()->name . ".",
+                description: "Started work on Job #{$jobCard->job_number} by ".Auth::user()->name.'.',
                 module: 'Job Cards'
             );
 
@@ -487,24 +1128,132 @@ class JobCardController extends Controller
         }
 
         if ($action === 'complete_job') {
-            if ($jobCard->status !== 'in_progress') {
-                return back()->with('error', 'Only in-progress jobs can be completed.');
+            if (! in_array($jobCard->status, ['pending', 'in_progress', 'additional_work'])) {
+                return back()->with('error', 'Only pending or in-progress jobs can be completed.');
             }
             if ($jobCard->services()->count() === 0 && $jobCard->products()->count() === 0) {
                 return back()->with('error', 'Cannot complete a job with no services or parts.');
             }
-            $jobCard->update([
-                'status' => 'completed',
-                'completed_at' => now(),
-            ]);
 
-            ActivityLog::log(
-                action: 'completed_job',
-                description: "Completed Job #{$jobCard->job_number} by " . Auth::user()->name . ".",
-                module: 'Job Cards'
-            );
+            // Task 5: Verify every billable service and product has a valid selling price
+            $hasPendingServices = $jobCard->services()->where('is_price_pending', true)->exists();
+            $hasPendingProducts = $jobCard->products()->where('is_price_pending', true)->exists();
 
-            return back()->with('success', "Job #{$jobCard->job_number} marked as Completed. Ready for billing.");
+            if ($hasPendingServices || $hasPendingProducts) {
+                return back()->with('error', 'Some items do not have prices. Please assign prices before completing the job.');
+            }
+
+            try {
+                $invoice = DB::transaction(function () use ($jobCard) {
+                    $lockedJobCard = JobCard::where('id', $jobCard->id)->lockForUpdate()->firstOrFail();
+
+                    // Recalculate service, product, discounts, and taxes
+                    $lockedJobCard->recalculateTotals();
+
+                    $sriLankaNow = now('Asia/Colombo');
+                    $lockedJobCard->update([
+                        'status' => 'completed',
+                        'started_at' => $lockedJobCard->started_at ?? $sriLankaNow,
+                        'completed_at' => $sriLankaNow,
+                        'completed_by' => Auth::id(),
+                    ]);
+
+                    // Check if a billing record (Invoice) already exists for this job
+                    $existingInvoice = Invoice::where('job_card_id', $lockedJobCard->id)
+                        ->where('status', '!=', 'cancelled')
+                        ->first();
+
+                    if ($existingInvoice) {
+                        if ($lockedJobCard->invoice_id !== $existingInvoice->id) {
+                            $lockedJobCard->update(['invoice_id' => $existingInvoice->id]);
+                        }
+
+                        return $existingInvoice;
+                    }
+
+                    $grandTotal = (float) $lockedJobCard->grand_total;
+                    $invoiceNumber = InvoiceNumberService::generateNextInvoiceNumber();
+
+                    $customerSnapshot = [
+                        'customer_name' => $lockedJobCard->customer->customer_name,
+                        'phone' => $lockedJobCard->customer->phone,
+                        'vehicle_number' => $lockedJobCard->vehicle->vehicle_number,
+                        'vehicle_type' => $lockedJobCard->vehicleType?->name ?? 'Vehicle',
+                        'current_mileage' => $lockedJobCard->current_mileage,
+                        'next_service_mileage' => $lockedJobCard->next_service_mileage,
+                    ];
+
+                    $invoice = Invoice::create([
+                        'invoice_number' => $invoiceNumber,
+                        'branch_id' => $lockedJobCard->branch_id,
+                        'invoice_date' => $sriLankaNow->toDateString(),
+                        'due_date' => $sriLankaNow->toDateString(),
+                        'customer_id' => $lockedJobCard->customer_id,
+                        'job_card_id' => $lockedJobCard->id,
+                        'invoice_type' => 'job_card',
+                        'subject' => "Service Bill for {$lockedJobCard->vehicle->vehicle_number} (Job #{$lockedJobCard->job_number})",
+                        'reference' => $lockedJobCard->job_number,
+                        'subtotal' => $lockedJobCard->service_total + $lockedJobCard->product_total,
+                        'discount_amount' => $lockedJobCard->discount_amount,
+                        'tax_amount' => $lockedJobCard->tax_amount,
+                        'grand_total' => $grandTotal,
+                        'amount_paid' => 0.00,
+                        'balance_amount' => $grandTotal,
+                        'status' => 'issued',
+                        'customer_snapshot' => $customerSnapshot,
+                        'created_by' => Auth::id(),
+                    ]);
+
+                    // Add services as invoice items
+                    foreach ($lockedJobCard->services as $serviceItem) {
+                        InvoiceItem::create([
+                            'invoice_id' => $invoice->id,
+                            'item_type' => 'service',
+                            'item_id' => $serviceItem->service_id,
+                            'item_code' => $serviceItem->service_code,
+                            'item_name' => $serviceItem->service_name,
+                            'quantity' => $serviceItem->quantity,
+                            'unit_price' => $serviceItem->unit_price,
+                            'line_total' => $serviceItem->line_total,
+                            'notes' => $serviceItem->notes,
+                        ]);
+                    }
+
+                    // Add products as invoice items
+                    foreach ($lockedJobCard->products as $productItem) {
+                        InvoiceItem::create([
+                            'invoice_id' => $invoice->id,
+                            'item_type' => 'product',
+                            'item_id' => $productItem->product_id,
+                            'item_code' => $productItem->product_sku,
+                            'item_name' => $productItem->product_name,
+                            'quantity' => $productItem->quantity,
+                            'unit_price' => $productItem->unit_price,
+                            'unit_cost' => $productItem->unit_cost,
+                            'line_total' => $productItem->line_total,
+                            'notes' => $productItem->notes,
+                        ]);
+                    }
+
+                    // Automatically apply any recorded job advances
+                    $this->applyJobAdvancesToInvoice($lockedJobCard, $invoice, $grandTotal);
+
+                    // Link invoice to job card
+                    $lockedJobCard->update(['invoice_id' => $invoice->id]);
+
+                    return $invoice;
+                });
+
+                ActivityLog::log(
+                    action: 'completed_job',
+                    description: "Completed Job #{$jobCard->job_number} and generated bill #{$invoice->invoice_number} by ".Auth::user()->name.'.',
+                    module: 'Job Cards'
+                );
+
+                return back()->with('success', 'Job completed successfully. Invoice is ready for billing.');
+            } catch (\Throwable $e) {
+                return back()->with('error', 'Error completing job and generating bill: '.$e->getMessage());
+            }
         }
 
         if ($action === 'mark_delivered') {
@@ -539,9 +1288,9 @@ class JobCardController extends Controller
                 'delivered_at' => now(),
             ]);
 
-            $logDesc = "Vehicle {$jobCard->vehicle?->vehicle_number} delivered for Job #{$jobCard->job_number} by " . Auth::user()->name . ".";
+            $logDesc = "Vehicle {$jobCard->vehicle?->vehicle_number} delivered for Job #{$jobCard->job_number} by ".Auth::user()->name.'.';
             if ($overrideReason !== '') {
-                $logDesc .= " Delivery Exception Override: {$overrideReason} (Approved by Admin: " . Auth::user()->name . ")";
+                $logDesc .= " Delivery Exception Override: {$overrideReason} (Approved by Admin: ".Auth::user()->name.')';
             }
 
             ActivityLog::log(
@@ -658,7 +1407,7 @@ class JobCardController extends Controller
                 // Lock the job card row to prevent concurrent race conditions
                 $lockedJobCard = JobCard::where('id', $jobCard->id)->lockForUpdate()->firstOrFail();
 
-                if ($lockedJobCard->invoice_id && $lockedJobCard->invoice) {
+                if ($lockedJobCard->invoice_id && $lockedJobCard->invoice && $lockedJobCard->invoice->status !== 'cancelled') {
                     return redirect()->route('operations.invoices.show', $lockedJobCard->invoice);
                 }
 
@@ -668,24 +1417,11 @@ class JobCardController extends Controller
 
                 if ($existingUnderLock) {
                     $lockedJobCard->update(['invoice_id' => $existingUnderLock->id]);
+
                     return redirect()->route('operations.invoices.show', $existingUnderLock);
                 }
 
-                // Query unallocated recorded advances for this job card
-                $advances = Payment::where('job_card_id', $lockedJobCard->id)
-                    ->whereNull('invoice_id')
-                    ->where('status', 'completed')
-                    ->get();
-
-                $totalAdvances = (float) $advances->sum('amount');
                 $grandTotal = (float) $lockedJobCard->grand_total;
-                $appliedAdvance = min($grandTotal, $totalAdvances);
-                $balanceAmount = max(0, round($grandTotal - $appliedAdvance, 2));
-
-                $status = ($balanceAmount <= 0.0001)
-                    ? 'paid'
-                    : ($appliedAdvance > 0 ? 'partially_paid' : 'issued');
-
                 $invoiceNumber = InvoiceNumberService::generateNextInvoiceNumber();
 
                 $customerSnapshot = [
@@ -711,9 +1447,9 @@ class JobCardController extends Controller
                     'discount_amount' => $lockedJobCard->discount_amount,
                     'tax_amount' => $lockedJobCard->tax_amount,
                     'grand_total' => $grandTotal,
-                    'amount_paid' => $appliedAdvance,
-                    'balance_amount' => $balanceAmount,
-                    'status' => $status,
+                    'amount_paid' => 0.00,
+                    'balance_amount' => $grandTotal,
+                    'status' => 'issued',
                     'customer_snapshot' => $customerSnapshot,
                     'created_by' => Auth::id(),
                 ]);
@@ -749,12 +1485,8 @@ class JobCardController extends Controller
                     ]);
                 }
 
-                // Allocate/link recorded advances to this final invoice
-                Payment::where('job_card_id', $lockedJobCard->id)
-                    ->whereNull('invoice_id')
-                    ->update([
-                        'invoice_id' => $invoice->id,
-                    ]);
+                // Automatically apply recorded advances to this final invoice
+                $advanceSummary = $this->applyJobAdvancesToInvoice($lockedJobCard, $invoice, $grandTotal);
 
                 // Link invoice to job card and items
                 $lockedJobCard->update(['invoice_id' => $invoice->id]);
@@ -763,8 +1495,11 @@ class JobCardController extends Controller
                 $lockedJobCard->issues()->where('status', 'approved')->update(['status' => 'fixed']);
 
                 $successMsg = "Invoice #{$invoice->invoice_number} generated for Job #{$lockedJobCard->job_number}.";
-                if ($appliedAdvance > 0) {
-                    $successMsg .= ' LKR '.number_format($appliedAdvance, 2).' advance payment applied.';
+                if ($advanceSummary['applied_advance'] > 0) {
+                    $successMsg .= ' LKR '.number_format($advanceSummary['applied_advance'], 2).' advance payment applied.';
+                }
+                if ($advanceSummary['excess_credit'] > 0) {
+                    $successMsg .= ' LKR '.number_format($advanceSummary['excess_credit'], 2).' retained as unapplied customer credit.';
                 }
 
                 return redirect()->route('operations.invoices.show', $invoice)
@@ -777,6 +1512,28 @@ class JobCardController extends Controller
 
             return back()->with('error', 'Unable to generate invoice at this time: '.$e->getMessage());
         }
+    }
+
+    /**
+     * Open the existing invoice associated with a completed job card.
+     */
+    public function goToInvoice(JobCard $jobCard): RedirectResponse
+    {
+        $user = Auth::user();
+        if (! $user->isAdmin() && ! $user->hasPermission('view_invoices')) {
+            return back()->with('error', 'Unauthorized. Technician access to billing invoice details is restricted.');
+        }
+
+        if (! in_array($jobCard->status, ['completed', 'delivered'])) {
+            return back()->with('error', 'Invoice is only accessible after job completion.');
+        }
+
+        $invoice = $jobCard->getResolvedInvoice();
+        if (! $invoice) {
+            return back()->with('error', 'Invoice not available for this completed job. Please contact the cashier or administrator.');
+        }
+
+        return redirect()->route('operations.invoices.show', $invoice);
     }
 
     /**
@@ -1028,8 +1785,8 @@ class JobCardController extends Controller
         // Calculate totals for print view (never exposing FIFO costs)
         $servicesTotal = (float) $services->sum('line_total');
         $productsTotal = (float) $products->sum('line_total');
-        $grandTotal = $isSelective 
-            ? ($servicesTotal + $productsTotal) 
+        $grandTotal = $isSelective
+            ? ($servicesTotal + $productsTotal)
             : (float) $jobCard->grand_total;
 
         return view('operations.jobs.print', compact(
@@ -1126,8 +1883,8 @@ class JobCardController extends Controller
         $company = CompanySetting::getSettings();
         $servicesTotal = (float) $services->sum('line_total');
         $productsTotal = (float) $products->sum('line_total');
-        $grandTotal = $isSelective 
-            ? ($servicesTotal + $productsTotal) 
+        $grandTotal = $isSelective
+            ? ($servicesTotal + $productsTotal)
             : (float) $jobCard->grand_total;
 
         $pdf = Pdf::loadView('operations.jobs.pdf', compact(
@@ -1161,7 +1918,7 @@ class JobCardController extends Controller
         $user = $request->user();
 
         if (! $user->isAdmin() && ! $user->hasPermission('record_payments')) {
-            abort(403, 'Unauthorized to record payments.');
+            abort(403, 'Unauthorized. Technicians cannot record customer payments. Payments must be processed through the Cashier Billing workflow.');
         }
 
         if ($jobCard->branch_id && ! $user->canAccessBranch($jobCard->branch_id)) {
@@ -1394,5 +2151,475 @@ class JobCardController extends Controller
             'estimatedTotal',
             'estimatedBalance'
         ));
+    }
+
+    /**
+     * Manage completed Job Card: Option 1 (Permanently Delete) or Option 2 (Recreate Job for Editing).
+     */
+    public function destroy(Request $request, JobCard $jobCard): RedirectResponse
+    {
+        $user = $request->user();
+        if (! $user || ! $user->isAdmin()) {
+            abort(403, 'Unauthorized. Only administrators can delete Job Cards.');
+        }
+
+        return $this->manageCompletedJob($request, $jobCard);
+    }
+
+    /**
+     * Manage completed Job Card: Process either permanent deletion or reopening for editing.
+     */
+    public function manageCompletedJob(Request $request, JobCard $jobCard): RedirectResponse
+    {
+        $user = $request->user();
+        if (! $user || ! $user->isAdmin()) {
+            abort(403, 'Unauthorized. Only administrators can delete or recreate Job Cards.');
+        }
+
+        $validated = $request->validate([
+            'manage_action' => ['nullable', 'string', Rule::in(['permanently_delete', 'recreate_for_editing'])],
+            'reason' => [
+                Rule::requiredIf(fn () => $request->input('manage_action', 'permanently_delete') === 'permanently_delete'),
+                'nullable',
+                'string',
+                Rule::in([
+                    'Incorrect services added',
+                    'Incorrect products added',
+                    'Wrong vehicle selected',
+                    'Incorrect pricing',
+                    'Customer requested cancellation',
+                    'Duplicate Job Card',
+                    'Other',
+                ]),
+            ],
+            'explanation' => ['nullable', 'string', 'max:1000'],
+        ], [
+            'reason.required' => 'Please select a reason for deletion.',
+        ]);
+
+        $action = $validated['manage_action'] ?? 'permanently_delete';
+        $reason = $validated['reason'] ?? ($action === 'recreate_for_editing' ? 'Job reopened for editing' : '');
+        $explanation = trim((string) ($validated['explanation'] ?? ''));
+
+        if ($action === 'recreate_for_editing') {
+            return $this->reopenJobForEditing($request, $jobCard, $reason, $explanation, $user);
+        }
+
+        return $this->permanentlyDeleteJob($request, $jobCard, $reason, $explanation, $user);
+    }
+
+    /**
+     * Automatically allocate available unallocated advances from the Job Card to the newly generated invoice.
+     * If total advances exceed the new invoice grand total (Example B), the excess amount is preserved
+     * as an unapplied customer credit balance (not tied to this invoice or job card) without issuing any physical refund.
+     *
+     * @return array{applied_advance: float, remaining_balance: float, excess_credit: float, payment_status: string}
+     */
+    protected function applyJobAdvancesToInvoice(JobCard $jobCard, Invoice $invoice, float $grandTotal): array
+    {
+        $advances = Payment::where('job_card_id', $jobCard->id)
+            ->whereNull('invoice_id')
+            ->where('status', 'completed')
+            ->orderBy('id', 'asc')
+            ->lockForUpdate()
+            ->get();
+
+        $totalAdvances = round((float) $advances->sum('amount'), 2);
+        $appliedAdvance = min($grandTotal, $totalAdvances);
+        $excessCredit = max(0, round($totalAdvances - $grandTotal, 2));
+        $remainingBalance = max(0, round($grandTotal - $appliedAdvance, 2));
+
+        $remainingToApply = $appliedAdvance;
+
+        foreach ($advances as $adv) {
+            if ($remainingToApply <= 0.0001) {
+                // Unapplied excess credit: detach from job card to become general customer credit balance
+                $adv->update([
+                    'invoice_id' => null,
+                    'job_card_id' => null,
+                    'customer_id' => $jobCard->customer_id,
+                    'is_advance' => true,
+                    'status' => 'completed',
+                    'notes' => trim(($adv->notes ?? '')." [Unapplied customer credit - excess from Job #{$jobCard->job_number}]"),
+                ]);
+
+                continue;
+            }
+
+            $advAmt = (float) $adv->amount;
+
+            if ($advAmt <= $remainingToApply + 0.0001) {
+                $adv->update([
+                    'invoice_id' => $invoice->id,
+                    'job_card_id' => $jobCard->id,
+                    'is_advance' => true,
+                    'status' => 'completed',
+                    'notes' => trim(($adv->notes ?? '')." [Applied to Invoice #{$invoice->invoice_number}]"),
+                ]);
+                $remainingToApply = max(0, round($remainingToApply - $advAmt, 2));
+            } else {
+                // Split payment: part covers the remainder of this invoice, part remains unapplied customer credit
+                $applyAmt = $remainingToApply;
+                $excessAmt = round($advAmt - $applyAmt, 2);
+                $origPaymentNumber = $adv->payment_number;
+
+                $adv->update([
+                    'amount' => $applyAmt,
+                    'invoice_id' => $invoice->id,
+                    'job_card_id' => $jobCard->id,
+                    'is_advance' => true,
+                    'status' => 'completed',
+                    'notes' => trim(($adv->notes ?? '').' [Applied LKR '.number_format($applyAmt, 2)." to Invoice #{$invoice->invoice_number} (Split from #{$origPaymentNumber})]"),
+                ]);
+
+                Payment::create([
+                    'invoice_id' => null,
+                    'job_card_id' => null,
+                    'customer_id' => $jobCard->customer_id,
+                    'payment_receipt_id' => $adv->payment_receipt_id,
+                    'payment_number' => Payment::generatePaymentNumber(),
+                    'payment_date' => $adv->payment_date,
+                    'amount' => $excessAmt,
+                    'payment_method' => $adv->payment_method,
+                    'reference_number' => $adv->reference_number ?? $origPaymentNumber,
+                    'notes' => 'Unapplied customer credit (Excess of LKR '.number_format($excessAmt, 2)." from Job #{$jobCard->job_number} after Invoice #{$invoice->invoice_number}. Orig Payment #{$origPaymentNumber})",
+                    'is_advance' => true,
+                    'status' => 'completed',
+                    'created_by' => $adv->created_by,
+                ]);
+
+                $remainingToApply = 0.00;
+            }
+        }
+
+        $paymentStatus = ($remainingBalance <= 0.0001)
+            ? 'paid'
+            : ($appliedAdvance > 0 ? 'partially_paid' : 'issued');
+
+        $invoice->update([
+            'amount_paid' => $appliedAdvance,
+            'balance_amount' => $remainingBalance,
+            'status' => $paymentStatus,
+        ]);
+
+        return [
+            'applied_advance' => $appliedAdvance,
+            'remaining_balance' => $remainingBalance,
+            'excess_credit' => $excessCredit,
+            'payment_status' => $paymentStatus,
+        ];
+    }
+
+    /**
+     * OPTION 2: Recreate Job for Editing.
+     * Reopens the SAME Job Card with the SAME ID and Job Number, removes the previous invoice from active billing,
+     * retains existing products/services, and sets status back to pending.
+     * Automatically transfers valid paid amounts into a job advance without requiring manual cashier reversals.
+     */
+    protected function reopenJobForEditing(Request $request, JobCard $jobCard, string $reason, string $explanation, User $user): RedirectResponse
+    {
+        if (! $user->isAdmin()) {
+            abort(403, 'Unauthorized. Only administrators can recreate Job Cards for editing.');
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $lockedJobCard = JobCard::where('id', $jobCard->id)->lockForUpdate()->firstOrFail();
+
+            if (! in_array($lockedJobCard->status, ['completed', 'delivered', 'cancelled'])) {
+                DB::rollBack();
+
+                return back()->with('error', 'Only completed, delivered, or cancelled jobs can be reopened for editing.');
+            }
+
+            // Identify all linked invoices
+            $linkedInvoices = Invoice::where('job_card_id', $lockedJobCard->id)
+                ->when($lockedJobCard->invoice_id, fn ($q) => $q->orWhere('id', $lockedJobCard->invoice_id))
+                ->lockForUpdate()
+                ->get()
+                ->unique('id');
+
+            $invoiceIds = $linkedInvoices->pluck('id')->filter()->all();
+
+            $primaryInvoice = $lockedJobCard->getResolvedInvoice() ?? $linkedInvoices->first();
+            $adminName = $user->name;
+            $reopenedTimestamp = now('Asia/Colombo')->format('Y-m-d H:i:s');
+            $prevStatus = $lockedJobCard->status;
+            $jobNumber = $lockedJobCard->job_number;
+            $oldInvoiceNumber = $primaryInvoice?->invoice_number ?? 'None';
+
+            // Find all valid (non-cancelled, non-reversed) recorded payments associated with linked invoices or this job card
+            $validPayments = Payment::where(function ($query) use ($invoiceIds, $lockedJobCard) {
+                if (! empty($invoiceIds)) {
+                    $query->whereIn('invoice_id', $invoiceIds);
+                }
+                $query->orWhere('job_card_id', $lockedJobCard->id);
+            })
+                ->whereNotIn('status', ['cancelled', 'reversed'])
+                ->lockForUpdate()
+                ->get();
+
+            // Automatically transfer valid payments to job advance
+            $totalAdvancePreserved = 0.0;
+            foreach ($validPayments as $payment) {
+                $origInvoiceNum = $payment->invoice?->invoice_number ?? ($payment->invoice_id ? "INV#{$payment->invoice_id}" : 'None');
+                $noteAppend = "[Transferred to Job Advance upon reopening Job #{$jobNumber}. Orig Invoice: {$origInvoiceNum}]";
+
+                $payment->update([
+                    'invoice_id' => null,
+                    'job_card_id' => $lockedJobCard->id,
+                    'is_advance' => true,
+                    'status' => 'completed',
+                    'notes' => trim(($payment->notes ?? '').' '.$noteAppend),
+                ]);
+
+                $totalAdvancePreserved += (float) $payment->amount;
+            }
+
+            // Update payment allocations linked to the voided invoices
+            if (! empty($invoiceIds)) {
+                PaymentAllocation::whereIn('invoice_id', $invoiceIds)
+                    ->update([
+                        'notes' => DB::raw("CONCAT(COALESCE(notes, ''), ' [Invoice voided: Job #{$jobNumber} reopened]')"),
+                    ]);
+            }
+
+            // Void old invoices and remove them from active receivables and sales
+            foreach ($linkedInvoices as $inv) {
+                $inv->update([
+                    'status' => 'cancelled',
+                    'amount_paid' => 0.00,
+                    'balance_amount' => 0.00,
+                    'job_card_id' => null,
+                    'cancellation_reason' => "Job Card #{$jobNumber} reopened for editing by {$adminName}.",
+                    'cancelled_by' => $user->id,
+                    'cancelled_at' => now(),
+                    'reference' => "{$inv->reference} (Reopened)",
+                    'notes' => trim(($inv->notes ?? '')."\nVoided/Archived: Job Card #{$jobNumber} reopened for editing by {$adminName} on {$reopenedTimestamp}."),
+                ]);
+            }
+
+            // Clear existing invoice_id on Job Card and services/products
+            $lockedJobCard->update([
+                'status' => 'pending',
+                'completed_at' => null,
+                'completed_by' => null,
+                'invoice_id' => null,
+            ]);
+
+            $lockedJobCard->services()->update(['invoice_id' => null]);
+            $lockedJobCard->products()->update(['invoice_id' => null]);
+
+            // Ensure totals reflect retained services and products
+            $lockedJobCard->recalculateTotals();
+
+            // Activity Log
+            ActivityLog::log(
+                action: 'reopened_job_for_editing',
+                description: "{$jobNumber} reopened for editing by {$adminName}. Previous invoice {$oldInvoiceNumber} voided and removed from active billing. LKR ".number_format($totalAdvancePreserved, 2).' preserved as job advance.',
+                module: 'Job Cards',
+                userId: $user->id
+            );
+
+            DB::commit();
+
+            $successMsg = "Job {$jobNumber} reopened successfully. Previous services and products are available for editing. The old invoice has been removed from active billing.";
+            if ($totalAdvancePreserved > 0) {
+                $successMsg .= ' LKR '.number_format($totalAdvancePreserved, 2).' previous payment preserved as job advance.';
+            }
+
+            return redirect()->route('operations.job-cards.show', $lockedJobCard->id)
+                ->with('success', $successMsg);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error("Failed to reopen Job Card #{$jobCard->job_number} for editing: {$e->getMessage()}", [
+                'job_card_id' => $jobCard->id,
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return back()->with('error', 'Error reopening job for editing: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * OPTION 1: Permanently Delete Job.
+     * Permanently deletes original Job Card, reverses FIFO stock, cancels eligible linked invoices,
+     * and moves valid payments into unapplied customer credit balance.
+     */
+    protected function permanentlyDeleteJob(Request $request, JobCard $jobCard, string $reason, string $explanation, User $user): RedirectResponse
+    {
+        if (! $user->isAdmin()) {
+            abort(403, 'Unauthorized. Only administrators can permanently delete Job Cards.');
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $lockedJobCard = JobCard::where('id', $jobCard->id)->lockForUpdate()->firstOrFail();
+
+            // Find all linked invoices (primary and supplementary)
+            $linkedInvoices = Invoice::where('job_card_id', $lockedJobCard->id)
+                ->when($lockedJobCard->invoice_id, fn ($q) => $q->orWhere('id', $lockedJobCard->invoice_id))
+                ->lockForUpdate()
+                ->get()
+                ->unique('id');
+
+            $invoiceIds = $linkedInvoices->pluck('id')->filter()->all();
+
+            $primaryInvoice = $lockedJobCard->getResolvedInvoice() ?? $linkedInvoices->first();
+            $adminName = $user->name;
+            $deletionTimestamp = now('Asia/Colombo')->format('Y-m-d H:i:s');
+            $jobNumber = $lockedJobCard->job_number;
+
+            // Find all valid (non-cancelled, non-reversed) recorded payments associated with linked invoices or this job card
+            $validPayments = Payment::where(function ($query) use ($invoiceIds, $lockedJobCard) {
+                if (! empty($invoiceIds)) {
+                    $query->whereIn('invoice_id', $invoiceIds);
+                }
+                $query->orWhere('job_card_id', $lockedJobCard->id);
+            })
+                ->whereNotIn('status', ['cancelled', 'reversed'])
+                ->lockForUpdate()
+                ->get();
+
+            // Move valid unapplied amounts into the customer's credit balance using a properly recorded accounting adjustment
+            $totalCreditPreserved = 0.0;
+            foreach ($validPayments as $payment) {
+                $origInvoiceNum = $payment->invoice?->invoice_number ?? ($payment->invoice_id ? "INV#{$payment->invoice_id}" : 'None');
+                $noteAppend = "[Retained as unapplied customer credit upon deletion of Job #{$jobNumber}. Orig Invoice: {$origInvoiceNum}. Reason: {$reason}]";
+
+                $payment->update([
+                    'invoice_id' => null,
+                    'job_card_id' => null,
+                    'customer_id' => $lockedJobCard->customer_id,
+                    'is_advance' => true,
+                    'status' => 'completed',
+                    'notes' => trim(($payment->notes ?? '').' '.$noteAppend),
+                ]);
+
+                $totalCreditPreserved += (float) $payment->amount;
+            }
+
+            // Update payment allocations linked to the voided invoices
+            if (! empty($invoiceIds)) {
+                PaymentAllocation::whereIn('invoice_id', $invoiceIds)
+                    ->update([
+                        'notes' => DB::raw("CONCAT(COALESCE(notes, ''), ' [Job #{$jobNumber} permanently deleted]')"),
+                    ]);
+            }
+
+            // FIFO Inventory and Stock Correction:
+            $jobProducts = $lockedJobCard->products()->lockForUpdate()->get();
+            $reversedBatches = [];
+
+            foreach ($jobProducts as $prodItem) {
+                if ($prodItem->is_stock_deducted && ! empty($prodItem->batch_allocations)) {
+                    try {
+                        $this->stockService->reverseStockFifo(
+                            $prodItem->batch_allocations,
+                            $lockedJobCard,
+                            $user,
+                            "Job Card #{$lockedJobCard->job_number} permanent deletion. Reason: {$reason}"
+                        );
+                        $reversedBatches[] = [
+                            'product_id' => $prodItem->product_id,
+                            'product_name' => $prodItem->product_name,
+                            'allocations' => $prodItem->batch_allocations,
+                        ];
+                    } catch (\Throwable $stockEx) {
+                        DB::rollBack();
+                        Log::error("Stock correction failed while deleting Job Card #{$lockedJobCard->job_number}: {$stockEx->getMessage()}", [
+                            'job_id' => $lockedJobCard->id,
+                            'product_item_id' => $prodItem->id,
+                        ]);
+
+                        return back()->with('error', 'Unable to delete this job because the associated stock transactions could not be safely corrected.');
+                    }
+                }
+            }
+
+            // Save Permanent Deletion Audit Log
+            $auditPayload = [
+                'job_id' => $lockedJobCard->id,
+                'job_number' => $lockedJobCard->job_number,
+                'vehicle_number' => $lockedJobCard->vehicle?->vehicle_number ?? 'N/A',
+                'customer_id' => $lockedJobCard->customer_id,
+                'customer_name' => $lockedJobCard->customer?->customer_name ?? 'N/A',
+                'job_total' => (float) $lockedJobCard->grand_total,
+                'invoice_id' => $primaryInvoice?->id,
+                'invoice_number' => $primaryInvoice?->invoice_number ?? 'N/A',
+                'invoice_payment_status' => $primaryInvoice?->payment_status ?? 'Unpaid',
+                'customer_credit_preserved' => $totalCreditPreserved,
+                'deletion_reason' => $reason,
+                'additional_explanation' => $explanation ?: null,
+                'admin_id' => $user->id,
+                'admin_name' => $adminName,
+                'deletion_timestamp' => $deletionTimestamp,
+                'reversed_inventory' => $reversedBatches,
+            ];
+
+            ActivityLog::log(
+                action: 'permanently_deleted_job',
+                description: "{$adminName} permanently deleted Job Card {$lockedJobCard->job_number}. Reason: {$reason}.".($explanation ? " Explanation: {$explanation}." : '').($totalCreditPreserved > 0 ? ' LKR '.number_format($totalCreditPreserved, 2).' preserved as unapplied customer credit.' : '').' [Audit Data: '.json_encode($auditPayload).']',
+                module: 'Job Cards',
+                userId: $user->id
+            );
+
+            // Clear circular foreign key on job_cards before deleting or voiding invoices
+            $lockedJobCard->update(['invoice_id' => null]);
+
+            foreach ($linkedInvoices as $inv) {
+                $hasPaymentHistory = Payment::where('invoice_id', $inv->id)->exists()
+                    || PaymentAllocation::where('invoice_id', $inv->id)->exists();
+
+                if (! $hasPaymentHistory && $inv->status === 'draft') {
+                    $inv->items()->delete();
+                    $inv->delete();
+                } else {
+                    // Retain legally mandatory financial history: void and remove from receivables
+                    $inv->update([
+                        'status' => 'cancelled',
+                        'amount_paid' => 0.00,
+                        'balance_amount' => 0.00,
+                        'job_card_id' => null,
+                        'cancellation_reason' => "Job Card #{$jobNumber} permanently deleted by {$adminName}. Reason: {$reason}",
+                        'cancelled_by' => $user->id,
+                        'cancelled_at' => now(),
+                        'notes' => trim(($inv->notes ?? '')."\nVoided: Job Card #{$jobNumber} permanently deleted on {$deletionTimestamp}."),
+                    ]);
+                }
+            }
+
+            // Unlink any appointments
+            Appointment::where('job_card_id', $lockedJobCard->id)->update(['job_card_id' => null]);
+
+            // Delete dependent records
+            $lockedJobCard->services()->delete();
+            $lockedJobCard->products()->delete();
+            $lockedJobCard->issues()->delete();
+            $lockedJobCard->carpets()->delete();
+
+            // Delete original Job Card
+            $lockedJobCard->delete();
+
+            DB::commit();
+
+            $msg = 'Job permanently deleted successfully.';
+            if ($totalCreditPreserved > 0) {
+                $msg .= ' LKR '.number_format($totalCreditPreserved, 2).' was moved into unapplied customer credit.';
+            }
+
+            return redirect()->route('operations.job-cards.index')
+                ->with('success', $msg);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error("Failed to permanently delete Job Card: {$e->getMessage()}", [
+                'job_card_id' => $jobCard->id,
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return back()->with('error', 'Error permanently deleting job: '.$e->getMessage());
+        }
     }
 }

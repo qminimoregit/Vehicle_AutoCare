@@ -120,4 +120,12 @@ class GoodsReceivedNote extends Model
     {
         return $this->belongsTo(Branch::class, 'branch_id');
     }
+
+    /**
+     * Generate the next concurrency-safe, sequential GRN number.
+     */
+    public static function generateGrnNumber(?string $date = null): string
+    {
+        return \App\Services\GrnNumberService::generateNextGrnNumber($date);
+    }
 }

@@ -47,7 +47,11 @@
         ])) }},
 
         // Selected Carpet Details: { [categoryId]: quantity }
-        selectedCarpets: {},
+        selectedCarpets: {{ Js::from(
+            collect(old('carpets', []))
+                ->filter(fn($c) => is_array($c) && !empty($c['category_id']) && (isset($c['quantity']) && (int)$c['quantity'] > 0))
+                ->mapWithKeys(fn($c) => [(string)$c['category_id'] => (int)$c['quantity']])
+        ) }},
 
         hasCarpetSupport() {
             return !!(this.vehicleTypeId && this.vehicleTypes[this.vehicleTypeId]?.enable_carpets);
@@ -59,19 +63,18 @@
         },
 
         isCarpetSelected(catId) {
-            return this.selectedCarpets.hasOwnProperty(catId) && this.selectedCarpets[catId] > 0;
+            return this.selectedCarpets.hasOwnProperty(String(catId));
         },
 
         toggleCarpet(catId) {
+            let key = String(catId);
+            let copy = Object.assign({}, this.selectedCarpets);
             if (this.isCarpetSelected(catId)) {
-                let copy = Object.assign({}, this.selectedCarpets);
-                delete copy[catId];
-                this.selectedCarpets = copy;
+                delete copy[key];
             } else {
-                let copy = Object.assign({}, this.selectedCarpets);
-                copy[catId] = 1;
-                this.selectedCarpets = copy;
+                copy[key] = 1;
             }
+            this.selectedCarpets = copy;
         },
 
         setVehicleType(typeId) {
@@ -151,6 +154,11 @@
                     this.serviceHistory = data.service_history || [];
                     this.searchMessage = data.message || 'Existing Vehicle Found – Customer Details Loaded';
                     
+                    if (data.vehicle?.saved_carpets && typeof data.vehicle.saved_carpets === 'object' && Object.keys(data.vehicle.saved_carpets).length > 0) {
+                        this.selectedCarpets = Object.assign({}, data.vehicle.saved_carpets);
+                    } else {
+                        this.selectedCarpets = {};
+                    }
                     this.syncCarpetsForVehicleType();
                 } else {
                     this.vehicleExists = false;
@@ -524,22 +532,46 @@
                                     <span x-text="cat.name"></span>
                                 </label>
 
-                                <!-- Quantity Input (Only displayed when category is selected) -->
+                                <!-- Quantity Input (Only displayed and enabled when category is selected) -->
                                 <div x-show="isCarpetSelected(cat.id)" class="flex items-center space-x-1.5 shrink-0" style="display: none;">
                                     <span class="text-[11px] font-bold text-gray-600">Qty:</span>
                                     <input 
                                         type="number" 
                                         min="1" 
                                         step="1"
-                                        x-model.number="selectedCarpets[cat.id]"
-                                        :name="'carpets[' + cat.id + '][quantity]'"
+                                        x-model.number="selectedCarpets[String(cat.id)]"
+                                        :name="isCarpetSelected(cat.id) ? 'carpets[' + cat.id + '][quantity]' : null"
+                                        :disabled="!isCarpetSelected(cat.id)"
                                         class="w-16 py-1 px-2 text-xs font-black text-center text-gray-900 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-[#0B1849] min-h-[30px]"
                                     >
-                                    <input type="hidden" :name="'carpets[' + cat.id + '][category_id]'" :value="cat.id">
+                                    <input 
+                                        type="hidden" 
+                                        :name="isCarpetSelected(cat.id) ? 'carpets[' + cat.id + '][category_id]' : null" 
+                                        :value="cat.id"
+                                        :disabled="!isCarpetSelected(cat.id)"
+                                    >
                                 </div>
                             </div>
                         </template>
                     </div>
+
+                    @if($errors->has('carpets') || $errors->has('carpets.*.quantity') || $errors->has('carpets.*.category_id'))
+                        <div class="mt-2 text-xs text-red-600 space-y-1">
+                            @error('carpets')
+                                <p>{{ $message }}</p>
+                            @enderror
+                            @foreach($errors->get('carpets.*.quantity') as $messages)
+                                @foreach($messages as $msg)
+                                    <p>{{ $msg }}</p>
+                                @endforeach
+                            @endforeach
+                            @foreach($errors->get('carpets.*.category_id') as $messages)
+                                @foreach($messages as $msg)
+                                    <p>{{ $msg }}</p>
+                                @endforeach
+                            @endforeach
+                        </div>
+                    @endif
                 </div>
             </div>
 

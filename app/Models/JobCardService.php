@@ -18,6 +18,7 @@ class JobCardService extends Model
         'quantity',
         'line_total',
         'is_price_custom',
+        'is_price_pending',
         'is_additional',
         'job_issue_id',
         'invoice_id',
@@ -30,6 +31,7 @@ class JobCardService extends Model
         'quantity' => 'decimal:2',
         'line_total' => 'decimal:2',
         'is_price_custom' => 'boolean',
+        'is_price_pending' => 'boolean',
         'is_additional' => 'boolean',
     ];
 

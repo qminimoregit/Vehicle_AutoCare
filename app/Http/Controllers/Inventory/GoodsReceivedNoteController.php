@@ -9,12 +9,17 @@ use App\Models\GoodsReceivedNote;
 use App\Models\GoodsReceivedNoteItem;
 use App\Models\Product;
 use App\Models\Supplier;
+use App\Services\BranchContext;
+use App\Services\GrnNumberService;
 use App\Services\Inventory\StockService;
 use Exception;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
+use Throwable;
 
 class GoodsReceivedNoteController extends Controller
 {
@@ -98,64 +103,67 @@ class GoodsReceivedNoteController extends Controller
             abort(403, 'Unauthorized. Only administrators can confirm and post stock into inventory.');
         }
 
+        $attachmentPath = null;
+
         try {
-            $grn = DB::transaction(function () use ($request, $user) {
-                // Generate next GRN Number: GRN-YYYYMM-XXXX
-                $prefix = 'GRN-'.date('Ym').'-';
-                $lastNumber = GoodsReceivedNote::where('grn_number', 'like', "{$prefix}%")
-                    ->lockForUpdate()
-                    ->count();
+            $grn = GrnNumberService::executeWithRetry(function () use ($request, $user, $action, $stockService, &$attachmentPath) {
+                return DB::transaction(function () use ($request, $user, $action, $stockService, &$attachmentPath) {
+                    $receivedDate = $request->input('received_date', now()->toDateString());
+                    $grnNumber = GrnNumberService::generateNextGrnNumber($receivedDate);
 
-                $grnNumber = sprintf('%s%04d', $prefix, $lastNumber + 1);
+                    // Handle file attachment only once per transaction/retry
+                    if (! $attachmentPath && $request->hasFile('invoice_attachment')) {
+                        $attachmentPath = $request->file('invoice_attachment')->store('grn-invoices', 'public');
+                    }
 
-                // Handle file attachment
-                $attachmentPath = null;
-                if ($request->hasFile('invoice_attachment')) {
-                    $attachmentPath = $request->file('invoice_attachment')->store('grn-invoices', 'public');
-                }
+                    $activeBranchId = BranchContext::getActiveBranchId() ?? $user->branch_id ?? null;
 
-                $grn = GoodsReceivedNote::create([
-                    'grn_number' => $grnNumber,
-                    'supplier_id' => $request->input('supplier_id'),
-                    'supplier_invoice_number' => $request->input('supplier_invoice_number'),
-                    'received_date' => $request->input('received_date'),
-                    'status' => 'draft',
-                    'total_amount' => 0.00,
-                    'notes' => $request->input('notes'),
-                    'invoice_attachment' => $attachmentPath,
-                    'created_by' => $user->id,
-                ]);
-
-                $totalAmount = 0.0;
-
-                foreach ($request->input('items', []) as $line) {
-                    $purchaseQty = (float) $line['purchase_quantity'];
-                    $freeQty = isset($line['free_quantity']) ? (float) $line['free_quantity'] : 0.0;
-                    $unitPrice = (float) $line['purchase_unit_price'];
-                    $lineTotal = round($purchaseQty * $unitPrice, 2);
-
-                    GoodsReceivedNoteItem::create([
-                        'grn_id' => $grn->id,
-                        'product_id' => $line['product_id'],
-                        'purchase_quantity' => $purchaseQty,
-                        'free_quantity' => $freeQty,
-                        'purchase_unit_price' => $unitPrice,
-                        'selling_price_snapshot' => $line['selling_price_snapshot'] ?? null,
-                        'line_total' => $lineTotal,
+                    $grn = GoodsReceivedNote::create([
+                        'grn_number' => $grnNumber,
+                        'branch_id' => $activeBranchId,
+                        'supplier_id' => $request->input('supplier_id'),
+                        'supplier_invoice_number' => $request->input('supplier_invoice_number'),
+                        'received_date' => $receivedDate,
+                        'status' => 'draft',
+                        'total_amount' => 0.00,
+                        'notes' => $request->input('notes'),
+                        'invoice_attachment' => $attachmentPath,
+                        'created_by' => $user->id,
                     ]);
 
-                    $totalAmount += $lineTotal;
-                }
+                    $totalAmount = 0.0;
 
-                $grn->update(['total_amount' => $totalAmount]);
+                    foreach ($request->input('items', []) as $line) {
+                        $purchaseQty = (float) $line['purchase_quantity'];
+                        $freeQty = isset($line['free_quantity']) ? (float) $line['free_quantity'] : 0.0;
+                        $unitPrice = (float) $line['purchase_unit_price'];
+                        $lineTotal = round($purchaseQty * $unitPrice, 2);
 
-                return $grn;
+                        GoodsReceivedNoteItem::create([
+                            'grn_id' => $grn->id,
+                            'product_id' => $line['product_id'],
+                            'purchase_quantity' => $purchaseQty,
+                            'free_quantity' => $freeQty,
+                            'purchase_unit_price' => $unitPrice,
+                            'selling_price_snapshot' => $line['selling_price_snapshot'] ?? null,
+                            'line_total' => $lineTotal,
+                        ]);
+
+                        $totalAmount += $lineTotal;
+                    }
+
+                    $grn->update(['total_amount' => $totalAmount]);
+
+                    // If action is confirm, post to stock batches atomically within the same transaction
+                    if ($action === 'confirm') {
+                        $stockService->confirmGrn($grn, $user);
+                    }
+
+                    return $grn;
+                });
             });
 
-            // If action is confirm, post to stock batches immediately
             if ($action === 'confirm') {
-                $stockService->confirmGrn($grn, $user);
-
                 ActivityLog::log(
                     action: 'confirmed',
                     description: "Created and confirmed GRN #{$grn->grn_number} totaling LKR {$grn->total_amount}.",
@@ -174,8 +182,19 @@ class GoodsReceivedNoteController extends Controller
 
             return redirect()->route('inventory.grn.show', $grn)
                 ->with('success', "GRN #{$grn->grn_number} saved as draft.");
-        } catch (Exception $e) {
-            return back()->withInput()->with('error', 'Error creating GRN: '.$e->getMessage());
+        } catch (Throwable $e) {
+            // Clean up newly uploaded file on failure
+            if ($attachmentPath && Storage::disk('public')->exists($attachmentPath)) {
+                Storage::disk('public')->delete($attachmentPath);
+            }
+
+            Log::error("Failed to create GRN: {$e->getMessage()}", [
+                'exception' => $e,
+                'user_id' => $user->id ?? null,
+                'supplier_id' => $request->input('supplier_id'),
+            ]);
+
+            return back()->withInput()->with('error', 'Unable to create GRN. Please try again.');
         }
     }
 
