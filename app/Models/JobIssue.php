@@ -48,6 +48,16 @@ class JobIssue extends Model
         return $this->belongsTo(User::class, 'approved_by');
     }
 
+    public function approvedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function approvedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
     public function recorder(): BelongsTo
     {
         return $this->belongsTo(User::class, 'recorded_by');
@@ -55,7 +65,7 @@ class JobIssue extends Model
 
     public function recordedByUser(): BelongsTo
     {
-        return $this->recorder();
+        return $this->belongsTo(User::class, 'recorded_by');
     }
 
     public function supplementaryInvoice(): BelongsTo
@@ -76,6 +86,16 @@ class JobIssue extends Model
     public function isPendingApproval(): bool
     {
         return $this->status === 'pending_approval';
+    }
+
+    public function getApprovalStatusAttribute(): string
+    {
+        return $this->status ?? 'pending_approval';
+    }
+
+    public function getTechnicianNotesAttribute(): ?string
+    {
+        return $this->remarks;
     }
 
     public function isApproved(): bool
