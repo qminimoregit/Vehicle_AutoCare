@@ -49,4 +49,34 @@ class Service extends Model
     {
         return $this->hasMany(ServiceVehiclePrice::class);
     }
+
+    /**
+     * Alias for vehiclePrices relationship for backward compatibility and clean property access.
+     */
+    public function prices()
+    {
+        return $this->vehiclePrices();
+    }
+
+    /**
+     * Safely resolve configured price for a specific vehicle type without throwing null exceptions.
+     */
+    public function getPriceForVehicleType(?int $vehicleTypeId): ?float
+    {
+        if (! $vehicleTypeId) {
+            return null;
+        }
+
+        $pricingCollection = $this->relationLoaded('vehiclePrices')
+            ? $this->vehiclePrices
+            : ($this->relationLoaded('prices') ? $this->prices : null);
+
+        if ($pricingCollection) {
+            $pricing = $pricingCollection->firstWhere('vehicle_type_id', $vehicleTypeId);
+        } else {
+            $pricing = $this->vehiclePrices()->where('vehicle_type_id', $vehicleTypeId)->first();
+        }
+
+        return ($pricing && $pricing->service_price !== null) ? (float) $pricing->service_price : null;
+    }
 }
