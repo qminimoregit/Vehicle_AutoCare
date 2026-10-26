@@ -11,6 +11,28 @@
         halfDayCount: 0,
         absentCount: 0,
         calendarOpen: false,
+        attendances: {
+            @foreach($employees as $emp)
+                @php
+                    $oldPresent = old('attendances.' . $emp->id . '.present');
+                    $oldHalf = old('attendances.' . $emp->id . '.half_day');
+                    if ($oldPresent !== null || $oldHalf !== null) {
+                        $initHalf = ! empty($oldHalf);
+                        $initPresent = ! empty($oldPresent) && ! $initHalf;
+                    } else {
+                        $rec = $existingRecords->get($emp->id);
+                        $initPresent = $rec && $rec->status === \App\Models\EmployeeAttendance::STATUS_FULL_DAY;
+                        $initHalf = $rec && $rec->status === \App\Models\EmployeeAttendance::STATUS_HALF_DAY;
+                    }
+                    $empWage = (float) $emp->getWageForDate($selectedDate);
+                @endphp
+                {{ $emp->id }}: {
+                    present: {{ $initPresent ? 'true' : 'false' }},
+                    halfDay: {{ $initHalf ? 'true' : 'false' }},
+                    wage: {{ $empWage }}
+                },
+            @endforeach
+        },
 
         init() {
             this.$watch('showConfirmModal', (isOpen) => {
@@ -18,34 +40,38 @@
             });
         },
 
+        togglePresent(empId) {
+            if (this.attendances[empId].present) {
+                this.attendances[empId].halfDay = false;
+            }
+        },
+
+        toggleHalfDay(empId) {
+            if (this.attendances[empId].halfDay) {
+                this.attendances[empId].present = false;
+            }
+        },
+
         selectAllPresent() {
-            document.querySelectorAll('.employee-row').forEach(row => {
-                let p = row.querySelector('.present-cb');
-                let h = row.querySelector('.halfday-cb');
-                if (p) {
-                    p.checked = true;
-                    p.dispatchEvent(new Event('change'));
-                }
-                if (h) {
-                    h.checked = false;
-                    h.dispatchEvent(new Event('change'));
-                }
+            Object.keys(this.attendances).forEach(id => {
+                this.attendances[id].present = true;
+                this.attendances[id].halfDay = false;
             });
         },
 
         deselectAll() {
-            document.querySelectorAll('.employee-row').forEach(row => {
-                let p = row.querySelector('.present-cb');
-                let h = row.querySelector('.halfday-cb');
-                if (p) {
-                    p.checked = false;
-                    p.dispatchEvent(new Event('change'));
-                }
-                if (h) {
-                    h.checked = false;
-                    h.dispatchEvent(new Event('change'));
-                }
+            Object.keys(this.attendances).forEach(id => {
+                this.attendances[id].present = false;
+                this.attendances[id].halfDay = false;
             });
+        },
+
+        employeeWage(empId) {
+            let item = this.attendances[empId];
+            if (!item || !item.wage) return '0.00';
+            if (!item.present && !item.halfDay) return '0.00';
+            if (item.halfDay) return (item.wage * 0.5).toFixed(2);
+            return item.wage.toFixed(2);
         },
 
         prepareSave() {
@@ -53,15 +79,10 @@
             let half = 0;
             let absent = 0;
 
-            document.querySelectorAll('.employee-row').forEach(row => {
-                let p = row.querySelector('.present-cb');
-                let h = row.querySelector('.halfday-cb');
-                let isPresent = p ? p.checked : false;
-                let isHalf = h ? h.checked : false;
-
-                if (isPresent && isHalf) {
+            Object.values(this.attendances).forEach(item => {
+                if (item.halfDay) {
                     half++;
-                } else if (isPresent) {
+                } else if (item.present) {
                     full++;
                 } else {
                     absent++;
@@ -76,6 +97,15 @@
 
         confirmAndSubmit() {
             this.showConfirmModal = false;
+            Object.keys(this.attendances).forEach(id => {
+                let att = this.attendances[id];
+                let pInput = document.querySelector(`input[name='attendances[${id}][present]']`);
+                let hInput = document.querySelector(`input[name='attendances[${id}][half_day]']`);
+                let sInput = document.querySelector(`input[name='attendances[${id}][status]']`);
+                if (pInput) pInput.value = att.present ? '1' : '0';
+                if (hInput) hInput.value = att.halfDay ? '1' : '0';
+                if (sInput) sInput.value = att.halfDay ? 'half_day' : (att.present ? 'full_day' : 'absent');
+            });
             document.getElementById('attendance-form').submit();
         }
     }"
@@ -118,7 +148,7 @@
 
             @if(!$selectedDate->isToday())
                 <a 
-                    href="{{ route('payroll.attendance.index', ['date' => today()->toDateString(), 'cal_month' => $calMonth, 'cal_year' => $calYear]) }}" 
+                    href="{{ route('payroll.attendance.index', ['date' => ($today ?? today('Asia/Colombo'))->toDateString(), 'cal_month' => $calMonth, 'cal_year' => $calYear]) }}" 
                     class="px-3 py-1.5 text-xs font-semibold text-[#0B1849] bg-[#EEF1FA] hover:bg-[#dfe4f5] rounded-lg transition"
                 >
                     Today
@@ -166,6 +196,26 @@
     <form id="attendance-form" method="POST" action="{{ route('payroll.attendance.store') }}">
         @csrf
         <input type="hidden" name="attendance_date" value="{{ $selectedDate->toDateString() }}">
+
+        <!-- Dynamic attendance inputs -->
+        @foreach($employees as $emp)
+            @php
+                $oldPresent = old("attendances.{$emp->id}.present");
+                $oldHalf = old("attendances.{$emp->id}.half_day");
+                if ($oldPresent !== null || $oldHalf !== null) {
+                    $initHalf = ! empty($oldHalf);
+                    $initPresent = ! empty($oldPresent) && ! $initHalf;
+                } else {
+                    $rec = $existingRecords->get($emp->id);
+                    $initPresent = $rec && $rec->status === \App\Models\EmployeeAttendance::STATUS_FULL_DAY;
+                    $initHalf = $rec && $rec->status === \App\Models\EmployeeAttendance::STATUS_HALF_DAY;
+                }
+                $initStatus = $initHalf ? 'half_day' : ($initPresent ? 'full_day' : 'absent');
+            @endphp
+            <input type="hidden" name="attendances[{{ $emp->id }}][present]" :value="attendances[{{ $emp->id }}].present ? '1' : '0'" value="{{ $initPresent ? '1' : '0' }}">
+            <input type="hidden" name="attendances[{{ $emp->id }}][half_day]" :value="attendances[{{ $emp->id }}].halfDay ? '1' : '0'" value="{{ $initHalf ? '1' : '0' }}">
+            <input type="hidden" name="attendances[{{ $emp->id }}][status]" :value="attendances[{{ $emp->id }}].halfDay ? 'half_day' : (attendances[{{ $emp->id }}].present ? 'full_day' : 'absent')" value="{{ $initStatus }}">
+        @endforeach
 
         <!-- Desktop Attendance Table -->
         <div class="hidden md:block bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
@@ -220,26 +270,17 @@
                         @foreach($employees as $emp)
                             @php
                                 $rec = $existingRecords->get($emp->id);
-                                $isPresent = $rec && in_array($rec->status, ['full_day', 'half_day']);
-                                $isHalf = $rec && $rec->status === 'half_day';
+                                $oldPresent = old("attendances.{$emp->id}.present");
+                                $oldHalf = old("attendances.{$emp->id}.half_day");
+                                if ($oldPresent !== null || $oldHalf !== null) {
+                                    $isHalf = ! empty($oldHalf);
+                                    $isPresent = ! empty($oldPresent) && ! $isHalf;
+                                } else {
+                                    $isPresent = $rec && $rec->status === \App\Models\EmployeeAttendance::STATUS_FULL_DAY;
+                                    $isHalf = $rec && $rec->status === \App\Models\EmployeeAttendance::STATUS_HALF_DAY;
+                                }
                             @endphp
-                            <tr 
-                                class="employee-row hover:bg-slate-50 transition" 
-                                x-data="{
-                                    present: {{ $isPresent ? 'true' : 'false' }},
-                                    halfDay: {{ $isHalf ? 'true' : 'false' }},
-                                    onHalfDayChange() {
-                                        if (this.halfDay) {
-                                            this.present = true;
-                                        }
-                                    },
-                                    onPresentChange() {
-                                        if (!this.present) {
-                                            this.halfDay = false;
-                                        }
-                                    }
-                                }"
-                            >
+                            <tr class="employee-row hover:bg-slate-50 transition">
                                 <td class="px-5 py-3.5 whitespace-nowrap text-xs font-mono font-bold text-gray-500">
                                     {{ $emp->employee_number }}
                                 </td>
@@ -249,14 +290,11 @@
                                 </td>
                                 <td class="px-5 py-3.5 whitespace-nowrap text-center">
                                     @if($canEdit)
-                                        <input type="hidden" name="attendances[{{ $emp->id }}][present]" value="0">
                                         <label class="inline-flex items-center justify-center cursor-pointer p-1">
                                             <input 
                                                 type="checkbox" 
-                                                name="attendances[{{ $emp->id }}][present]" 
-                                                value="1" 
-                                                x-model="present" 
-                                                @change="onPresentChange()"
+                                                x-model="attendances[{{ $emp->id }}].present" 
+                                                @change="togglePresent({{ $emp->id }})"
                                                 class="present-cb w-5 h-5 rounded text-[#0B1849] border-gray-300 focus:ring-[#0B1849] cursor-pointer"
                                             >
                                         </label>
@@ -274,14 +312,11 @@
                                 </td>
                                 <td class="px-5 py-3.5 whitespace-nowrap text-center">
                                     @if($canEdit)
-                                        <input type="hidden" name="attendances[{{ $emp->id }}][half_day]" value="0">
                                         <label class="inline-flex items-center justify-center cursor-pointer p-1">
                                             <input 
                                                 type="checkbox" 
-                                                name="attendances[{{ $emp->id }}][half_day]" 
-                                                value="1" 
-                                                x-model="halfDay" 
-                                                @change="onHalfDayChange()"
+                                                x-model="attendances[{{ $emp->id }}].halfDay" 
+                                                @change="toggleHalfDay({{ $emp->id }})"
                                                 class="halfday-cb w-5 h-5 rounded text-blue-600 border-gray-300 focus:ring-blue-600 cursor-pointer"
                                             >
                                         </label>
@@ -328,33 +363,18 @@
             @foreach($employees as $emp)
                 @php
                     $rec = $existingRecords->get($emp->id);
-                    $isPresent = $rec && in_array($rec->status, ['full_day', 'half_day']);
-                    $isHalf = $rec && $rec->status === 'half_day';
+                    $oldPresent = old("attendances.{$emp->id}.present");
+                    $oldHalf = old("attendances.{$emp->id}.half_day");
+                    if ($oldPresent !== null || $oldHalf !== null) {
+                        $isHalf = ! empty($oldHalf);
+                        $isPresent = ! empty($oldPresent) && ! $isHalf;
+                    } else {
+                        $isPresent = $rec && $rec->status === \App\Models\EmployeeAttendance::STATUS_FULL_DAY;
+                        $isHalf = $rec && $rec->status === \App\Models\EmployeeAttendance::STATUS_HALF_DAY;
+                    }
                     $wage = $emp->getWageForDate($selectedDate);
                 @endphp
-                <div 
-                    class="employee-row bg-white rounded-xl border border-gray-200 p-3.5 shadow-xs flex flex-col gap-3"
-                    x-data="{
-                        present: {{ $isPresent ? 'true' : 'false' }},
-                        halfDay: {{ $isHalf ? 'true' : 'false' }},
-                        baseWage: {{ (float)$wage }},
-                        onHalfDayChange() {
-                            if (this.halfDay) {
-                                this.present = true;
-                            }
-                        },
-                        onPresentChange() {
-                            if (!this.present) {
-                                this.halfDay = false;
-                            }
-                        },
-                        currentWage() {
-                            if (!this.present) return '0.00';
-                            if (this.halfDay) return (this.baseWage * 0.5).toFixed(2);
-                            return this.baseWage.toFixed(2);
-                        }
-                    }"
-                >
+                <div class="employee-row bg-white rounded-xl border border-gray-200 p-3.5 shadow-xs flex flex-col gap-3">
                     <div class="flex items-start justify-between gap-2">
                         <div>
                             <span class="text-xs text-gray-400 font-mono block">{{ $emp->employee_number }} &bull; {{ $emp->position ?: 'Staff' }}</span>
@@ -371,33 +391,27 @@
                             <!-- Dynamic Earnings Preview -->
                             <div class="text-xs">
                                 <span class="text-gray-500">Day Pay:</span>
-                                <span class="font-bold font-mono text-[#0B1849]" x-text="'LKR ' + currentWage()"></span>
+                                <span class="font-bold font-mono text-[#0B1849]" x-text="'LKR ' + employeeWage({{ $emp->id }})"></span>
                             </div>
 
                             <div class="flex items-center gap-2 sm:gap-4">
                                 <!-- Attendance Checkbox -->
-                                <input type="hidden" name="attendances[{{ $emp->id }}][present]" value="0">
                                 <label class="flex items-center gap-1.5 cursor-pointer py-1.5 px-2 rounded-lg hover:bg-gray-50 min-h-[44px]">
                                     <input 
                                         type="checkbox" 
-                                        name="attendances[{{ $emp->id }}][present]" 
-                                        value="1" 
-                                        x-model="present" 
-                                        @change="onPresentChange()"
+                                        x-model="attendances[{{ $emp->id }}].present" 
+                                        @change="togglePresent({{ $emp->id }})"
                                         class="present-cb w-5 h-5 rounded text-[#0B1849] border-gray-300 focus:ring-[#0B1849]"
                                     >
                                     <span class="text-xs font-semibold text-gray-800">Present</span>
                                 </label>
 
                                 <!-- Half Day Checkbox -->
-                                <input type="hidden" name="attendances[{{ $emp->id }}][half_day]" value="0">
                                 <label class="flex items-center gap-1.5 cursor-pointer py-1.5 px-2 rounded-lg hover:bg-gray-50 min-h-[44px]">
                                     <input 
                                         type="checkbox" 
-                                        name="attendances[{{ $emp->id }}][half_day]" 
-                                        value="1" 
-                                        x-model="halfDay" 
-                                        @change="onHalfDayChange()"
+                                        x-model="attendances[{{ $emp->id }}].halfDay" 
+                                        @change="toggleHalfDay({{ $emp->id }})"
                                         class="halfday-cb w-5 h-5 rounded text-blue-600 border-gray-300 focus:ring-blue-600"
                                     >
                                     <span class="text-xs font-semibold text-gray-800">Half Day</span>

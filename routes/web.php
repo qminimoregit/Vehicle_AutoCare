@@ -187,6 +187,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::patch('/job-cards/{jobCard}/status', [JobCardController::class, 'updateStatus'])->name('job-cards.status');
         Route::post('/job-cards/{jobCard}/cancel', [JobCardController::class, 'cancel'])->name('job-cards.cancel');
         Route::post('/job-cards/{jobCard}/generate-invoice', [JobCardController::class, 'generateInvoice'])->name('job-cards.generate-invoice');
+        Route::get('/job-cards/{jobCard}/invoice', [JobCardController::class, 'goToInvoice'])->name('job-cards.invoice');
         Route::post('/job-cards/{jobCard}/payments', [JobCardController::class, 'recordPayment'])->name('job-cards.payments.store');
         Route::get('/job-cards/{jobCard}/print-bill', [JobCardController::class, 'printBill'])->name('job-cards.print-bill');
         Route::get('/job-cards/{jobCard}/advance-receipt', [JobCardController::class, 'advanceReceipt'])->name('job-cards.advance-receipt');
@@ -204,10 +205,14 @@ Route::middleware(['auth', 'active'])->group(function () {
         // Job Card Services
         Route::get('/job-cards/{jobCard}/services/{service}/price', [JobCardController::class, 'getServicePrice'])->name('job-cards.service-price');
         Route::post('/job-cards/{jobCard}/services', [JobCardController::class, 'addService'])->name('job-cards.services.add');
+        Route::patch('/job-cards/{jobCard}/services/{serviceItem}/quantity', [JobCardController::class, 'updateServiceQuantity'])->name('job-cards.services.quantity');
+        Route::patch('/job-cards/{jobCard}/services/{serviceItem}', [JobCardController::class, 'updateServiceItem'])->name('job-cards.services.update');
         Route::delete('/job-cards/{jobCard}/services/{serviceItem}', [JobCardController::class, 'removeService'])->name('job-cards.services.remove');
 
         // Job Card Products
         Route::post('/job-cards/{jobCard}/products', [JobCardController::class, 'addProduct'])->name('job-cards.products.add');
+        Route::patch('/job-cards/{jobCard}/products/{productItem}/quantity', [JobCardController::class, 'updateProductQuantity'])->name('job-cards.products.quantity');
+        Route::patch('/job-cards/{jobCard}/products/{productItem}', [JobCardController::class, 'updateProductItem'])->name('job-cards.products.update');
         Route::delete('/job-cards/{jobCard}/products/{productItem}', [JobCardController::class, 'removeProduct'])->name('job-cards.products.remove');
 
         // Direct Sale (POS)
