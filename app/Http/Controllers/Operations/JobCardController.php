@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Operations;
 
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
+use App\Models\Appointment;
 use App\Models\CarpetCategory;
 use App\Models\CompanySetting;
 use App\Models\Invoice;
@@ -12,6 +13,7 @@ use App\Models\JobCard;
 use App\Models\JobCardProduct;
 use App\Models\JobCardService;
 use App\Models\Payment;
+use App\Models\PaymentAllocation;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\ServiceVehiclePrice;
@@ -29,6 +31,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class JobCardController extends Controller
@@ -2181,5 +2184,320 @@ class JobCardController extends Controller
             'estimatedTotal',
             'estimatedBalance'
         ));
+    }
+
+    /**
+    /**
+     * Manage completed Job Card: Option 1 (Permanently Delete) or Option 2 (Recreate Job for Editing).
+     */
+    public function destroy(Request $request, JobCard $jobCard): RedirectResponse
+    {
+        return $this->manageCompletedJob($request, $jobCard);
+    }
+
+    /**
+     * Manage completed Job Card: Process either permanent deletion or reopening for editing.
+     */
+    public function manageCompletedJob(Request $request, JobCard $jobCard): RedirectResponse
+    {
+        $user = Auth::user();
+        if (! $user || ! $user->isAdmin()) {
+            return back()->with('error', 'You do not have permission to manage completed jobs.');
+        }
+
+        $validated = $request->validate([
+            'manage_action' => ['nullable', 'string', Rule::in(['permanently_delete', 'recreate_for_editing'])],
+            'reason' => [
+                Rule::requiredIf(fn () => $request->input('manage_action', 'permanently_delete') === 'permanently_delete'),
+                'nullable',
+                'string',
+                Rule::in([
+                    'Incorrect services added',
+                    'Incorrect products added',
+                    'Wrong vehicle selected',
+                    'Incorrect pricing',
+                    'Customer requested cancellation',
+                    'Duplicate Job Card',
+                    'Other',
+                ]),
+            ],
+            'explanation' => ['nullable', 'string', 'max:1000'],
+        ], [
+            'reason.required' => 'Please select a reason for deletion.',
+        ]);
+
+        $action = $validated['manage_action'] ?? 'permanently_delete';
+        $reason = $validated['reason'] ?? ($action === 'recreate_for_editing' ? 'Job reopened for editing' : '');
+        $explanation = trim((string) ($validated['explanation'] ?? ''));
+
+        if ($action === 'recreate_for_editing') {
+            return $this->reopenJobForEditing($request, $jobCard, $reason, $explanation, $user);
+        }
+
+        return $this->permanentlyDeleteJob($request, $jobCard, $reason, $explanation, $user);
+    }
+
+
+    /**
+     * OPTION 2: Recreate Job for Editing.
+     * Reopens the SAME Job Card with the SAME ID and Job Number, removes the previous invoice from active billing,
+     * retains existing products/services, and sets status back to pending.
+     */
+    protected function reopenJobForEditing(Request $request, JobCard $jobCard, string $reason, string $explanation, User $user): RedirectResponse
+    {
+        try {
+            DB::beginTransaction();
+
+            $lockedJobCard = JobCard::where('id', $jobCard->id)->lockForUpdate()->firstOrFail();
+
+            if (! in_array($lockedJobCard->status, ['completed', 'delivered', 'cancelled'])) {
+                DB::rollBack();
+
+                return back()->with('error', 'Only completed, delivered, or cancelled jobs can be reopened for editing.');
+            }
+
+            // Identify all linked invoices
+            $linkedInvoices = Invoice::where('job_card_id', $lockedJobCard->id)
+                ->when($lockedJobCard->invoice_id, fn ($q) => $q->orWhere('id', $lockedJobCard->invoice_id))
+                ->lockForUpdate()
+                ->get()
+                ->unique('id');
+
+            $invoiceIds = $linkedInvoices->pluck('id')->filter()->all();
+
+            // Check payments on job_card_id
+            $hasJobPayments = Payment::where('job_card_id', $lockedJobCard->id)
+                ->where('status', '!=', 'cancelled')
+                ->exists();
+
+            // Check payments on linked invoices
+            $hasInvoicePayments = ! empty($invoiceIds) && Payment::whereIn('invoice_id', $invoiceIds)
+                ->where('status', '!=', 'cancelled')
+                ->exists();
+
+            // Check payment allocations
+            $hasPaymentAllocations = ! empty($invoiceIds) && PaymentAllocation::whereIn('invoice_id', $invoiceIds)->exists();
+
+            // Check if any invoice has amount_paid > 0
+            $hasPaidAmount = $linkedInvoices->contains(fn ($inv) => (float) $inv->amount_paid > 0.0001);
+
+            if ($hasJobPayments || $hasInvoicePayments || $hasPaymentAllocations || $hasPaidAmount) {
+                DB::rollBack();
+
+                return back()->with('error', 'This job has recorded payments. Please reverse or refund them through the Cashier section before recreating or deleting the job.');
+            }
+
+            $primaryInvoice = $lockedJobCard->getResolvedInvoice() ?? $linkedInvoices->first();
+            $adminName = $user->name;
+            $reopenedTimestamp = now('Asia/Colombo')->format('Y-m-d H:i:s');
+            $prevStatus = $lockedJobCard->status;
+            $jobNumber = $lockedJobCard->job_number;
+            $oldInvoiceNumber = $primaryInvoice?->invoice_number ?? 'None';
+
+            // Save Reopen Audit Log before modifying records
+            $auditPayload = [
+                'job_id' => $lockedJobCard->id,
+                'job_number' => $jobNumber,
+                'original_invoice_id' => $primaryInvoice?->id,
+                'original_invoice_number' => $oldInvoiceNumber,
+                'reason_for_reopening' => $reason,
+                'additional_explanation' => $explanation ?: null,
+                'reopened_by' => $adminName,
+                'reopened_by_id' => $user->id,
+                'reopened_at' => $reopenedTimestamp,
+                'previous_completion_status' => $prevStatus,
+                'new_status' => 'pending',
+            ];
+
+            ActivityLog::log(
+                action: 'reopened_job_for_editing',
+                description: "{$jobNumber} reopened for editing by {$adminName}. Previous invoice {$oldInvoiceNumber} removed from active billing. Reason: {$reason}.".($explanation ? " Explanation: {$explanation}." : ''),
+                module: 'Job Cards'
+            );
+
+            // Clear existing invoice_id on Job Card
+            $lockedJobCard->update(['invoice_id' => null]);
+
+            // Remove/void old invoices from active billing
+            foreach ($linkedInvoices as $inv) {
+                if ($inv->status === 'draft') {
+                    // For an eligible unpaid draft invoice: delete line items and invoice record
+                    $inv->items()->delete();
+                    $inv->delete();
+                } else {
+                    // For an issued or finalized invoice: void/archive so it no longer appears as active receivable
+                    $inv->update([
+                        'status' => 'cancelled',
+                        'balance_amount' => 0.00,
+                        'job_card_id' => null,
+                        'reference' => "{$inv->reference} (Reopened)",
+                        'notes' => trim(($inv->notes ?? '')."\nVoided/Archived: Job Card #{$jobNumber} reopened for editing by {$adminName}. Reason: {$reason}"),
+                    ]);
+                }
+            }
+
+            // Reopen Job Card: change status to pending, reset completion timestamp and user
+            // RETAIN: existing services, products, prices, quantities, vehicle details, issues, notes, carpets
+            $lockedJobCard->update([
+                'status' => 'pending',
+                'completed_at' => null,
+                'completed_by' => null,
+                'invoice_id' => null,
+            ]);
+
+            // Ensure totals reflect retained items
+            $lockedJobCard->recalculateTotals();
+
+            DB::commit();
+
+            return redirect()->route('operations.job-cards.show', $lockedJobCard->id)
+                ->with('success', "Job {$jobNumber} reopened successfully. Previous services and products are available for editing. The old invoice has been removed from active billing.");
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error("Failed to reopen Job Card #{$jobCard->job_number} for editing: {$e->getMessage()}", [
+                'job_card_id' => $jobCard->id,
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return back()->with('error', 'Error reopening job for editing: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * OPTION 1: Permanently Delete Job.
+     * Permanently deletes original Job Card, reverses FIFO stock, deletes eligible linked invoices.
+     */
+    protected function permanentlyDeleteJob(Request $request, JobCard $jobCard, string $reason, string $explanation, User $user): RedirectResponse
+    {
+        try {
+            DB::beginTransaction();
+
+            $lockedJobCard = JobCard::where('id', $jobCard->id)->lockForUpdate()->firstOrFail();
+
+            // Find all linked invoices (primary and supplementary)
+            $linkedInvoices = Invoice::where('job_card_id', $lockedJobCard->id)
+                ->when($lockedJobCard->invoice_id, fn ($q) => $q->orWhere('id', $lockedJobCard->invoice_id))
+                ->lockForUpdate()
+                ->get()
+                ->unique('id');
+
+            $invoiceIds = $linkedInvoices->pluck('id')->filter()->all();
+
+            // Check payments on job_card_id
+            $hasJobPayments = Payment::where('job_card_id', $lockedJobCard->id)
+                ->where('status', '!=', 'cancelled')
+                ->exists();
+
+            // Check payments on linked invoices
+            $hasInvoicePayments = ! empty($invoiceIds) && Payment::whereIn('invoice_id', $invoiceIds)
+                ->where('status', '!=', 'cancelled')
+                ->exists();
+
+            // Check payment allocations
+            $hasPaymentAllocations = ! empty($invoiceIds) && PaymentAllocation::whereIn('invoice_id', $invoiceIds)->exists();
+
+            // Check if any invoice has amount_paid > 0
+            $hasPaidAmount = $linkedInvoices->contains(fn ($inv) => (float) $inv->amount_paid > 0.0001);
+
+            if ($hasJobPayments || $hasInvoicePayments || $hasPaymentAllocations || $hasPaidAmount) {
+                DB::rollBack();
+
+                return back()->with('error', 'This job has recorded payments. Please reverse or refund them through the Cashier section before permanently deleting the job.');
+            }
+
+            // FIFO Inventory and Stock Correction:
+            $jobProducts = $lockedJobCard->products()->lockForUpdate()->get();
+            $reversedBatches = [];
+
+            foreach ($jobProducts as $prodItem) {
+                if ($prodItem->is_stock_deducted && ! empty($prodItem->batch_allocations)) {
+                    try {
+                        $this->stockService->reverseStockFifo(
+                            $prodItem->batch_allocations,
+                            $lockedJobCard,
+                            $user,
+                            "Job Card #{$lockedJobCard->job_number} permanent deletion. Reason: {$reason}"
+                        );
+                        $reversedBatches[] = [
+                            'product_id' => $prodItem->product_id,
+                            'product_name' => $prodItem->product_name,
+                            'allocations' => $prodItem->batch_allocations,
+                        ];
+                    } catch (\Throwable $stockEx) {
+                        DB::rollBack();
+                        Log::error("Stock correction failed while deleting Job Card #{$lockedJobCard->job_number}: {$stockEx->getMessage()}", [
+                            'job_id' => $lockedJobCard->id,
+                            'product_item_id' => $prodItem->id,
+                        ]);
+
+                        return back()->with('error', 'Unable to delete this job because the associated stock transactions could not be safely corrected.');
+                    }
+                }
+            }
+
+            // Save Permanent Deletion Audit Log
+            $primaryInvoice = $lockedJobCard->getResolvedInvoice();
+            $adminName = $user->name;
+            $deletionTimestamp = now('Asia/Colombo')->format('Y-m-d H:i:s');
+
+            $auditPayload = [
+                'job_id' => $lockedJobCard->id,
+                'job_number' => $lockedJobCard->job_number,
+                'vehicle_number' => $lockedJobCard->vehicle?->vehicle_number ?? 'N/A',
+                'customer_id' => $lockedJobCard->customer_id,
+                'customer_name' => $lockedJobCard->customer?->customer_name ?? 'N/A',
+                'job_total' => (float) $lockedJobCard->grand_total,
+                'invoice_id' => $primaryInvoice?->id,
+                'invoice_number' => $primaryInvoice?->invoice_number ?? 'N/A',
+                'invoice_payment_status' => $primaryInvoice?->payment_status ?? 'Unpaid',
+                'deletion_reason' => $reason,
+                'additional_explanation' => $explanation ?: null,
+                'admin_id' => $user->id,
+                'admin_name' => $adminName,
+                'deletion_timestamp' => $deletionTimestamp,
+                'reversed_inventory' => $reversedBatches,
+            ];
+
+            ActivityLog::log(
+                action: 'permanently_deleted_job',
+                description: "{$adminName} permanently deleted Job Card {$lockedJobCard->job_number}. Reason: {$reason}.".($explanation ? " Explanation: {$explanation}." : '').' [Audit Data: '.json_encode($auditPayload).']',
+                module: 'Job Cards'
+            );
+
+            $jobNumber = $lockedJobCard->job_number;
+
+            // Clear circular foreign key on job_cards before deleting invoices
+            $lockedJobCard->update(['invoice_id' => null]);
+
+            foreach ($linkedInvoices as $inv) {
+                $inv->items()->delete();
+                $inv->delete();
+            }
+
+            // Unlink any appointments
+            Appointment::where('job_card_id', $lockedJobCard->id)->update(['job_card_id' => null]);
+
+            // Delete dependent records
+            $lockedJobCard->services()->delete();
+            $lockedJobCard->products()->delete();
+            $lockedJobCard->issues()->delete();
+            $lockedJobCard->carpets()->delete();
+
+            // Delete original Job Card
+            $lockedJobCard->delete();
+
+            DB::commit();
+
+            return redirect()->route('operations.job-cards.index')
+                ->with('success', 'Job permanently deleted successfully.');
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error("Failed to permanently delete Job Card: {$e->getMessage()}", [
+                'job_card_id' => $jobCard->id,
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return back()->with('error', 'Error permanently deleting job: '.$e->getMessage());
+        }
     }
 }

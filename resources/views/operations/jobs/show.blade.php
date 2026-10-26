@@ -1124,6 +1124,10 @@
         showApprovalModal: false,
         showWhatsAppModal: false,
         showEditItemModal: false,
+        showDeleteJobModal: false,
+        manageAction: 'permanently_delete',
+        deleteReason: '',
+        deleteExplanation: '',
 
         // Edit Cart Item State
         editingItem: {
@@ -1767,6 +1771,17 @@
                                         <i class="bi bi-box-arrow-right"></i> Mark Delivered
                                     </button>
                                 </form>
+                            </div>
+                        @endif
+                        @if(Auth::user()->isAdmin() && in_array($status, ['completed', 'delivered']))
+                            <div class="py-1">
+                                <button 
+                                    type="button" 
+                                    @click="showDeleteJobModal = true; manageAction = 'permanently_delete'; moreOpen = false;" 
+                                    class="w-full text-left px-4 py-2.5 text-rose-600 hover:bg-rose-50 flex items-center gap-2 font-semibold"
+                                >
+                                    <i class="bi bi-gear-wide-connected text-rose-600"></i> Manage Completed Job
+                                </button>
                             </div>
                         @endif
                     </div>
@@ -3012,6 +3027,203 @@
             </div>
         </div>
     </div>
+
+    <!-- MODAL 8: MANAGE COMPLETED JOB (ADMIN ONLY) -->
+    @if(Auth::user()->isAdmin() && in_array($status, ['completed', 'delivered']))
+    <div x-show="showDeleteJobModal" x-transition class="lv-modal-overlay" style="display: none;">
+        <div class="lv-modal-content max-w-lg" @click.stop>
+            <div class="px-6 py-4 border-b flex items-center justify-between rounded-t-2xl transition-colors duration-150" :class="manageAction === 'recreate_for_editing' ? 'bg-blue-50/80 border-blue-100' : 'bg-red-50/80 border-red-100'">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-colors duration-150" :class="manageAction === 'recreate_for_editing' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'">
+                        <i :class="manageAction === 'recreate_for_editing' ? 'bi bi-arrow-counterclockwise text-lg' : 'bi bi-trash3 text-lg'"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-gray-900 m-0">Manage Completed Job</h3>
+                        <p class="text-xs m-0" :class="manageAction === 'recreate_for_editing' ? 'text-blue-700' : 'text-red-700'">Administrator workflow management action</p>
+                    </div>
+                </div>
+                <button type="button" @click="showDeleteJobModal = false" class="border-0 bg-transparent text-gray-400 hover:text-gray-700 cursor-pointer">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <form action="{{ route('operations.job-cards.destroy', $jobCard) }}" method="POST" class="p-6 space-y-4">
+                @csrf
+                @method('DELETE')
+
+                <!-- Database Values Summary Card -->
+                <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-2 text-xs">
+                    <div class="flex justify-between items-center py-1 border-b border-gray-100">
+                        <span class="text-gray-500 font-medium">Job Number:</span>
+                        <span class="font-bold text-gray-900">{{ $jobCard->job_number }}</span>
+                    </div>
+                    <div class="flex justify-between items-center py-1 border-b border-gray-100">
+                        <span class="text-gray-500 font-medium">Vehicle Number:</span>
+                        <span class="font-bold text-gray-900">{{ $vehicle?->vehicle_number ?? 'N/A' }}</span>
+                    </div>
+                    <div class="flex justify-between items-center py-1 border-b border-gray-100">
+                        <span class="text-gray-500 font-medium">Customer Name:</span>
+                        <span class="font-semibold text-gray-900">{{ $customer?->customer_name ?? 'Walk-in Customer' }}</span>
+                    </div>
+                    <div class="flex justify-between items-center py-1 border-b border-gray-100">
+                        <span class="text-gray-500 font-medium">Job Total:</span>
+                        <span class="font-bold text-gray-900">Rs. {{ number_format((float) $jobCard->grand_total, 2) }}</span>
+                    </div>
+                    <div class="flex justify-between items-center py-1 border-b border-gray-100">
+                        <span class="text-gray-500 font-medium">Linked Invoice Number:</span>
+                        <span class="font-bold text-indigo-700">{{ $resolvedInvoice?->invoice_number ?? 'None' }}</span>
+                    </div>
+                    <div class="flex justify-between items-center py-1 border-b border-gray-100">
+                        <span class="text-gray-500 font-medium">Invoice Payment Status:</span>
+                        @php
+                            $invPayStatus = $resolvedInvoice ? ucfirst(str_replace('_', ' ', $resolvedInvoice->payment_status)) : 'Unbilled';
+                        @endphp
+                        <span class="font-bold {{ $resolvedInvoice && $resolvedInvoice->payment_status === 'paid' ? 'text-emerald-700' : ($resolvedInvoice && $resolvedInvoice->payment_status === 'partial' ? 'text-amber-700' : 'text-gray-700') }}">
+                            {{ $invPayStatus }}
+                        </span>
+                    </div>
+                    <div class="flex justify-between items-center py-1">
+                        <span class="text-gray-500 font-medium">Outstanding Balance:</span>
+                        <span class="font-bold text-gray-900">Rs. {{ number_format((float) ($resolvedInvoice?->balance_amount ?? $jobCard->grand_total), 2) }}</span>
+                    </div>
+                </div>
+
+                <!-- Select Action -->
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                        Select Action <span class="text-red-500">*</span>
+                    </label>
+                    <div class="space-y-2">
+                        <!-- Option 1: Permanently Delete Job -->
+                        <label 
+                            class="flex items-start p-3 border rounded-xl cursor-pointer transition"
+                            :class="manageAction === 'permanently_delete' ? 'border-red-500 bg-red-50/40 ring-1 ring-red-500' : 'border-gray-200 hover:bg-gray-50'"
+                        >
+                            <input 
+                                type="radio" 
+                                name="manage_action" 
+                                value="permanently_delete" 
+                                x-model="manageAction" 
+                                class="mt-0.5 text-red-600 focus:ring-red-500"
+                            >
+                            <div class="ml-3">
+                                <div class="text-sm font-bold text-gray-900">Option 1 — Permanently Delete Job</div>
+                                <div class="text-xs text-gray-500 mt-0.5">Remove this completed job and its eligible associated records permanently.</div>
+                            </div>
+                        </label>
+
+                        <!-- Option 2: Recreate Job for Editing -->
+                        <label 
+                            class="flex items-start p-3 border rounded-xl cursor-pointer transition"
+                            :class="manageAction === 'recreate_for_editing' ? 'border-blue-500 bg-blue-50/40 ring-1 ring-blue-500' : 'border-gray-200 hover:bg-gray-50'"
+                        >
+                            <input 
+                                type="radio" 
+                                name="manage_action" 
+                                value="recreate_for_editing" 
+                                x-model="manageAction" 
+                                class="mt-0.5 text-blue-600 focus:ring-blue-500"
+                            >
+                            <div class="ml-3">
+                                <div class="text-sm font-bold text-gray-900">Option 2 — Recreate Job for Editing</div>
+                                <div class="text-xs text-gray-500 mt-0.5">Reopen this job using the same job number and previous items. The old invoice will be removed from active billing.</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Mandatory Reason Dropdown -->
+                <div>
+                    <label for="show_delete_reason" class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                        Reason for Action <span class="text-red-500">*</span>
+                    </label>
+                    <select 
+                        name="reason" 
+                        id="show_delete_reason" 
+                        x-model="deleteReason" 
+                        required 
+                        class="block w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    >
+                        <option value="" disabled selected>-- Select reason --</option>
+                        <option value="Incorrect services added">Incorrect services added</option>
+                        <option value="Incorrect products added">Incorrect products added</option>
+                        <option value="Wrong vehicle selected">Wrong vehicle selected</option>
+                        <option value="Incorrect pricing">Incorrect pricing</option>
+                        <option value="Customer requested cancellation">Customer requested cancellation</option>
+                        <option value="Duplicate Job Card">Duplicate Job Card</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+
+                <!-- Additional Explanation Textarea -->
+                <div>
+                    <label for="show_delete_explanation" class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                        Additional Explanation <span x-show="deleteReason === 'Other'" class="text-red-500">*</span>
+                    </label>
+                    <textarea 
+                        name="explanation" 
+                        id="show_delete_explanation" 
+                        x-model="deleteExplanation" 
+                        rows="2" 
+                        :required="deleteReason === 'Other'" 
+                        placeholder="Provide additional details or justification..."
+                        class="block w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-gray-400 bg-white"
+                    ></textarea>
+                    <p x-show="deleteReason === 'Other'" class="text-[11px] text-red-600 mt-1 font-medium">
+                        An explanation is required when selecting 'Other'.
+                    </p>
+                </div>
+
+                <!-- Contextual Notice/Warning Banner -->
+                <template x-if="manageAction === 'permanently_delete'">
+                    <div class="flex items-start p-3 bg-red-50 border border-red-200 rounded-lg text-red-900 text-xs">
+                        <i class="bi bi-exclamation-triangle-fill text-red-600 mr-2 mt-0.5 shrink-0"></i>
+                        <span><strong>Warning:</strong> Permanent deletion cannot be undone. Eligible linked invoice and item records will be removed, and deducted FIFO stock will be restored to original batches.</span>
+                    </div>
+                </template>
+
+                <template x-if="manageAction === 'recreate_for_editing'">
+                    <div class="flex items-start p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-900 text-xs">
+                        <i class="bi bi-info-circle-fill text-blue-600 mr-2 mt-0.5 shrink-0"></i>
+                        <span><strong>Notice:</strong> This job will be reopened in Pending status with the SAME Job ID and Job Number. Existing services, products, and vehicle details will be retained for editing. The old invoice will be removed from active billing.</span>
+                    </div>
+                </template>
+
+                <!-- Modal Actions -->
+                <div class="pt-2 flex items-center justify-end space-x-3">
+                    <button 
+                        type="button" 
+                        @click="showDeleteJobModal = false" 
+                        class="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition cursor-pointer"
+                    >
+                        Cancel
+                    </button>
+
+                    <template x-if="manageAction === 'permanently_delete'">
+                        <button 
+                            type="submit" 
+                            class="inline-flex items-center px-5 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-xs transition cursor-pointer"
+                        >
+                            <i class="bi bi-trash3 mr-1.5"></i>
+                            Permanently Delete Job
+                        </button>
+                    </template>
+
+                    <template x-if="manageAction === 'recreate_for_editing'">
+                        <button 
+                            type="submit" 
+                            class="inline-flex items-center px-5 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition cursor-pointer"
+                        >
+                            <i class="bi bi-arrow-counterclockwise mr-1.5"></i>
+                            Recreate Job for Editing
+                        </button>
+                    </template>
+                </div>
+            </form>
+        </div>
+    </div>
+    @endif
+
 
     <!-- 5. FLOATING TOAST NOTIFICATION -->
     <div 
