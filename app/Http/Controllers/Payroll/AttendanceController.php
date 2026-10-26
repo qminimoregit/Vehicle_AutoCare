@@ -6,11 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\Employee;
 use App\Models\EmployeeAttendance;
+use App\Services\BranchContext;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class AttendanceController extends Controller
@@ -27,7 +30,11 @@ class AttendanceController extends Controller
 
         $today = Carbon::today('Asia/Colombo');
         $dateStr = $request->input('date', $today->toDateString());
-        $selectedDate = Carbon::parse($dateStr, 'Asia/Colombo');
+        try {
+            $selectedDate = Carbon::parse($dateStr, 'Asia/Colombo');
+        } catch (\Throwable) {
+            $selectedDate = $today;
+        }
 
         // Staff can only mark for today or yesterday; Admin can mark/edit any date
         $canEdit = $user->isAdmin() || $selectedDate->isSameDay($today) || $selectedDate->isYesterday();
@@ -42,9 +49,15 @@ class AttendanceController extends Controller
             ->get();
 
         // Existing records for selected date
-        $existingRecords = EmployeeAttendance::whereDate('attendance_date', $selectedDate->toDateString())
-            ->get()
-            ->keyBy('employee_id');
+        $hasBranchCol = Schema::hasColumn('employee_attendance', 'branch_id');
+        $attendanceQuery = EmployeeAttendance::whereDate('attendance_date', $selectedDate->toDateString());
+        if ($hasBranchCol && ($activeBranchId = BranchContext::getActiveBranchId())) {
+            $attendanceQuery->where(function ($q) use ($activeBranchId) {
+                $q->where('branch_id', $activeBranchId)
+                    ->orWhereNull('branch_id');
+            });
+        }
+        $existingRecords = $attendanceQuery->get()->keyBy('employee_id');
 
         // Attendance summary for selected date
         $summary = [
@@ -124,6 +137,7 @@ class AttendanceController extends Controller
 
         return view('payroll.attendance.index', compact(
             'selectedDate',
+            'today',
             'canEdit',
             'employees',
             'existingRecords',
@@ -167,86 +181,102 @@ class AttendanceController extends Controller
         $savedCount = 0;
         $clearedCount = 0;
 
-        DB::transaction(function () use ($validated, $attendanceDate, $user, &$savedCount, &$clearedCount) {
-            foreach ($validated['attendances'] as $employeeId => $data) {
-                $employee = Employee::find($employeeId);
-                if (! $employee) {
-                    continue;
-                }
+        try {
+            DB::transaction(function () use ($validated, $attendanceDate, $user, &$savedCount, &$clearedCount) {
+                $hasBranchCol = Schema::hasColumn('employee_attendance', 'branch_id');
+                $activeBranchId = BranchContext::getActiveBranchId();
 
-                // Determine attendance status: either from direct status or from simplified checkboxes
-                if (isset($data['status'])) {
-                    $status = $data['status'];
-                } else {
-                    $isPresent = ! empty($data['present']);
-                    $isHalfDay = ! empty($data['half_day']);
+                foreach ($validated['attendances'] as $employeeId => $data) {
+                    $employee = Employee::find($employeeId);
+                    if (! $employee) {
+                        continue;
+                    }
 
-                    if ($isPresent && $isHalfDay) {
-                        $status = EmployeeAttendance::STATUS_HALF_DAY;
-                    } elseif ($isPresent) {
-                        $status = EmployeeAttendance::STATUS_FULL_DAY;
+                    // Determine attendance status: either from direct status or from simplified checkboxes
+                    if (isset($data['status']) && in_array($data['status'], ['full_day', 'half_day', 'absent', 'leave', 'day_off', 'not_marked'], true)) {
+                        $status = $data['status'];
                     } else {
-                        $status = EmployeeAttendance::STATUS_ABSENT;
-                    }
-                }
+                        $isHalfDay = ! empty($data['half_day']);
+                        $isPresent = ! empty($data['present']);
 
-                $notes = $data['notes'] ?? null;
-                $isPaidLeave = ! empty($data['is_paid_leave']);
-
-                if ($status === 'not_marked') {
-                    // Remove record if existing
-                    $deleted = EmployeeAttendance::where('employee_id', $employeeId)
-                        ->whereDate('attendance_date', $attendanceDate)
-                        ->delete();
-                    if ($deleted) {
-                        $clearedCount++;
+                        if ($isHalfDay) {
+                            $status = EmployeeAttendance::STATUS_HALF_DAY;
+                        } elseif ($isPresent) {
+                            $status = EmployeeAttendance::STATUS_FULL_DAY;
+                        } else {
+                            $status = EmployeeAttendance::STATUS_ABSENT;
+                        }
                     }
 
-                    continue;
-                }
+                    $notes = $data['notes'] ?? null;
+                    $isPaidLeave = ! empty($data['is_paid_leave']);
 
-                // Retrieve wage rate applicable on that specific date
-                $dailyWage = $employee->getWageForDate($attendanceDate);
-                $payableFraction = EmployeeAttendance::getStatusFraction($status, $isPaidLeave);
-                $dailyEarnings = round($payableFraction * $dailyWage, 2);
+                    if ($status === 'not_marked') {
+                        $deleteQuery = EmployeeAttendance::where('employee_id', $employeeId)
+                            ->whereDate('attendance_date', $attendanceDate);
+                        if ($hasBranchCol && $employee->branch_id) {
+                            $deleteQuery->where('branch_id', $employee->branch_id);
+                        }
+                        $deleted = $deleteQuery->delete();
+                        if ($deleted) {
+                            $clearedCount++;
+                        }
 
-                $existingAttendance = EmployeeAttendance::where('employee_id', $employeeId)
-                    ->whereDate('attendance_date', $attendanceDate)
-                    ->first();
+                        continue;
+                    }
 
-                if ($existingAttendance) {
-                    $existingAttendance->update([
-                        'status' => $status,
-                        'payable_day_fraction' => $payableFraction,
-                        'applied_daily_wage' => $dailyWage,
-                        'daily_earnings' => $dailyEarnings,
-                        'notes' => $notes,
-                        'recorded_by' => $user->id,
-                    ]);
-                } else {
-                    EmployeeAttendance::create([
+                    // Retrieve wage rate applicable on that specific date
+                    $dailyWage = $employee->getWageForDate($attendanceDate);
+                    $payableFraction = EmployeeAttendance::getStatusFraction($status, $isPaidLeave);
+                    $dailyEarnings = round($payableFraction * $dailyWage, 2);
+
+                    $matchCriteria = [
                         'employee_id' => $employeeId,
                         'attendance_date' => $attendanceDate,
+                    ];
+                    if ($hasBranchCol && $employee->branch_id) {
+                        $matchCriteria['branch_id'] = $employee->branch_id;
+                    }
+
+                    $attributes = [
                         'status' => $status,
                         'payable_day_fraction' => $payableFraction,
                         'applied_daily_wage' => $dailyWage,
                         'daily_earnings' => $dailyEarnings,
                         'notes' => $notes,
                         'recorded_by' => $user->id,
-                    ]);
+                    ];
+                    if ($hasBranchCol) {
+                        $attributes['branch_id'] = $employee->branch_id ?? $activeBranchId;
+                    }
+
+                    EmployeeAttendance::updateOrCreate(
+                        $matchCriteria,
+                        $attributes
+                    );
+
+                    $savedCount++;
                 }
+            });
 
-                $savedCount++;
-            }
-        });
+            ActivityLog::log(
+                'record_attendance',
+                "Recorded daily attendance for {$attendanceDate} ({$savedCount} employees updated)",
+                'Payroll'
+            );
 
-        ActivityLog::log(
-            'record_attendance',
-            "Recorded daily attendance for {$attendanceDate} ({$savedCount} employees updated)",
-            'Payroll'
-        );
+            return redirect()->route('payroll.attendance.index', ['date' => $attendanceDate])
+                ->with('success', 'Employee attendance saved successfully.');
+        } catch (\Throwable $e) {
+            Log::error('Failed to save employee attendance: '.$e->getMessage(), [
+                'exception' => $e,
+                'attendance_date' => $attendanceDate,
+                'user_id' => $user->id,
+            ]);
 
-        return redirect()->route('payroll.attendance.index', ['date' => $attendanceDate])
-            ->with('success', "Attendance for {$attendanceDate} recorded successfully ({$savedCount} updated).");
+            return redirect()->route('payroll.attendance.index', ['date' => $attendanceDate])
+                ->withInput()
+                ->with('error', 'Failed to save employee attendance: '.$e->getMessage());
+        }
     }
 }

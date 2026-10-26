@@ -24,7 +24,7 @@ class VehicleRegistrationController extends Controller
     public function index(Request $request): View
     {
         $vehicleTypes = VehicleType::active()->with('carpetCategories')->orderBy('name')->get();
-        $initialSearch = trim((string) $request->query('search', ''));
+        $initialSearch = trim((string) $request->query('search', $request->query('vehicle_number', '')));
 
         return view('operations.vehicles.index', compact('vehicleTypes', 'initialSearch'));
     }
@@ -60,9 +60,9 @@ class VehicleRegistrationController extends Controller
             ]);
         }
 
-        // Active ongoing jobs (pending or in_progress)
+        // Active ongoing jobs (pending, in_progress, additional_work)
         $ongoingJobs = JobCard::where('vehicle_id', $vehicle->id)
-            ->whereIn('status', ['pending', 'in_progress'])
+            ->whereIn('status', ['pending', 'in_progress', 'additional_work'])
             ->with(['services', 'assignedTechnician'])
             ->orderBy('id', 'desc')
             ->get()
