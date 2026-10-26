@@ -3,13 +3,218 @@
 @section('title', 'Direct Sale (POS)')
 
 @section('content')
+<!-- External Google Font & Bootstrap Icons -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+<style>
+/* ==========================================================================
+   VIRAN AUTO CARE DIRECT SALE (POS) — IMAGE 1 HIGH FIDELITY DESIGN SYSTEM
+   ========================================================================== */
+:root {
+    --lv-navy: #0D1946;
+    --lv-navy-dark: #071030;
+    --lv-blue: #2563EB;
+    --lv-blue-hover: #1D4ED8;
+    --lv-border: #E5EAF2;
+    --lv-bg: #F5F7FB;
+    --lv-text: #111827;
+    --lv-muted: #64748B;
+}
+
+.pos-workspace-wrap {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    color: var(--lv-text);
+}
+
+.thin-scrollbar::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+}
+.thin-scrollbar::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+/* Job Card Lovable Item List Styles */
+.lv-cart-group {
+    margin-top: 4px;
+}
+.lv-cart-group h4 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .7px;
+    color: var(--lv-muted);
+    font-weight: 700;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    padding: 2px 6px;
+}
+
+.lv-line {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 6px;
+    border-bottom: 1px solid var(--lv-border);
+    transition: background-color 0.15s;
+}
+.lv-line:hover {
+    background-color: #FAFBFD;
+}
+.lv-line:last-child {
+    border-bottom: 0;
+}
+.lv-line-main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.lv-line-name {
+    font-weight: 600;
+    font-size: 13px;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--lv-text);
+}
+.lv-line-tech {
+    font-size: 11px;
+    color: var(--lv-muted);
+    margin-top: 1px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.lv-line-total {
+    flex: 0 0 auto;
+    text-align: right;
+    min-width: 80px;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--lv-navy);
+    font-variant-numeric: tabular-nums;
+}
+.lv-rm-btn {
+    flex: 0 0 auto;
+    border: 0;
+    background: none;
+    color: #94A3B8;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.15s;
+}
+.lv-rm-btn:hover {
+    background: #FEE2E2;
+    color: #DC2626;
+}
+
+/* Stepper Quantity Controls [-] [qty] [+] */
+.lv-stepper {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--lv-border);
+    border-radius: 8px;
+    background: #fff;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+.lv-step-btn {
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--lv-text);
+    cursor: pointer;
+    font-size: 11px;
+    transition: background-color 0.15s, color 0.15s;
+    padding: 0;
+}
+.lv-step-btn:hover:not(:disabled) {
+    background: #EFF6FF;
+    color: var(--lv-blue);
+}
+.lv-step-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+.lv-step-val {
+    min-width: 22px;
+    padding: 0 4px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--lv-text);
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 480px) {
+    .lv-line {
+        flex-wrap: wrap;
+        gap: 6px 8px;
+        padding: 8px 6px;
+    }
+    .lv-line-main {
+        flex: 1 0 100%;
+        width: 100%;
+    }
+    .lv-stepper {
+        margin-right: auto;
+    }
+    .lv-line-total {
+        min-width: auto;
+        text-align: right;
+    }
+}
+</style>
+
 <div 
     x-data="{
-        // Search & Filter
+        // Search & Filter State
         searchTerm: '',
-        products: {{ Js::from($products) }},
+        selectedCategory: 'all',
+        viewMode: 'grid', // 'grid' | 'list'
         
-        // Cart State
+        // Products initialized with dynamic category classification
+        products: {{ Js::from($products) }}.map(p => {
+            let name = (p.name || p.product_name || '').toLowerCase();
+            let cat = 'Spare Parts';
+            if (name.includes('filter') || name.includes('pad') || name.includes('brake') || name.includes('shoe') || name.includes('battery') || name.includes('plug') || name.includes('wiper') || name.includes('belt') || name.includes('bulb')) {
+                cat = 'Spare Parts';
+            } else if (name.includes('oil') || name.includes('fluid') || name.includes('coolant') || name.includes('spray') || name.includes('lubricant')) {
+                cat = 'Lubricants';
+            } else if (name.includes('assistant') || name.includes('accessory') || name.includes('camera') || name.includes('cover') || name.includes('perfume') || name.includes('cleaner')) {
+                cat = 'Accessories';
+            }
+            p.category = cat;
+            return p;
+        }),
+        
         // Cart State
         cart: [],
         customerId: '',
@@ -22,13 +227,13 @@
         amountPaid: '',
         notes: '',
 
-        // UI State
+        // UI & Modal State
         isSubmitting: false,
-        mobileView: 'products',
+        mobileView: 'products', // 'products' | 'cart'
         showSuccessModal: false,
         completedSale: null,
 
-        // Sharing State (Email & WhatsApp)
+        // Sharing State
         activeShareTab: '', // '' | 'email' | 'whatsapp'
         emailRecipient: '',
         isSendingEmail: false,
@@ -71,31 +276,59 @@
             return parseFloat(num.toFixed(4)).toLocaleString();
         },
 
+        formatMoney(val) {
+            return Number(val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        },
+
+        // Category options list with dynamic counts
+        get categoryList() {
+            let counts = { 'All Items': this.products.length };
+            this.products.forEach(p => {
+                counts[p.category] = (counts[p.category] || 0) + 1;
+            });
+            return [
+                { name: 'All Items', key: 'all', count: this.products.length },
+                { name: 'Spare Parts', key: 'Spare Parts', count: counts['Spare Parts'] || 0 },
+                { name: 'Lubricants', key: 'Lubricants', count: counts['Lubricants'] || 0 },
+                { name: 'Accessories', key: 'Accessories', count: counts['Accessories'] || 0 },
+            ];
+        },
+
         // Filtered products list
         get filteredProducts() {
+            let list = this.products;
+
+            // Category filter
+            if (this.selectedCategory !== 'all') {
+                list = list.filter(p => p.category === this.selectedCategory);
+            }
+
+            // Search filter
             if (!this.searchTerm.trim()) {
-                return this.products;
+                return list;
             }
             let term = this.searchTerm.toLowerCase();
-            return this.products.filter(p => {
+            return list.filter(p => {
                 let name = (p.name || p.product_name || '').toLowerCase();
                 let sku = (p.sku || '').toLowerCase();
                 let barcode = (p.barcode || '').toLowerCase();
-                return name.includes(term) || sku.includes(term) || barcode.includes(term);
+                let cat = (p.category || '').toLowerCase();
+                return name.includes(term) || sku.includes(term) || barcode.includes(term) || cat.includes(term);
             });
         },
 
         // Add item to cart
         addToCart(product) {
-            if (product.available_stock <= 0) {
+            let stock = parseFloat(product.available_stock) || 0;
+            if (stock <= 0) {
                 alert('This product is currently out of stock.');
                 return;
             }
 
             let existing = this.cart.find(item => item.product_id === product.id);
             if (existing) {
-                if (existing.quantity + 1 > product.available_stock) {
-                    alert('Cannot add more than available stock (' + this.formatQty(product.available_stock) + ' units).');
+                if (existing.quantity + 1 > stock) {
+                    alert('Cannot add more than available stock (' + this.formatQty(stock) + ' units).');
                     return;
                 }
                 existing.quantity += 1;
@@ -107,7 +340,7 @@
                     sku: product.sku,
                     image_url: product.image_url,
                     unit_price: parseFloat(product.selling_price) || 0,
-                    available_stock: parseFloat(product.available_stock) || 0,
+                    available_stock: stock,
                     quantity: 1,
                     line_total: parseFloat(product.selling_price) || 0,
                 });
@@ -145,16 +378,16 @@
             this.recalculatePayment();
         },
 
-        // Clear cart
+        // Clear cart with confirmation
         clearCart() {
-            if (this.cart.length > 0 && confirm('Clear current cart?')) {
+            if (this.cart.length > 0 && confirm('Are you sure you want to clear the entire sale cart?')) {
                 this.cart = [];
                 this.amountPaid = '';
                 this.discount = 0;
             }
         },
 
-        // Totals calculations
+        // Financial calculations
         get subtotal() {
             return this.cart.reduce((sum, item) => sum + (parseFloat(item.line_total) || 0), 0);
         },
@@ -184,7 +417,7 @@
             this.amountPaid = this.grandTotal;
         },
 
-        // Phone normalization helper for Sri Lankan numbers
+        // Phone normalization helper
         normalizePhone(phone) {
             if (!phone) return '';
             let clean = phone.toString().replace(/[\s\-\(\)\.]/g, '').trim();
@@ -292,7 +525,7 @@
             }
         },
 
-        // Submit Checkout via AJAX
+        // Checkout via AJAX
         async checkout() {
             if (this.cart.length === 0) {
                 alert('Cart is empty. Please add products first.');
@@ -356,351 +589,488 @@
             }
         }
     }"
-    class="max-w-7xl mx-auto space-y-4"
+    class="pos-workspace-wrap space-y-3"
 >
-    <!-- Page Header -->
-    <x-page-header 
-        title="Direct Sale (POS)" 
-        description="Over-the-counter spare parts, lubricants, and accessory sales with instant FIFO deduction."
-    />
+    <!-- Compact Top Bar: Title & Status -->
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5">
+            <h1 class="text-lg sm:text-xl font-extrabold text-[#0D1946] tracking-tight m-0">Direct Sale (POS)</h1>
+            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                Terminal Ready
+            </span>
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-500 hidden sm:inline">FIFO Inventory & Sales Billing</span>
+            <a href="{{ route('operations.job-cards.index') }}" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition shadow-2xs">
+                <i class="bi bi-wrench-adjustable text-blue-600"></i> Job Cards
+            </a>
+        </div>
+    </div>
 
-    <!-- Mobile & Tablet View Switcher Tab Bar (< lg) -->
-    <div class="lg:hidden flex items-center p-1 rounded-xl bg-gray-200/90 shadow-2xs">
+    <!-- Mobile Quick Navigation Bar (< lg) -->
+    <div class="lg:hidden flex items-center p-1 rounded-xl bg-gray-200/90 shadow-2xs gap-1">
         <button 
             type="button" 
-            @click="mobileView = 'products'"
-            :class="mobileView === 'products' ? 'bg-[#0B1849] text-white shadow-xs font-bold' : 'text-gray-700 hover:text-gray-900 font-semibold'"
-            class="flex-1 py-2.5 px-3 text-xs rounded-lg transition text-center cursor-pointer flex items-center justify-center space-x-1.5 min-h-[40px]"
+            @click="document.getElementById('pos-catalog-panel')?.scrollIntoView({ behavior: 'smooth' })"
+            class="flex-1 py-2 px-3 text-xs rounded-lg transition text-center cursor-pointer flex items-center justify-center space-x-1.5 min-h-[38px] bg-white text-gray-700 hover:text-gray-900 font-semibold border border-gray-300"
         >
-            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-            </svg>
+            <i class="bi bi-box-seam"></i>
             <span>Products (<span x-text="filteredProducts.length"></span>)</span>
         </button>
 
         <button 
             type="button" 
-            @click="mobileView = 'cart'"
-            :class="mobileView === 'cart' ? 'bg-[#0B1849] text-white shadow-xs font-bold' : 'text-gray-700 hover:text-gray-900 font-semibold'"
-            class="flex-1 py-2.5 px-3 text-xs rounded-lg transition text-center cursor-pointer flex items-center justify-center space-x-1.5 min-h-[40px]"
+            @click="document.getElementById('pos-cart-panel')?.scrollIntoView({ behavior: 'smooth' })"
+            class="flex-1 py-2 px-3 text-xs rounded-lg transition text-center cursor-pointer flex items-center justify-center space-x-1.5 min-h-[38px] bg-[#0D1946] text-white shadow-xs font-bold"
         >
-            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-            <span>Cart (<span x-text="cart.length"></span>)</span>
+            <i class="bi bi-cart3"></i>
+            <span>Go to Cart (<span x-text="cart.length"></span>)</span>
             <template x-if="cart.length > 0">
                 <span class="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-500 text-white font-black" x-text="'LKR ' + grandTotal.toFixed(0)"></span>
             </template>
         </button>
     </div>
 
-    <!-- Split Layout: Desktop side-by-side, Mobile responsive toggle -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+    <!-- ===================================================================
+         MAIN TWO-COLUMN WORKSPACE: LEFT CATALOG (~65%) / RIGHT CART (~35%)
+         =================================================================== -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         
-        <!-- LEFT COLUMN: Product Search & Product Grid (lg:col-span-7) -->
-        <div :class="mobileView === 'products' ? 'block' : 'hidden lg:block'" class="lg:col-span-7 space-y-4">
-            <!-- Search & Filter Banner -->
-            <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
-                <div class="relative">
-                    <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                        <svg class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
+        <!-- LEFT COLUMN: PRODUCT CATALOG (Image 1: 4 columns on large desktop) -->
+        <div id="pos-catalog-panel" class="w-full lg:col-span-7 xl:col-span-8 space-y-3">
+            
+            <!-- Row 1: Search Bar & Grid/List View Toggle -->
+            <div class="flex items-center gap-2">
+                <div class="relative flex-1">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                        <i class="bi bi-search text-sm"></i>
                     </div>
                     <input 
                         type="text" 
-                        x-model="searchTerm"
-                        placeholder="Search product by name, SKU code, or barcode..."
-                        class="block w-full pl-11 pr-4 py-3 text-sm sm:text-base text-gray-900 placeholder-gray-400 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] bg-white min-h-[44px]"
+                        x-model="searchTerm" 
+                        placeholder="Search products by name, SKU, or barcode..." 
+                        class="w-full pl-9 pr-3 py-2 text-xs sm:text-sm text-gray-900 placeholder-gray-400 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D1946] focus:border-[#0D1946] shadow-2xs h-[42px]"
                     >
+                </div>
+
+                <div class="flex bg-white border border-gray-300 rounded-xl p-1 shadow-2xs shrink-0 h-[42px]">
+                    <button 
+                        type="button" 
+                        :class="viewMode === 'grid' ? 'bg-blue-50 text-blue-600 font-bold' : 'text-gray-400 hover:text-gray-700'"
+                        @click="viewMode = 'grid'" 
+                        class="px-2.5 rounded-lg flex items-center justify-center transition cursor-pointer"
+                        title="Grid view"
+                    >
+                        <i class="bi bi-grid-3x3-gap text-base"></i>
+                    </button>
+                    <button 
+                        type="button" 
+                        :class="viewMode === 'list' ? 'bg-blue-50 text-blue-600 font-bold' : 'text-gray-400 hover:text-gray-700'"
+                        @click="viewMode = 'list'" 
+                        class="px-2.5 rounded-lg flex items-center justify-center transition cursor-pointer"
+                        title="List view"
+                    >
+                        <i class="bi bi-list-ul text-base"></i>
+                    </button>
                 </div>
             </div>
 
-            <!-- Products List / Grid -->
-            <div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
-                <div class="px-5 py-3 border-b border-gray-100 bg-slate-50/70 flex items-center justify-between">
-                    <span class="text-xs font-bold uppercase tracking-wider text-gray-500">
-                        Available Products (<span x-text="filteredProducts.length"></span>)
-                    </span>
-                    <span class="text-xs text-gray-400">Total available stock across all active batches</span>
-                </div>
+            <!-- Row 2: Category Filter Buttons (Dynamic with Actual Product Counts) -->
+            <div class="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+                <template x-for="cat in categoryList" :key="cat.key">
+                    <button 
+                        type="button" 
+                        @click="selectedCategory = cat.key"
+                        class="whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0"
+                        :class="selectedCategory === cat.key ? 'bg-[#0D1946] text-white shadow-2xs border border-[#0D1946]' : 'bg-white text-gray-700 border border-gray-200 hover:border-gray-300'"
+                    >
+                        <span x-text="cat.name"></span>
+                        <span 
+                            class="text-[10px] px-1.5 py-0.2 rounded-full font-semibold"
+                            :class="selectedCategory === cat.key ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'"
+                            x-text="cat.count"
+                        ></span>
+                    </button>
+                </template>
+            </div>
 
-                <div class="p-3.5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 max-h-[640px] overflow-y-auto thin-scrollbar">
-                    <template x-for="product in filteredProducts" :key="product.id">
-                        <div 
-                            class="border rounded-xl p-3 flex flex-col justify-between transition hover:shadow-sm" 
-                            :class="product.available_stock > 0 ? 'border-gray-200 bg-white hover:border-[#0B1849]/40' : 'border-gray-100 bg-gray-50/70 opacity-60'"
-                        >
-                            <!-- Top: Image + Info -->
-                            <div>
-                                <!-- 1. Product Image (Aspect fixed, Contain, Fallback graphic) -->
-                                <div class="w-full h-32 bg-slate-50 rounded-lg border border-gray-100 flex items-center justify-center p-2 overflow-hidden relative">
+            <!-- Product Items: GRID VIEW (Image 1: 4 Columns, Compact, Upper-Left Thumbnail) -->
+            <div x-show="viewMode === 'grid'" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                <template x-for="product in filteredProducts" :key="product.id">
+                    <div 
+                        class="bg-white border rounded-xl p-3 flex flex-col justify-between transition hover:shadow-md hover:border-blue-400"
+                        :class="(parseFloat(product.available_stock) || 0) <= 0 ? 'border-gray-200 opacity-70 bg-gray-50/50' : 'border-gray-200'"
+                    >
+                        <div>
+                            <!-- Upper Row: Thumbnail at Left + Name and SKU beside it -->
+                            <div class="flex items-start gap-2.5">
+                                <div class="w-14 h-14 sm:w-16 sm:h-16 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0 overflow-hidden relative">
                                     <template x-if="product.image_url">
                                         <img 
                                             :src="product.image_url" 
                                             :alt="product.name || product.product_name" 
+                                            class="w-full h-full object-contain p-1" 
                                             loading="lazy" 
-                                            class="w-full h-full object-contain"
                                         />
                                     </template>
                                     <template x-if="!product.image_url">
                                         <div class="flex flex-col items-center justify-center text-slate-300">
-                                            <svg class="w-9 h-9 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.25" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                                            </svg>
+                                            <i class="bi bi-box-seam text-xl"></i>
                                         </div>
                                     </template>
                                 </div>
 
-                                <!-- 2. Product Name (Always clearly visible with consistent height) -->
-                                <h4 
-                                    class="text-sm font-bold text-gray-900 leading-snug line-clamp-2 mt-2.5 min-h-[2.5rem]" 
-                                    x-text="product.name || product.product_name"
-                                    :title="product.name || product.product_name"
-                                ></h4>
-
-                                <!-- 3 & 4. Product SKU & Available Stock -->
-                                <div class="mt-1 flex items-center justify-between gap-1 text-[11px]">
-                                    <span class="text-gray-500 font-mono truncate" x-text="'SKU: ' + (product.sku || 'N/A')"></span>
-                                    <span 
-                                        class="px-2 py-0.5 rounded-full font-bold whitespace-nowrap text-[10px]"
-                                        :class="product.available_stock > 0 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'"
-                                        x-text="product.available_stock > 0 ? 'Available: ' + (product.formatted_stock || formatQty(product.available_stock)) : 'Out of stock'"
-                                    ></span>
+                                <div class="flex-1 min-w-0">
+                                    <h4 
+                                        class="text-xs sm:text-[13px] font-bold text-gray-900 leading-snug line-clamp-2 min-h-[2rem]" 
+                                        x-text="product.name || product.product_name"
+                                        :title="product.name || product.product_name"
+                                    ></h4>
+                                    <p class="text-[10.5px] font-mono text-gray-400 mt-0.5 truncate" x-text="'SKU: ' + (product.sku || 'N/A')"></p>
                                 </div>
                             </div>
 
-                            <!-- Bottom: 5. Selling Price & 6. Add Button -->
-                            <div class="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between gap-2">
-                                <div class="min-w-0">
-                                    <span class="text-[10px] text-gray-400 block font-medium uppercase">Price</span>
-                                    <span class="text-sm font-black text-[#0B1849] whitespace-nowrap" x-text="'LKR ' + parseFloat(product.selling_price).toFixed(2)"></span>
+                            <!-- Middle Section: Category Label & Availability Badge -->
+                            <div class="mt-2.5 space-y-1">
+                                <div class="text-[11px] font-medium text-gray-500 truncate" x-text="product.category || 'Spare Parts'"></div>
+                                <div>
+                                    <template x-if="(parseFloat(product.available_stock) || 0) > 0">
+                                        <span class="inline-flex items-center text-[10.5px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/60 rounded px-1.5 py-0.5">
+                                            Available: <span class="ml-1" x-text="product.formatted_stock || formatQty(product.available_stock)"></span>
+                                        </span>
+                                    </template>
+                                    <template x-if="(parseFloat(product.available_stock) || 0) <= 0">
+                                        <span class="inline-flex items-center text-[10.5px] font-bold text-red-700 bg-red-50 border border-red-200/60 rounded px-1.5 py-0.5">
+                                            Out of Stock
+                                        </span>
+                                    </template>
                                 </div>
+                            </div>
+                        </div>
 
+                        <!-- Bottom Section: Price on Left, [+ Add] Button on Right -->
+                        <div class="mt-3 pt-2 border-t border-gray-100 flex items-center justify-between gap-1">
+                            <div>
+                                <span class="text-xs sm:text-sm font-black text-[#0D1946] whitespace-nowrap" x-text="'LKR ' + parseFloat(product.selling_price).toFixed(2)"></span>
+                            </div>
+
+                            <div>
+                                <template x-if="(parseFloat(product.available_stock) || 0) > 0">
+                                    <button 
+                                        type="button" 
+                                        @click="addToCart(product)"
+                                        class="inline-flex items-center justify-center px-2.5 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-lg shadow-2xs transition cursor-pointer"
+                                    >
+                                        <i class="bi bi-plus-lg text-[11px] mr-1"></i> Add
+                                    </button>
+                                </template>
+                                <template x-if="(parseFloat(product.available_stock) || 0) <= 0">
+                                    <button 
+                                        type="button" 
+                                        disabled 
+                                        class="inline-flex items-center justify-center px-2.5 py-1.5 bg-gray-100 text-gray-400 text-xs font-semibold rounded-lg cursor-not-allowed opacity-60"
+                                    >
+                                        Out
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Product Items: LIST VIEW (Compact Row Format) -->
+            <div x-show="viewMode === 'list'" class="space-y-2">
+                <template x-for="product in filteredProducts" :key="product.id">
+                    <div 
+                        class="bg-white border rounded-xl p-2.5 flex items-center justify-between gap-3 transition hover:shadow-sm hover:border-blue-400"
+                        :class="(parseFloat(product.available_stock) || 0) <= 0 ? 'border-gray-200 opacity-70 bg-gray-50/50' : 'border-gray-200'"
+                    >
+                        <div class="flex items-center gap-3 flex-1 min-w-0">
+                            <div class="w-12 h-12 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0 overflow-hidden">
+                                <template x-if="product.image_url">
+                                    <img :src="product.image_url" :alt="product.name" class="w-full h-full object-contain p-1" loading="lazy" />
+                                </template>
+                                <template x-if="!product.image_url">
+                                    <i class="bi bi-box-seam text-slate-300 text-lg"></i>
+                                </template>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <h4 class="text-xs sm:text-sm font-bold text-gray-900 truncate" x-text="product.name || product.product_name" :title="product.name || product.product_name"></h4>
+                                <p class="text-[10.5px] font-mono text-gray-400" x-text="'SKU: ' + (product.sku || 'N/A')"></p>
+                            </div>
+                        </div>
+
+                        <div class="w-36 shrink-0 hidden sm:block">
+                            <div class="text-[11px] font-medium text-gray-500 truncate" x-text="product.category || 'Spare Parts'"></div>
+                            <div>
+                                <template x-if="(parseFloat(product.available_stock) || 0) > 0">
+                                    <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/60 rounded px-1.5 py-0.5">
+                                        Available: <span x-text="product.formatted_stock || formatQty(product.available_stock)"></span>
+                                    </span>
+                                </template>
+                                <template x-if="(parseFloat(product.available_stock) || 0) <= 0">
+                                    <span class="text-[10px] font-bold text-red-700 bg-red-50 border border-red-200/60 rounded px-1.5 py-0.5">
+                                        Out of Stock
+                                    </span>
+                                </template>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-3 shrink-0">
+                            <span class="text-xs sm:text-sm font-black text-[#0D1946] whitespace-nowrap" x-text="'LKR ' + parseFloat(product.selling_price).toFixed(2)"></span>
+                            <template x-if="(parseFloat(product.available_stock) || 0) > 0">
                                 <button 
                                     type="button" 
                                     @click="addToCart(product)"
-                                    :disabled="product.available_stock <= 0"
-                                    class="inline-flex items-center justify-center px-3 py-1.5 bg-[#0B1849] hover:bg-[#15286e] text-white text-xs font-bold rounded-lg shadow-xs transition disabled:opacity-40 min-h-[36px] cursor-pointer shrink-0"
+                                    class="inline-flex items-center justify-center px-3 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-lg shadow-2xs transition cursor-pointer"
                                 >
-                                    <svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                                    </svg>
-                                    Add
+                                    <i class="bi bi-plus-lg text-[11px] mr-1"></i> Add
                                 </button>
-                            </div>
+                            </template>
+                            <template x-if="(parseFloat(product.available_stock) || 0) <= 0">
+                                <button 
+                                    type="button" 
+                                    disabled 
+                                    class="inline-flex items-center justify-center px-3 py-1.5 bg-gray-100 text-gray-400 text-xs font-semibold rounded-lg cursor-not-allowed opacity-60"
+                                >
+                                    Out
+                                </button>
+                            </template>
                         </div>
-                    </template>
-
-                    <template x-if="filteredProducts.length === 0">
-                        <div class="col-span-full py-12 text-center text-gray-400">
-                            <p class="text-sm font-semibold">No matching products found.</p>
-                            <p class="text-xs mt-1">Try another keyword or add products under Suppliers & Inventory.</p>
-                        </div>
-                    </template>
-                </div>
+                    </div>
+                </template>
             </div>
+
+            <!-- Empty State when no products match filter -->
+            <template x-if="filteredProducts.length === 0">
+                <div class="bg-white border border-gray-200 rounded-xl p-8 text-center text-gray-400">
+                    <div class="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2 text-xl">
+                        <i class="bi bi-search"></i>
+                    </div>
+                    <h4 class="font-bold text-gray-700 text-sm m-0">No matching products found</h4>
+                    <p class="text-xs text-gray-500 mt-1">Try another keyword or select All Items.</p>
+                    <button 
+                        type="button" 
+                        @click="searchTerm = ''; selectedCategory = 'all'" 
+                        class="mt-3 px-3 py-1 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100"
+                    >
+                        Reset Filters
+                    </button>
+                </div>
+            </template>
         </div>
 
-        <!-- RIGHT COLUMN (DESKTOP) / CART & PAYMENT PANEL (lg:col-span-5) -->
-        <div id="pos-cart-panel" :class="mobileView === 'cart' ? 'block' : 'hidden lg:block'" class="lg:col-span-5 space-y-4">
-            <div class="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
-                <!-- Cart Header -->
-                <div class="px-5 py-3.5 border-b border-gray-100 bg-[#0B1849] text-white flex items-center justify-between">
-                    <div class="flex items-center space-x-2">
-                        <button 
-                            type="button" 
-                            @click="mobileView = 'products'" 
-                            class="lg:hidden text-xs text-blue-200 hover:text-white flex items-center cursor-pointer font-semibold mr-1"
-                            title="Back to products list"
-                        >
-                            <svg class="w-4 h-4 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                            </svg>
-                            Back
-                        </button>
-                        <svg class="w-5 h-5 text-gray-200 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                        <h3 class="text-sm font-bold uppercase tracking-wider">Sale Cart (<span x-text="cart.length"></span>)</h3>
+        <!-- ===================================================================
+             RIGHT COLUMN: CURRENT SALE CART (Image 1 Exact Design)
+             =================================================================== -->
+        <div id="pos-cart-panel" class="w-full lg:col-span-5 xl:col-span-4">
+            <div class="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+                
+                <!-- 1. Cart Header (Image 1: Dark Navy Background) -->
+                <div class="bg-[#0D1946] text-white px-4 py-3 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <i class="bi bi-cart3 text-base text-blue-200"></i>
+                        <h3 class="text-xs sm:text-sm font-bold uppercase tracking-wider text-white m-0">
+                            Current Sale Cart (<span x-text="cart.length"></span>)
+                        </h3>
                     </div>
                     <button 
                         type="button" 
                         @click="clearCart()" 
                         x-show="cart.length > 0"
-                        class="text-xs text-gray-300 hover:text-white underline cursor-pointer"
+                        class="text-xs text-blue-200 hover:text-white underline cursor-pointer font-medium"
                     >
-                        Clear Cart
+                        Clear All
                     </button>
                 </div>
 
-                <!-- Customer Selection (Optional for Walk-in) -->
-                <div class="p-4 border-b border-gray-100 bg-slate-50/50 space-y-2">
+                <!-- 2. Customer Details (Optional Walk-In by Default) -->
+                <div class="p-3 bg-slate-50/70 border-b border-gray-200 space-y-2">
                     <div class="flex items-center justify-between">
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-gray-700">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-gray-500">
                             Customer Details (Optional)
-                        </label>
-                        <span class="text-[10px] text-gray-500 font-medium">Walk-in by default</span>
+                        </span>
+                        <span class="text-[10px] text-gray-400 font-medium">Walk-in by default</span>
                     </div>
-                    <div class="space-y-2">
+                    <div class="space-y-1.5">
                         <input 
                             type="text" 
                             x-model="customerName"
                             placeholder="Customer Name (optional)"
-                            class="block w-full py-1.5 px-2.5 text-xs text-gray-900 border border-gray-300 rounded-md bg-white min-h-[38px]"
+                            class="block w-full py-1.5 px-2.5 text-xs text-gray-900 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#0D1946] focus:border-[#0D1946] min-h-[34px]"
                         >
-                        <div class="grid grid-cols-2 gap-2">
+                        <div class="grid grid-cols-2 gap-1.5">
                             <input 
                                 type="text" 
                                 x-model="customerPhone"
-                                placeholder="Mobile (e.g. 0771234567)"
-                                class="py-1.5 px-2.5 text-xs text-gray-900 border border-gray-300 rounded-md bg-white min-h-[38px]"
+                                placeholder="Mobile Number"
+                                class="py-1.5 px-2.5 text-xs text-gray-900 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#0D1946] focus:border-[#0D1946] min-h-[34px]"
                             >
                             <input 
                                 type="email" 
                                 x-model="customerEmail"
                                 placeholder="Email Address"
-                                class="py-1.5 px-2.5 text-xs text-gray-900 border border-gray-300 rounded-md bg-white min-h-[38px]"
+                                class="py-1.5 px-2.5 text-xs text-gray-900 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#0D1946] focus:border-[#0D1946] min-h-[34px]"
                             >
                         </div>
                     </div>
                 </div>
 
-                <!-- Cart Items List -->
-                <div class="p-4 max-h-[280px] overflow-y-auto divide-y divide-gray-100 space-y-2 thin-scrollbar">
-                    <template x-for="(item, index) in cart" :key="item.product_id">
-                        <div class="pt-2 first:pt-0 flex items-center justify-between text-xs">
-                            <div class="flex-1 pr-2">
-                                <span class="font-bold text-gray-900 block truncate" x-text="item.name"></span>
-                                <span class="text-[11px] text-gray-500 whitespace-nowrap" x-text="'LKR ' + item.unit_price.toFixed(2) + ' each'"></span>
-                            </div>
+                <!-- 3. Cart Items List (Job Card Compact Row Structure) -->
+                <div class="p-2 space-y-1">
+                    <!-- Empty State -->
+                    <template x-if="cart.length === 0">
+                        <div class="py-8 text-center text-gray-400">
+                            <i class="bi bi-cart3 text-2xl text-slate-300 block mb-1"></i>
+                            <p class="text-xs font-semibold text-gray-600 m-0">Your sale cart is empty</p>
+                            <p class="text-[11px] text-gray-400 mt-0.5">Click <b>+ Add</b> on any product to start a sale.</p>
+                        </div>
+                    </template>
 
-                            <div class="flex items-center space-x-2">
-                                <!-- Quantity modifier buttons -->
-                                <div class="flex items-center border border-gray-200 rounded-md overflow-hidden bg-white">
+                    <!-- Products & Parts Section -->
+                    <div class="lv-cart-group" x-show="cart.length > 0">
+                        <h4>
+                            <span><i class="bi bi-box-seam text-amber-600"></i> Products & Parts (<span x-text="cart.length"></span>)</span>
+                            <span>LKR <span x-text="formatMoney(subtotal)"></span></span>
+                        </h4>
+
+                        <!-- Cart Item Rows (Compact Row Layout matching Job Card) -->
+                        <template x-for="(item, index) in cart" :key="item.product_id">
+                            <div class="lv-line">
+                                <!-- Product Details (Name & SKU underneath) -->
+                                <div class="lv-line-main">
+                                    <div class="lv-line-name" :title="item.name" x-text="item.name"></div>
+                                    <div class="lv-line-tech" x-text="'SKU: ' + (item.sku || 'N/A')"></div>
+                                </div>
+
+                                <!-- Stepper Quantity Controls [-] [qty] [+] -->
+                                <div class="lv-stepper">
                                     <button 
                                         type="button" 
                                         @click="decreaseQty(index)" 
-                                        class="px-2 py-1 text-gray-600 hover:bg-gray-100 font-bold min-h-[30px] min-w-[26px] cursor-pointer"
-                                    >-</button>
-                                    <span class="px-2 text-xs font-bold text-gray-900" x-text="formatQty(item.quantity)"></span>
+                                        class="lv-step-btn" 
+                                        title="Decrease quantity"
+                                    >
+                                        <i class="bi bi-dash"></i>
+                                    </button>
+                                    <span class="lv-step-val" x-text="formatQty(item.quantity)"></span>
                                     <button 
                                         type="button" 
                                         @click="increaseQty(index)" 
-                                        class="px-2 py-1 text-gray-600 hover:bg-gray-100 font-bold min-h-[30px] min-w-[26px] cursor-pointer"
-                                    >+</button>
+                                        class="lv-step-btn" 
+                                        :disabled="(parseFloat(item.available_stock) || 0) <= item.quantity"
+                                        title="Increase quantity"
+                                    >
+                                        <i class="bi bi-plus"></i>
+                                    </button>
                                 </div>
 
-                                <span class="w-24 text-right font-black text-gray-900 whitespace-nowrap" x-text="'LKR ' + item.line_total.toFixed(2)"></span>
+                                <!-- Line Total -->
+                                <div class="lv-line-total" x-text="formatMoney(item.line_total)"></div>
 
+                                <!-- Remove Button -->
                                 <button 
                                     type="button" 
                                     @click="removeFromCart(index)" 
-                                    class="text-gray-400 hover:text-red-600 p-1 cursor-pointer"
-                                    title="Remove"
+                                    class="lv-rm-btn" 
+                                    title="Remove item"
                                 >
-                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
+                                    <i class="bi bi-trash3"></i>
                                 </button>
                             </div>
-                        </div>
-                    </template>
-
-                    <template x-if="cart.length === 0">
-                        <div class="py-10 text-center text-gray-400">
-                            <svg class="mx-auto h-8 w-8 text-gray-300 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                            </svg>
-                            <p class="text-xs font-semibold">Cart is empty</p>
-                            <p class="text-[11px]">Click "Add" on any product to start a sale.</p>
-                        </div>
-                    </template>
+                        </template>
+                    </div>
                 </div>
 
-                <!-- Totals & Payment Section -->
-                <div class="p-4 bg-slate-50 border-t border-gray-200 space-y-3">
+                <!-- 4. Cart Totals & Payment Section (Image 1: Highlighted Strip) -->
+                <div class="p-3.5 bg-slate-50/90 border-t border-gray-200 space-y-2.5">
+                    <!-- Subtotal & Discount -->
                     <div class="space-y-1.5 text-xs text-gray-600">
-                        <div class="flex justify-between">
+                        <div class="flex justify-between items-center">
                             <span>Subtotal:</span>
-                            <span class="font-bold text-gray-900 whitespace-nowrap" x-text="'LKR ' + subtotal.toFixed(2)"></span>
+                            <span class="font-bold text-gray-900" x-text="'LKR ' + formatMoney(subtotal)"></span>
                         </div>
-                        <div class="flex items-center justify-between">
+                        <div class="flex justify-between items-center">
                             <span>Discount (LKR):</span>
                             <input 
                                 type="number" 
                                 step="0.01" 
+                                min="0" 
                                 x-model="discount" 
                                 @input="recalculatePayment()"
-                                class="w-24 text-right py-1 px-2 text-xs border border-gray-300 rounded bg-white font-semibold"
+                                class="w-24 text-right py-1 px-2 text-xs border border-gray-300 rounded bg-white font-bold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#0D1946]"
                             >
-                        </div>
-                        <div class="pt-2 border-t border-gray-200 flex justify-between text-base font-black text-[#0B1849]">
-                            <span>Grand Total:</span>
-                            <span class="whitespace-nowrap" x-text="'LKR ' + grandTotal.toFixed(2)"></span>
                         </div>
                     </div>
 
-                    <!-- Payment Method Picker: Cash, Card, Transfer, Cheque, Credit -->
-                    <div class="pt-2 border-t border-gray-200 space-y-2">
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-gray-700">
+                    <!-- Prominent Highlighted TOTAL AMOUNT Strip -->
+                    <div class="bg-blue-50/80 border border-blue-200/80 rounded-xl px-3 py-2 flex items-center justify-between">
+                        <span class="text-xs font-black text-[#0D1946] tracking-wider uppercase">TOTAL AMOUNT</span>
+                        <span class="text-base font-black text-[#0D1946]" x-text="'LKR ' + formatMoney(grandTotal)"></span>
+                    </div>
+
+                    <!-- 5. Payment Methods (Image 1: Compact Horizontal Buttons) -->
+                    <div class="space-y-1.5 pt-1">
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-500">
                             Payment Method
                         </label>
-                        <div class="grid grid-cols-2 sm:grid-cols-5 gap-1.5 text-xs">
+                        <div class="grid grid-cols-5 gap-1.5">
                             <button 
                                 type="button" 
                                 @click="paymentMethod = 'cash'; recalculatePayment();"
-                                class="py-2 px-1 text-center rounded-lg border font-bold transition cursor-pointer"
-                                :class="paymentMethod === 'cash' ? 'bg-[#0B1849] text-white border-[#0B1849]' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'"
+                                class="py-2 px-1 text-center rounded-lg border font-bold text-xs transition cursor-pointer"
+                                :class="paymentMethod === 'cash' ? 'bg-[#0D1946] text-white border-[#0D1946] shadow-2xs' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'"
                             >Cash</button>
                             <button 
                                 type="button" 
                                 @click="paymentMethod = 'card'; recalculatePayment();"
-                                class="py-2 px-1 text-center rounded-lg border font-bold transition cursor-pointer"
-                                :class="paymentMethod === 'card' ? 'bg-[#0B1849] text-white border-[#0B1849]' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'"
+                                class="py-2 px-1 text-center rounded-lg border font-bold text-xs transition cursor-pointer"
+                                :class="paymentMethod === 'card' ? 'bg-[#0D1946] text-white border-[#0D1946] shadow-2xs' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'"
                             >Card</button>
                             <button 
                                 type="button" 
                                 @click="paymentMethod = 'bank_transfer'; recalculatePayment();"
-                                class="py-2 px-1 text-center rounded-lg border font-bold transition cursor-pointer"
-                                :class="paymentMethod === 'bank_transfer' ? 'bg-[#0B1849] text-white border-[#0B1849]' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'"
+                                class="py-2 px-1 text-center rounded-lg border font-bold text-xs transition cursor-pointer"
+                                :class="paymentMethod === 'bank_transfer' ? 'bg-[#0D1946] text-white border-[#0D1946] shadow-2xs' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'"
                             >Transfer</button>
                             <button 
                                 type="button" 
                                 @click="paymentMethod = 'cheque'; recalculatePayment();"
-                                class="py-2 px-1 text-center rounded-lg border font-bold transition cursor-pointer"
-                                :class="paymentMethod === 'cheque' ? 'bg-[#0B1849] text-white border-[#0B1849]' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'"
+                                class="py-2 px-1 text-center rounded-lg border font-bold text-xs transition cursor-pointer"
+                                :class="paymentMethod === 'cheque' ? 'bg-[#0D1946] text-white border-[#0D1946] shadow-2xs' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'"
                             >Cheque</button>
                             <button 
                                 type="button" 
                                 @click="paymentMethod = 'credit'; amountPaid = 0;"
-                                class="py-2 px-1 text-center rounded-lg border font-bold transition cursor-pointer"
-                                :class="paymentMethod === 'credit' ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'"
+                                class="py-2 px-1 text-center rounded-lg border font-bold text-xs transition cursor-pointer"
+                                :class="paymentMethod === 'credit' ? 'bg-[#0D1946] text-white border-[#0D1946] shadow-2xs' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'"
                             >Credit</button>
                         </div>
                     </div>
 
-                    <!-- Cheque Reference Input (When Cheque) -->
-                    <div x-show="paymentMethod === 'cheque'" class="pt-1">
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-gray-600 mb-1">
+                    <!-- Cheque Reference Input (When Cheque selected) -->
+                    <div x-show="paymentMethod === 'cheque'" class="pt-1" x-transition>
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">
                             Cheque / Bank Reference
                         </label>
                         <input 
                             type="text" 
                             x-model="notes" 
                             placeholder="e.g. CHQ-928103 / Commercial Bank" 
-                            class="block w-full py-2 px-3 text-xs border border-gray-300 rounded-lg bg-white"
+                            class="block w-full py-1.5 px-2.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#0D1946]"
                         >
                     </div>
 
                     <!-- Amount Paid & Change (When Cash / Card / Transfer / Cheque) -->
-                    <div x-show="paymentMethod !== 'credit'" class="space-y-2 pt-1">
+                    <div x-show="paymentMethod !== 'credit'" class="space-y-1 pt-1" x-transition>
                         <div class="flex items-center justify-between text-xs">
-                            <label class="font-bold uppercase tracking-wider text-gray-700">Amount Paid (LKR):</label>
+                            <label class="font-bold text-[10px] uppercase tracking-wider text-gray-600">Amount Paid (LKR):</label>
                             <button 
                                 type="button" 
                                 @click="setExactPayment()"
-                                class="text-[11px] font-semibold text-[#0B1849] hover:underline cursor-pointer"
+                                class="text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
                             >
                                 Exact Amount
                             </button>
@@ -709,21 +1079,21 @@
                             type="number" 
                             step="0.01" 
                             x-model="amountPaid"
-                            class="block w-full py-2.5 px-3 text-base font-extrabold text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white min-h-[44px]"
+                            class="block w-full py-2 px-3 text-sm font-extrabold text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0D1946] bg-white min-h-[38px]"
                         >
-                        <div class="flex justify-between items-center text-xs font-bold pt-1" :class="changeAmount >= 0 ? 'text-emerald-700' : 'text-red-600'">
+                        <div class="flex justify-between items-center text-xs font-bold pt-0.5" :class="changeAmount >= 0 ? 'text-emerald-700' : 'text-red-600'">
                             <span>Change / Balance:</span>
-                            <span class="text-sm font-black whitespace-nowrap" x-text="'LKR ' + changeAmount.toFixed(2)"></span>
+                            <span class="text-xs font-black whitespace-nowrap" x-text="'LKR ' + changeAmount.toFixed(2)"></span>
                         </div>
                     </div>
 
-                    <!-- Complete Sale Submit Button -->
+                    <!-- 6. Complete Sale Button (Image 1: Blue Full-Width) -->
                     <div class="pt-2">
                         <button 
                             type="button" 
                             @click="checkout()"
                             :disabled="cart.length === 0 || isSubmitting"
-                            class="w-full inline-flex items-center justify-center py-3.5 px-4 bg-[#0B1849] hover:bg-[#15286e] text-white font-extrabold text-sm sm:text-base rounded-xl shadow-md transition disabled:opacity-50 cursor-pointer min-h-[48px]"
+                            class="w-full inline-flex items-center justify-center py-3 px-4 bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-extrabold text-sm rounded-xl shadow-md transition disabled:opacity-50 cursor-pointer min-h-[46px]"
                         >
                             <template x-if="isSubmitting">
                                 <span class="inline-flex items-center">
@@ -735,10 +1105,8 @@
                                 </span>
                             </template>
                             <template x-if="!isSubmitting">
-                                <span class="inline-flex items-center">
-                                    <svg class="w-5 h-5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                    </svg>
+                                <span class="inline-flex items-center gap-1.5">
+                                    <i class="bi bi-check2-circle text-base"></i>
                                     Complete Sale & Generate Bill
                                 </span>
                             </template>
@@ -749,26 +1117,26 @@
         </div>
     </div>
 
-    <!-- Mobile Sticky Cart Summary Banner (lg:hidden) -->
+    <!-- Mobile Sticky Cart Summary Banner (When cart has items and not on cart view) -->
     <div 
         x-show="cart.length > 0 && !showSuccessModal && mobileView !== 'cart'" 
-        class="lg:hidden fixed bottom-4 inset-x-4 z-30 bg-[#0B1849] text-white p-3.5 rounded-2xl shadow-2xl flex items-center justify-between border border-white/20 animate-fade-in"
+        class="lg:hidden fixed bottom-4 inset-x-4 z-30 bg-[#0D1946] text-white p-3 rounded-2xl shadow-2xl flex items-center justify-between border border-white/20"
         style="display: none;"
     >
         <div>
-            <span class="text-[11px] font-bold uppercase tracking-wider text-blue-200 block">Sales Cart</span>
-            <span class="text-sm font-black whitespace-nowrap" x-text="cart.length + ' item(s) • LKR ' + grandTotal.toFixed(2)"></span>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-blue-200 block">Sales Cart</span>
+            <span class="text-xs font-black whitespace-nowrap" x-text="cart.length + ' item(s) • LKR ' + grandTotal.toFixed(2)"></span>
         </div>
         <button 
-            type="button"
-            @click="mobileView = 'cart'; window.scrollTo({ top: 0, behavior: 'smooth' })"
-            class="inline-flex items-center px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black rounded-xl shadow-xs transition cursor-pointer"
+            type="button" 
+            @click="mobileView = 'cart'; window.scrollTo({ top: 0, behavior: 'smooth' })" 
+            class="inline-flex items-center px-3.5 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer"
         >
             Checkout &rarr;
         </button>
     </div>
 
-    <!-- Sale Completed Success Modal -->
+    <!-- Sale Completed Success Modal (Preserves all Bill, Thermal Print, Email, WhatsApp, PDF & Next Sale functions) -->
     <div 
         x-show="showSuccessModal" 
         class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
@@ -778,10 +1146,8 @@
             @click.outside="resetSale()"
             class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-w-[calc(100vw-2rem)] p-5 sm:p-6 text-center space-y-4 border border-gray-200 max-h-[90vh] overflow-y-auto"
         >
-            <div class="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
-                <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                </svg>
+            <div class="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-2xl">
+                <i class="bi bi-check-lg"></i>
             </div>
 
             <div>
@@ -793,7 +1159,7 @@
             <div class="bg-slate-50 rounded-xl p-3.5 border border-gray-100 text-xs space-y-2 text-gray-700 text-left">
                 <div class="flex justify-between items-center font-bold">
                     <span class="text-gray-500 uppercase text-[11px]">Bill Number:</span>
-                    <span class="text-[#0B1849] font-mono text-sm font-black" x-text="completedSale?.bill_number || ('#' + (completedSale?.sale_id || ''))"></span>
+                    <span class="text-[#0D1946] font-mono text-sm font-black" x-text="completedSale?.bill_number || ('#' + (completedSale?.sale_id || ''))"></span>
                 </div>
                 <div class="flex justify-between items-center font-semibold">
                     <span class="text-gray-500 uppercase text-[11px]">Total Paid:</span>
@@ -821,17 +1187,15 @@
                 </template>
             </div>
 
-            <!-- Action Buttons: 2-Column Responsive Desktop & Mobile -->
+            <!-- Action Buttons: 2-Column Responsive Grid -->
             <div class="grid grid-cols-2 gap-2 pt-1">
                 <!-- Print Bill -->
                 <button 
                     type="button" 
                     @click="printBill()"
-                    class="inline-flex items-center justify-center px-3 py-2.5 bg-[#0B1849] hover:bg-[#15286e] text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer min-h-[42px]"
+                    class="inline-flex items-center justify-center px-3 py-2.5 bg-[#0D1946] hover:bg-[#172B63] text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer min-h-[40px] gap-1.5"
                 >
-                    <svg class="w-4 h-4 mr-1.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                    </svg>
+                    <i class="bi bi-printer"></i>
                     <span>Print Bill</span>
                 </button>
 
@@ -839,12 +1203,9 @@
                 <a 
                     :href="completedSale?.bill_url || completedSale?.thermal_url" 
                     target="_blank"
-                    class="inline-flex items-center justify-center px-3 py-2.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-bold text-xs rounded-xl shadow-xs transition min-h-[42px]"
+                    class="inline-flex items-center justify-center px-3 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-800 text-xs font-bold rounded-xl shadow-xs transition min-h-[40px] gap-1.5"
                 >
-                    <svg class="w-4 h-4 mr-1.5 shrink-0 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
+                    <i class="bi bi-eye text-gray-500"></i>
                     <span>View Bill</span>
                 </a>
 
@@ -852,12 +1213,10 @@
                 <button 
                     type="button" 
                     @click="openEmailModal()"
-                    class="inline-flex items-center justify-center px-3 py-2.5 border font-bold text-xs rounded-xl shadow-xs transition cursor-pointer min-h-[42px]"
-                    :class="activeShareTab === 'email' ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-50 border-blue-200 hover:bg-blue-100 text-[#0B1849]'"
+                    class="inline-flex items-center justify-center px-3 py-2.5 border text-xs font-bold rounded-xl shadow-xs transition cursor-pointer min-h-[40px] gap-1.5"
+                    :class="activeShareTab === 'email' ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-50 border-blue-200 hover:bg-blue-100 text-[#0D1946]'"
                 >
-                    <svg class="w-4 h-4 mr-1.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
+                    <i class="bi bi-envelope"></i>
                     <span>Email Bill</span>
                 </button>
 
@@ -865,12 +1224,10 @@
                 <button 
                     type="button" 
                     @click="openWhatsAppModal()"
-                    class="inline-flex items-center justify-center px-3 py-2.5 border font-bold text-xs rounded-xl shadow-xs transition cursor-pointer min-h-[42px]"
+                    class="inline-flex items-center justify-center px-3 py-2.5 border text-xs font-bold rounded-xl shadow-xs transition cursor-pointer min-h-[40px] gap-1.5"
                     :class="activeShareTab === 'whatsapp' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-emerald-50 border-emerald-200 hover:bg-emerald-100 text-emerald-800'"
                 >
-                    <svg class="w-4 h-4 mr-1.5 shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
-                    </svg>
+                    <i class="bi bi-whatsapp"></i>
                     <span>WhatsApp</span>
                 </button>
             </div>
@@ -879,13 +1236,11 @@
             <div 
                 x-show="activeShareTab === 'email'" 
                 x-transition 
-                class="bg-blue-50/70 border border-blue-200 rounded-xl p-3.5 text-left space-y-3"
+                class="bg-blue-50/70 border border-blue-200 rounded-xl p-3 text-left space-y-2.5"
             >
                 <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold text-[#0B1849] uppercase tracking-wide flex items-center">
-                        <svg class="w-4 h-4 mr-1 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
+                    <span class="text-xs font-bold text-[#0D1946] uppercase tracking-wide flex items-center gap-1.5">
+                        <i class="bi bi-envelope-paper text-blue-600"></i>
                         Email Sales Bill (PDF Attached)
                     </span>
                     <button type="button" @click="activeShareTab = ''" class="text-gray-400 hover:text-gray-700 text-xs font-bold cursor-pointer">
@@ -899,24 +1254,20 @@
                         type="email" 
                         x-model="emailRecipient" 
                         placeholder="customer@example.com"
-                        class="w-full py-2 px-3 text-xs bg-white border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500"
+                        class="w-full py-1.5 px-3 text-xs bg-white border border-gray-300 rounded-lg text-gray-900 focus:ring-1 focus:ring-blue-500"
                     >
                 </div>
 
                 <template x-if="emailSuccessMessage">
-                    <div class="p-2.5 bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-lg text-xs font-semibold flex items-center">
-                        <svg class="w-4 h-4 mr-1.5 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                        </svg>
+                    <div class="p-2 bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-lg text-xs font-semibold flex items-center gap-1.5">
+                        <i class="bi bi-check-circle-fill text-emerald-600"></i>
                         <span x-text="emailSuccessMessage"></span>
                     </div>
                 </template>
 
                 <template x-if="emailErrorMessage">
-                    <div class="p-2.5 bg-red-100 border border-red-300 text-red-800 rounded-lg text-xs font-semibold flex items-center">
-                        <svg class="w-4 h-4 mr-1.5 text-red-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
+                    <div class="p-2 bg-red-100 border border-red-300 text-red-800 rounded-lg text-xs font-semibold flex items-center gap-1.5">
+                        <i class="bi bi-exclamation-triangle-fill text-red-600"></i>
                         <span x-text="emailErrorMessage"></span>
                     </div>
                 </template>
@@ -926,7 +1277,7 @@
                         type="button" 
                         @click="sendBillEmail()"
                         :disabled="isSendingEmail || !emailRecipient"
-                        class="inline-flex items-center px-4 py-2 bg-[#0B1849] hover:bg-[#15286e] text-white text-xs font-bold rounded-lg shadow-xs transition disabled:opacity-50 cursor-pointer"
+                        class="inline-flex items-center px-3.5 py-1.5 bg-[#0D1946] hover:bg-[#172B63] text-white text-xs font-bold rounded-lg shadow-2xs transition disabled:opacity-50 cursor-pointer gap-1"
                     >
                         <template x-if="isSendingEmail">
                             <span class="inline-flex items-center">
@@ -934,11 +1285,11 @@
                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                 </svg>
-                                Sending PDF Bill...
+                                Sending...
                             </span>
                         </template>
                         <template x-if="!isSendingEmail">
-                            <span>Send Email</span>
+                            <span><i class="bi bi-send"></i> Send Email</span>
                         </template>
                     </button>
                 </div>
@@ -948,13 +1299,11 @@
             <div 
                 x-show="activeShareTab === 'whatsapp'" 
                 x-transition 
-                class="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 text-left space-y-3"
+                class="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3 text-left space-y-2.5"
             >
                 <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold text-emerald-900 uppercase tracking-wide flex items-center">
-                        <svg class="w-4 h-4 mr-1 text-emerald-600" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
-                        </svg>
+                    <span class="text-xs font-bold text-emerald-900 uppercase tracking-wide flex items-center gap-1.5">
+                        <i class="bi bi-whatsapp text-emerald-600"></i>
                         Share via WhatsApp (Manual)
                     </span>
                     <button type="button" @click="activeShareTab = ''" class="text-gray-400 hover:text-gray-700 text-xs font-bold cursor-pointer">
@@ -968,7 +1317,7 @@
                         type="text" 
                         x-model="whatsappRecipientPhone" 
                         placeholder="e.g. 077 123 4567"
-                        class="w-full py-2 px-3 text-xs bg-white border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-emerald-500"
+                        class="w-full py-1.5 px-3 text-xs bg-white border border-gray-300 rounded-lg text-gray-900 focus:ring-1 focus:ring-emerald-500"
                     >
                     <p class="text-[10px] text-gray-500">
                         <template x-if="isValidWhatsAppPhone(whatsappRecipientPhone)">
@@ -991,49 +1340,42 @@
                         <button 
                             type="button" 
                             @click="copyWhatsAppText()"
-                            class="text-emerald-700 hover:underline cursor-pointer"
+                            class="text-emerald-700 hover:underline cursor-pointer font-semibold"
                         >
                             <span x-text="copiedWhatsApp ? 'Copied!' : 'Copy Text'"></span>
                         </button>
                     </div>
                     <textarea 
                         x-model="whatsappMessageText" 
-                        rows="6" 
+                        rows="4" 
                         class="w-full p-2 text-[11px] bg-white border border-gray-200 rounded-lg font-mono text-gray-800"
                     ></textarea>
                 </div>
 
-                <!-- Manual Sending Info Note -->
                 <p class="text-[10.5px] text-gray-500 italic">
-                    Note: WhatsApp click-to-chat opens WhatsApp Web or App with the prefilled message. Cashier must review and manually press Send.
+                    Note: WhatsApp click-to-chat opens WhatsApp Web or App with prefilled text. Cashier can review and press Send.
                 </p>
 
                 <!-- Action Buttons in WhatsApp Drawer -->
                 <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-emerald-200">
-                    <!-- Download Bill PDF for manual WhatsApp attachment -->
                     <a 
                         :href="completedSale?.pdf_url" 
                         download
-                        class="inline-flex items-center px-3 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-semibold rounded-lg shadow-2xs transition"
+                        class="inline-flex items-center px-2.5 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-semibold rounded-lg shadow-2xs gap-1"
                         title="Download PDF to manually attach in WhatsApp"
                     >
-                        <svg class="w-3.5 h-3.5 mr-1 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        Download Bill PDF
+                        <i class="bi bi-file-earmark-pdf"></i>
+                        <span>Download PDF</span>
                     </a>
 
-                    <!-- Open in WhatsApp Button -->
                     <button 
                         type="button" 
                         @click="openWhatsApp()"
                         :disabled="!isValidWhatsAppPhone(whatsappRecipientPhone)"
-                        class="inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition disabled:opacity-40 cursor-pointer"
+                        class="inline-flex items-center px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-2xs transition disabled:opacity-40 cursor-pointer gap-1"
                     >
-                        <svg class="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
-                        </svg>
-                        Open in WhatsApp &rarr;
+                        <i class="bi bi-whatsapp"></i>
+                        <span>Open WhatsApp &rarr;</span>
                     </button>
                 </div>
             </div>
@@ -1043,9 +1385,10 @@
                 <button 
                     type="button" 
                     @click="resetSale()"
-                    class="w-full inline-flex items-center justify-center px-4 py-2 text-xs font-semibold text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-xl transition cursor-pointer"
+                    class="w-full py-2.5 px-3 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
                 >
-                    + Start Next Sale
+                    <i class="bi bi-plus-circle"></i>
+                    <span>Start Next Sale</span>
                 </button>
             </div>
         </div>

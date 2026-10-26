@@ -69,7 +69,52 @@
                 Multiple Invoice Payment
             </a>
         </div>
-    </div>
+    <!-- Instant Payment Receipt & Updated Bill Print Alert -->
+    @if(session('recent_payment_id'))
+        @php
+            $recentPayment = \App\Models\Payment::with(['invoice.jobCard'])->find(session('recent_payment_id'));
+        @endphp
+        @if($recentPayment)
+            <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm text-emerald-900 shadow-xs">
+                <div class="flex items-center space-x-2">
+                    <svg class="w-5 h-5 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>Payment of <strong>LKR {{ number_format($recentPayment->amount, 2) }}</strong> recorded successfully (Receipt #{{ $recentPayment->payment_number }}).
+                        @if($recentPayment->invoice)
+                            New Balance: <strong>LKR {{ number_format($recentPayment->invoice->balance_amount, 2) }}</strong>
+                        @endif
+                    </span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <a 
+                        href="{{ route('billing.payments.thermal', $recentPayment) }}" 
+                        @click.prevent="AutoCarePrinter.printUrl('{{ route('billing.payments.thermal', $recentPayment) }}', { type: 'payment_receipt', title: 'Payment Receipt #{{ $recentPayment->payment_number }}', documentId: {{ $recentPayment->id }}, documentNumber: '{{ $recentPayment->payment_number }}', fallbackUrl: '{{ route('billing.payments.thermal', $recentPayment) }}' })"
+                        class="inline-flex items-center px-3.5 py-1.5 bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-100 font-bold text-xs rounded-lg shadow-2xs transition"
+                        title="Print 80mm Payment Receipt"
+                    >
+                        <svg class="w-4 h-4 mr-1.5 text-emerald-700 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                        </svg>
+                        Print Receipt
+                    </a>
+                    @if($recentPayment->invoice?->job_card_id)
+                        <a 
+                            href="{{ route('operations.job-cards.print-bill', $recentPayment->invoice->job_card_id) }}" 
+                            @click.prevent="AutoCarePrinter.printUrl('{{ route('operations.job-cards.print-bill', $recentPayment->invoice->job_card_id) }}', { type: 'bill', title: 'Sales Bill #{{ $recentPayment->invoice->jobCard?->job_number }}', documentId: {{ $recentPayment->invoice->job_card_id }}, documentNumber: '{{ $recentPayment->invoice->jobCard?->job_number }}', fallbackUrl: '{{ route('operations.job-cards.print-bill', $recentPayment->invoice->job_card_id) }}' })"
+                            class="inline-flex items-center px-3.5 py-1.5 bg-[#0B1849] text-white hover:bg-[#15286e] font-bold text-xs rounded-lg shadow-2xs transition"
+                            title="Print Updated 80mm Sales Bill"
+                        >
+                            <svg class="w-4 h-4 mr-1.5 text-white shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Print Updated Bill
+                        </a>
+                    @endif
+                </div>
+            </div>
+        @endif
+    @endif
 
     <!-- Stats Bar -->
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -304,6 +349,20 @@
                                     </a>
                                 @endif
 
+                                @if($inv->job_card_id)
+                                    <a 
+                                        href="{{ route('operations.job-cards.print-bill', $inv->job_card_id) }}" 
+                                        @click.prevent="AutoCarePrinter.printUrl('{{ route('operations.job-cards.print-bill', $inv->job_card_id) }}', { type: 'bill', title: 'Sales Bill #{{ $inv->jobCard?->job_number }}', documentId: {{ $inv->job_card_id }}, documentNumber: '{{ $inv->jobCard?->job_number }}', fallbackUrl: '{{ route('operations.job-cards.print-bill', $inv->job_card_id) }}' })"
+                                        class="inline-flex items-center px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg transition min-h-[36px]"
+                                        title="Print 80mm Sales Bill"
+                                    >
+                                        <svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                        </svg>
+                                        Print Bill
+                                    </a>
+                                @endif
+
                                 <a 
                                     href="{{ route('operations.invoices.show', $inv) }}" 
                                     class="inline-flex items-center px-2 py-1.5 text-gray-500 hover:text-gray-900 transition" 
@@ -498,6 +557,7 @@
                             <option value="card">Card</option>
                             <option value="bank_transfer">Bank Transfer</option>
                             <option value="cheque">Cheque</option>
+                            <option value="credit">Company Credit (Authorized Account)</option>
                         </select>
                     </div>
 
