@@ -1773,7 +1773,7 @@
                                 </form>
                             </div>
                         @endif
-                        @if(Auth::user()->isAdmin() && in_array($status, ['completed', 'delivered']))
+                        @if(Auth::user()?->isAdmin() && in_array($status, ['completed', 'delivered']))
                             <div class="py-1">
                                 <button 
                                     type="button" 
@@ -2417,77 +2417,39 @@
                             <div class="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-center text-xs text-emerald-800 font-bold flex items-center justify-center gap-1.5">
                                 <i class="bi bi-check-circle-fill text-emerald-600"></i> Job completed successfully.
                             </div>
-
-                            <!-- FIRST ROW: Print Job — Full Width (Dark navy background #0B1849, White text, Printer icon) -->
-                            <button 
-                                type="button" 
-                                @click="printJobCard()" 
-                                class="lv-btn lv-btn-brand main-action-btn shadow-xs justify-center" 
-                                title="Print Full Job Card"
-                            >
-                                <i class="bi bi-printer"></i>
-                                <span>Print Job</span>
-                            </button>
-
-                            <!-- SECOND ROW: Print Selected — Full Width (Existing outlined styling) -->
-                            <button 
-                                type="button" 
-                                @click="printSelectedItems()" 
-                                class="lv-btn lv-btn-soft main-action-btn shadow-xs justify-center" 
-                                title="Print Checked Items"
-                            >
-                                <i class="bi bi-check2-square text-indigo-600"></i>
-                                <span>Print Selected</span>
-                            </button>
-
-                            <!-- THIRD ROW: + Add Job — Full Width (Green background, White text, Single plus icon) -->
-                            <a 
-                                href="{{ route('operations.vehicles.index', ['search' => $vehicle?->vehicle_number]) }}" 
-                                class="lv-btn lv-btn-success main-action-btn shadow-xs justify-center"
-                                title="Add new job card for {{ $vehicle?->vehicle_number }}"
-                            >
-                                <i class="bi bi-plus-lg"></i>
-                                <span>Add Job</span>
-                            </a>
-                        @else
-                            <!-- Row 1: Print Job — Full Width (Large, Navy #0B1849) -->
-                            <button 
-                                type="button" 
-                                @click="printJobCard()" 
-                                class="lv-btn lv-btn-brand main-action-btn shadow-xs justify-center" 
-                                title="Print Full Job Card"
-                            >
-                                <i class="bi bi-printer"></i>
-                                <span>Print Job</span>
-                            </button>
-
-                            <!-- Row 2: Equal-Width Buttons [ Print Selected ] [ Complete Job ] -->
-                            <div class="lv-mini-grid">
-                                <button 
-                                    type="button" 
-                                    @click="printSelectedItems()" 
-                                    class="lv-btn lv-btn-soft lv-btn-sm justify-center w-full" 
-                                    title="Print Checked Items"
-                                >
-                                    <i class="bi bi-check2-square text-indigo-600"></i>
-                                    <span>Print Selected</span>
-                                </button>
-
-                                <form action="{{ route('operations.job-cards.status', $jobCard) }}" method="POST" class="w-full h-full m-0 p-0 flex" @submit.prevent="submitCompleteJob($event)">
-                                    @csrf
-                                    @method('PATCH')
-                                    <input type="hidden" name="action" value="complete_job">
-                                    <button 
-                                        type="submit" 
-                                        class="lv-btn lv-btn-success lv-btn-sm shadow-xs justify-center w-full h-full"
-                                        title="Complete Job"
-                                    >
-                                        <i class="bi bi-check2-circle"></i>
-                                        <span>Complete Job</span>
-                                    </button>
-                                </form>
-                            </div>
                         @endif
+
+                        <!-- 1. Print Job — Full Width (Navy Blue) -->
+                        <button 
+                            type="button" 
+                            @click="printJobCard()" 
+                            class="lv-btn lv-btn-brand main-action-btn shadow-xs justify-center" 
+                            title="Print Full Job Card"
+                        >
+                            <i class="bi bi-printer"></i>
+                            <span>Print Job</span>
+                        </button>
+
+                        <!-- 2. Print Selected — Full Width (White / Outlined) -->
+                        <button 
+                            type="button" 
+                            @click="printSelectedItems()" 
+                            class="lv-btn lv-btn-soft main-action-btn shadow-xs justify-center" 
+                            title="Print Checked Items"
+                        >
+                            <i class="bi bi-check2-square text-indigo-600"></i>
+                            <span>Print Selected</span>
+                        </button>
+
+                        <!-- 3. Add New Job — Full Width (Green) -->
+                        <a 
+                            href="{{ route('operations.vehicles.index') }}" 
+                            class="lv-btn lv-btn-success main-action-btn shadow-xs justify-center"
+                            title="Add New Job"
+                        >
+                            <i class="bi bi-plus-lg"></i>
+                            <span>Add New Job</span>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -2620,7 +2582,7 @@
             <div class="lv-cart-foot">
                 <div class="lv-tot">
                     <div class="grand">
-                        <span>Grand Total</span>
+                        <span>Job Total</span>
                         <b>LKR <span x-text="formatMoney(totals.grand_total)"></span></b>
                     </div>
                 </div>
@@ -2629,77 +2591,39 @@
                         <div class="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-center text-xs text-emerald-800 font-bold flex items-center justify-center gap-1.5">
                             <i class="bi bi-check-circle-fill text-emerald-600"></i> Job completed successfully.
                         </div>
-
-                        <!-- FIRST ROW: Print Job — Full Width (Dark navy background #0B1849, White text, Printer icon) -->
-                        <button 
-                            type="button" 
-                            @click="printJobCard()" 
-                            class="lv-btn lv-btn-brand main-action-btn shadow-xs justify-center" 
-                            title="Print Full Job Card"
-                        >
-                            <i class="bi bi-printer"></i>
-                            <span>Print Job</span>
-                        </button>
-
-                        <!-- SECOND ROW: Print Selected — Full Width (Existing outlined styling) -->
-                        <button 
-                            type="button" 
-                            @click="printSelectedItems()" 
-                            class="lv-btn lv-btn-soft main-action-btn shadow-xs justify-center" 
-                            title="Print Checked Items"
-                        >
-                            <i class="bi bi-check2-square text-indigo-600"></i>
-                            <span>Print Selected</span>
-                        </button>
-
-                        <!-- THIRD ROW: + Add Job — Full Width (Green background, White text, Single plus icon) -->
-                        <a 
-                            href="{{ route('operations.vehicles.index', ['search' => $vehicle?->vehicle_number]) }}" 
-                            class="lv-btn lv-btn-success main-action-btn shadow-xs justify-center"
-                            title="Add new job card for {{ $vehicle?->vehicle_number }}"
-                        >
-                            <i class="bi bi-plus-lg"></i>
-                            <span>Add Job</span>
-                        </a>
-                    @else
-                        <!-- Row 1: Print Job — Full Width (Large, Navy #0B1849) -->
-                        <button 
-                            type="button" 
-                            @click="printJobCard()" 
-                            class="lv-btn lv-btn-brand main-action-btn shadow-xs justify-center" 
-                            title="Print Full Job Card"
-                        >
-                            <i class="bi bi-printer"></i>
-                            <span>Print Job</span>
-                        </button>
-
-                        <!-- Row 2: Equal-Width Buttons [ Print Selected ] [ Complete Job ] -->
-                        <div class="lv-mini-grid">
-                            <button 
-                                type="button" 
-                                @click="printSelectedItems()" 
-                                class="lv-btn lv-btn-soft lv-btn-sm justify-center w-full" 
-                                title="Print Checked Items"
-                            >
-                                <i class="bi bi-check2-square text-indigo-600"></i>
-                                <span>Print Selected</span>
-                            </button>
-
-                            <form action="{{ route('operations.job-cards.status', $jobCard) }}" method="POST" class="w-full h-full m-0 p-0 flex" @submit.prevent="submitCompleteJob($event)">
-                                @csrf
-                                @method('PATCH')
-                                <input type="hidden" name="action" value="complete_job">
-                                <button 
-                                    type="submit" 
-                                    class="lv-btn lv-btn-success lv-btn-sm shadow-xs justify-center w-full h-full"
-                                    title="Complete Job"
-                                >
-                                    <i class="bi bi-check2-circle"></i>
-                                    <span>Complete Job</span>
-                                </button>
-                            </form>
-                        </div>
                     @endif
+
+                    <!-- 1. Print Job — Full Width (Navy Blue) -->
+                    <button 
+                        type="button" 
+                        @click="printJobCard()" 
+                        class="lv-btn lv-btn-brand main-action-btn shadow-xs justify-center" 
+                        title="Print Full Job Card"
+                    >
+                        <i class="bi bi-printer"></i>
+                        <span>Print Job</span>
+                    </button>
+
+                    <!-- 2. Print Selected — Full Width (White / Outlined) -->
+                    <button 
+                        type="button" 
+                        @click="printSelectedItems()" 
+                        class="lv-btn lv-btn-soft main-action-btn shadow-xs justify-center" 
+                        title="Print Checked Items"
+                    >
+                        <i class="bi bi-check2-square text-indigo-600"></i>
+                        <span>Print Selected</span>
+                    </button>
+
+                    <!-- 3. Add New Job — Full Width (Green) -->
+                    <a 
+                        href="{{ route('operations.vehicles.index') }}" 
+                        class="lv-btn lv-btn-success main-action-btn shadow-xs justify-center"
+                        title="Add New Job"
+                    >
+                        <i class="bi bi-plus-lg"></i>
+                        <span>Add New Job</span>
+                    </a>
                 </div>
             </div>
         </div>
@@ -3029,7 +2953,7 @@
     </div>
 
     <!-- MODAL 8: MANAGE COMPLETED JOB (ADMIN ONLY) -->
-    @if(Auth::user()->isAdmin() && in_array($status, ['completed', 'delivered']))
+    @if(Auth::user()?->isAdmin() && in_array($status, ['completed', 'delivered']))
     <div x-show="showDeleteJobModal" x-transition class="lv-modal-overlay" style="display: none;">
         <div class="lv-modal-content max-w-lg" @click.stop>
             <div class="px-6 py-4 border-b flex items-center justify-between rounded-t-2xl transition-colors duration-150" :class="manageAction === 'recreate_for_editing' ? 'bg-blue-50/80 border-blue-100' : 'bg-red-50/80 border-red-100'">

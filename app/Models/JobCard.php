@@ -128,19 +128,22 @@ class JobCard extends Model
      */
     public function getResolvedInvoice(): ?Invoice
     {
-        if ($this->invoice_id && $this->relationLoaded('invoice') && $this->invoice) {
+        if ($this->invoice_id && $this->relationLoaded('invoice') && $this->invoice && $this->invoice->status !== 'cancelled') {
             return $this->invoice;
         }
 
         if ($this->invoice_id) {
             $invoice = Invoice::find($this->invoice_id);
-            if ($invoice) {
+            if ($invoice && $invoice->status !== 'cancelled') {
                 return $invoice;
             }
         }
 
-        // Check whether an invoice already exists for the job_card_id
-        $found = Invoice::where('job_card_id', $this->id)->latest('id')->first();
+        // Check whether an active invoice already exists for the job_card_id
+        $found = Invoice::where('job_card_id', $this->id)
+            ->where('status', '!=', 'cancelled')
+            ->latest('id')
+            ->first();
         if ($found) {
             // Safely repair the missing foreign key link
             if (! $this->invoice_id) {

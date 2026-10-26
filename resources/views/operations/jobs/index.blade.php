@@ -186,7 +186,7 @@
                                             Complete Job
                                         </button>
                                     @elseif(in_array($job->status, ['completed', 'delivered']))
-                                        @if(Auth::user()->isAdmin())
+                                        @if(Auth::user()?->isAdmin())
                                             <button 
                                                 type="button" 
                                                 @click="openDeleteModal({
@@ -311,7 +311,7 @@
                                 Complete Job
                             </button>
                         @elseif(in_array($job->status, ['completed', 'delivered']))
-                            @if(Auth::user()->isAdmin())
+                            @if(Auth::user()?->isAdmin())
                                 <button 
                                     type="button" 
                                     @click="openDeleteModal({
@@ -471,7 +471,8 @@
         </div>
     </div>
 
-    <!-- Permanently Delete Job Confirmation Modal -->
+    <!-- Permanently Delete Job Confirmation Modal (Admin Only) -->
+    @if(Auth::user()?->isAdmin())
     <div 
         x-show="showDeleteModal" 
         x-cloak
@@ -668,4 +669,5 @@
             </div>
     </div>
 </div>
+@endif
 @endsection

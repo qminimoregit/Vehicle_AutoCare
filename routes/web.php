@@ -183,8 +183,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/job-cards/{jobCard}/print', [JobCardController::class, 'print'])->name('job-cards.print');
         Route::get('/job-cards/{jobCard}/pdf', [JobCardController::class, 'downloadPdf'])->name('job-cards.pdf');
         Route::put('/job-cards/{jobCard}', [JobCardController::class, 'update'])->name('job-cards.update');
-        Route::delete('/job-cards/{jobCard}', [JobCardController::class, 'destroy'])->name('job-cards.destroy');
-        Route::post('/job-cards/{jobCard}/manage', [JobCardController::class, 'manageCompletedJob'])->name('job-cards.manage');
+        Route::delete('/job-cards/{jobCard}', [JobCardController::class, 'destroy'])->name('job-cards.destroy')->middleware('admin');
+        Route::post('/job-cards/{jobCard}/manage', [JobCardController::class, 'manageCompletedJob'])->name('job-cards.manage')->middleware('admin');
         Route::patch('/job-cards/{jobCard}/carpets', [JobCardController::class, 'updateCarpets'])->name('job-cards.carpets.update');
         Route::patch('/job-cards/{jobCard}/status', [JobCardController::class, 'updateStatus'])->name('job-cards.status');
         Route::post('/job-cards/{jobCard}/cancel', [JobCardController::class, 'cancel'])->name('job-cards.cancel');

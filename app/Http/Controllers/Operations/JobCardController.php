@@ -1171,21 +1171,7 @@ class JobCardController extends Controller
                         return $existingInvoice;
                     }
 
-                    // Query any unallocated recorded advances for this job card
-                    $advances = Payment::where('job_card_id', $lockedJobCard->id)
-                        ->whereNull('invoice_id')
-                        ->where('status', 'completed')
-                        ->get();
-
-                    $totalAdvances = (float) $advances->sum('amount');
                     $grandTotal = (float) $lockedJobCard->grand_total;
-                    $appliedAdvance = min($grandTotal, $totalAdvances);
-                    $balanceAmount = max(0, round($grandTotal - $appliedAdvance, 2));
-
-                    $status = ($balanceAmount <= 0.0001)
-                        ? 'paid'
-                        : ($appliedAdvance > 0 ? 'partially_paid' : 'issued');
-
                     $invoiceNumber = InvoiceNumberService::generateNextInvoiceNumber();
 
                     $customerSnapshot = [
@@ -1211,9 +1197,9 @@ class JobCardController extends Controller
                         'discount_amount' => $lockedJobCard->discount_amount,
                         'tax_amount' => $lockedJobCard->tax_amount,
                         'grand_total' => $grandTotal,
-                        'amount_paid' => $appliedAdvance,
-                        'balance_amount' => $balanceAmount,
-                        'status' => $status,
+                        'amount_paid' => 0.00,
+                        'balance_amount' => $grandTotal,
+                        'status' => 'issued',
                         'customer_snapshot' => $customerSnapshot,
                         'created_by' => Auth::id(),
                     ]);
@@ -1249,12 +1235,8 @@ class JobCardController extends Controller
                         ]);
                     }
 
-                    // Allocate/link recorded advances to this final invoice
-                    Payment::where('job_card_id', $lockedJobCard->id)
-                        ->whereNull('invoice_id')
-                        ->update([
-                            'invoice_id' => $invoice->id,
-                        ]);
+                    // Automatically apply any recorded job advances
+                    $this->applyJobAdvancesToInvoice($lockedJobCard, $invoice, $grandTotal);
 
                     // Link invoice to job card
                     $lockedJobCard->update(['invoice_id' => $invoice->id]);
@@ -1425,7 +1407,7 @@ class JobCardController extends Controller
                 // Lock the job card row to prevent concurrent race conditions
                 $lockedJobCard = JobCard::where('id', $jobCard->id)->lockForUpdate()->firstOrFail();
 
-                if ($lockedJobCard->invoice_id && $lockedJobCard->invoice) {
+                if ($lockedJobCard->invoice_id && $lockedJobCard->invoice && $lockedJobCard->invoice->status !== 'cancelled') {
                     return redirect()->route('operations.invoices.show', $lockedJobCard->invoice);
                 }
 
@@ -1439,21 +1421,7 @@ class JobCardController extends Controller
                     return redirect()->route('operations.invoices.show', $existingUnderLock);
                 }
 
-                // Query unallocated recorded advances for this job card
-                $advances = Payment::where('job_card_id', $lockedJobCard->id)
-                    ->whereNull('invoice_id')
-                    ->where('status', 'completed')
-                    ->get();
-
-                $totalAdvances = (float) $advances->sum('amount');
                 $grandTotal = (float) $lockedJobCard->grand_total;
-                $appliedAdvance = min($grandTotal, $totalAdvances);
-                $balanceAmount = max(0, round($grandTotal - $appliedAdvance, 2));
-
-                $status = ($balanceAmount <= 0.0001)
-                    ? 'paid'
-                    : ($appliedAdvance > 0 ? 'partially_paid' : 'issued');
-
                 $invoiceNumber = InvoiceNumberService::generateNextInvoiceNumber();
 
                 $customerSnapshot = [
@@ -1479,9 +1447,9 @@ class JobCardController extends Controller
                     'discount_amount' => $lockedJobCard->discount_amount,
                     'tax_amount' => $lockedJobCard->tax_amount,
                     'grand_total' => $grandTotal,
-                    'amount_paid' => $appliedAdvance,
-                    'balance_amount' => $balanceAmount,
-                    'status' => $status,
+                    'amount_paid' => 0.00,
+                    'balance_amount' => $grandTotal,
+                    'status' => 'issued',
                     'customer_snapshot' => $customerSnapshot,
                     'created_by' => Auth::id(),
                 ]);
@@ -1517,12 +1485,8 @@ class JobCardController extends Controller
                     ]);
                 }
 
-                // Allocate/link recorded advances to this final invoice
-                Payment::where('job_card_id', $lockedJobCard->id)
-                    ->whereNull('invoice_id')
-                    ->update([
-                        'invoice_id' => $invoice->id,
-                    ]);
+                // Automatically apply recorded advances to this final invoice
+                $advanceSummary = $this->applyJobAdvancesToInvoice($lockedJobCard, $invoice, $grandTotal);
 
                 // Link invoice to job card and items
                 $lockedJobCard->update(['invoice_id' => $invoice->id]);
@@ -1531,8 +1495,11 @@ class JobCardController extends Controller
                 $lockedJobCard->issues()->where('status', 'approved')->update(['status' => 'fixed']);
 
                 $successMsg = "Invoice #{$invoice->invoice_number} generated for Job #{$lockedJobCard->job_number}.";
-                if ($appliedAdvance > 0) {
-                    $successMsg .= ' LKR '.number_format($appliedAdvance, 2).' advance payment applied.';
+                if ($advanceSummary['applied_advance'] > 0) {
+                    $successMsg .= ' LKR '.number_format($advanceSummary['applied_advance'], 2).' advance payment applied.';
+                }
+                if ($advanceSummary['excess_credit'] > 0) {
+                    $successMsg .= ' LKR '.number_format($advanceSummary['excess_credit'], 2).' retained as unapplied customer credit.';
                 }
 
                 return redirect()->route('operations.invoices.show', $invoice)
@@ -2187,11 +2154,15 @@ class JobCardController extends Controller
     }
 
     /**
-    /**
      * Manage completed Job Card: Option 1 (Permanently Delete) or Option 2 (Recreate Job for Editing).
      */
     public function destroy(Request $request, JobCard $jobCard): RedirectResponse
     {
+        $user = $request->user();
+        if (! $user || ! $user->isAdmin()) {
+            abort(403, 'Unauthorized. Only administrators can delete Job Cards.');
+        }
+
         return $this->manageCompletedJob($request, $jobCard);
     }
 
@@ -2200,9 +2171,9 @@ class JobCardController extends Controller
      */
     public function manageCompletedJob(Request $request, JobCard $jobCard): RedirectResponse
     {
-        $user = Auth::user();
+        $user = $request->user();
         if (! $user || ! $user->isAdmin()) {
-            return back()->with('error', 'You do not have permission to manage completed jobs.');
+            abort(403, 'Unauthorized. Only administrators can delete or recreate Job Cards.');
         }
 
         $validated = $request->validate([
@@ -2237,14 +2208,120 @@ class JobCardController extends Controller
         return $this->permanentlyDeleteJob($request, $jobCard, $reason, $explanation, $user);
     }
 
+    /**
+     * Automatically allocate available unallocated advances from the Job Card to the newly generated invoice.
+     * If total advances exceed the new invoice grand total (Example B), the excess amount is preserved
+     * as an unapplied customer credit balance (not tied to this invoice or job card) without issuing any physical refund.
+     *
+     * @return array{applied_advance: float, remaining_balance: float, excess_credit: float, payment_status: string}
+     */
+    protected function applyJobAdvancesToInvoice(JobCard $jobCard, Invoice $invoice, float $grandTotal): array
+    {
+        $advances = Payment::where('job_card_id', $jobCard->id)
+            ->whereNull('invoice_id')
+            ->where('status', 'completed')
+            ->orderBy('id', 'asc')
+            ->lockForUpdate()
+            ->get();
+
+        $totalAdvances = round((float) $advances->sum('amount'), 2);
+        $appliedAdvance = min($grandTotal, $totalAdvances);
+        $excessCredit = max(0, round($totalAdvances - $grandTotal, 2));
+        $remainingBalance = max(0, round($grandTotal - $appliedAdvance, 2));
+
+        $remainingToApply = $appliedAdvance;
+
+        foreach ($advances as $adv) {
+            if ($remainingToApply <= 0.0001) {
+                // Unapplied excess credit: detach from job card to become general customer credit balance
+                $adv->update([
+                    'invoice_id' => null,
+                    'job_card_id' => null,
+                    'customer_id' => $jobCard->customer_id,
+                    'is_advance' => true,
+                    'status' => 'completed',
+                    'notes' => trim(($adv->notes ?? '')." [Unapplied customer credit - excess from Job #{$jobCard->job_number}]"),
+                ]);
+
+                continue;
+            }
+
+            $advAmt = (float) $adv->amount;
+
+            if ($advAmt <= $remainingToApply + 0.0001) {
+                $adv->update([
+                    'invoice_id' => $invoice->id,
+                    'job_card_id' => $jobCard->id,
+                    'is_advance' => true,
+                    'status' => 'completed',
+                    'notes' => trim(($adv->notes ?? '')." [Applied to Invoice #{$invoice->invoice_number}]"),
+                ]);
+                $remainingToApply = max(0, round($remainingToApply - $advAmt, 2));
+            } else {
+                // Split payment: part covers the remainder of this invoice, part remains unapplied customer credit
+                $applyAmt = $remainingToApply;
+                $excessAmt = round($advAmt - $applyAmt, 2);
+                $origPaymentNumber = $adv->payment_number;
+
+                $adv->update([
+                    'amount' => $applyAmt,
+                    'invoice_id' => $invoice->id,
+                    'job_card_id' => $jobCard->id,
+                    'is_advance' => true,
+                    'status' => 'completed',
+                    'notes' => trim(($adv->notes ?? '').' [Applied LKR '.number_format($applyAmt, 2)." to Invoice #{$invoice->invoice_number} (Split from #{$origPaymentNumber})]"),
+                ]);
+
+                Payment::create([
+                    'invoice_id' => null,
+                    'job_card_id' => null,
+                    'customer_id' => $jobCard->customer_id,
+                    'payment_receipt_id' => $adv->payment_receipt_id,
+                    'payment_number' => Payment::generatePaymentNumber(),
+                    'payment_date' => $adv->payment_date,
+                    'amount' => $excessAmt,
+                    'payment_method' => $adv->payment_method,
+                    'reference_number' => $adv->reference_number ?? $origPaymentNumber,
+                    'notes' => 'Unapplied customer credit (Excess of LKR '.number_format($excessAmt, 2)." from Job #{$jobCard->job_number} after Invoice #{$invoice->invoice_number}. Orig Payment #{$origPaymentNumber})",
+                    'is_advance' => true,
+                    'status' => 'completed',
+                    'created_by' => $adv->created_by,
+                ]);
+
+                $remainingToApply = 0.00;
+            }
+        }
+
+        $paymentStatus = ($remainingBalance <= 0.0001)
+            ? 'paid'
+            : ($appliedAdvance > 0 ? 'partially_paid' : 'issued');
+
+        $invoice->update([
+            'amount_paid' => $appliedAdvance,
+            'balance_amount' => $remainingBalance,
+            'status' => $paymentStatus,
+        ]);
+
+        return [
+            'applied_advance' => $appliedAdvance,
+            'remaining_balance' => $remainingBalance,
+            'excess_credit' => $excessCredit,
+            'payment_status' => $paymentStatus,
+        ];
+    }
 
     /**
      * OPTION 2: Recreate Job for Editing.
      * Reopens the SAME Job Card with the SAME ID and Job Number, removes the previous invoice from active billing,
      * retains existing products/services, and sets status back to pending.
+     * Automatically transfers valid paid amounts into a job advance without requiring manual cashier reversals.
      */
     protected function reopenJobForEditing(Request $request, JobCard $jobCard, string $reason, string $explanation, User $user): RedirectResponse
     {
+        if (! $user->isAdmin()) {
+            abort(403, 'Unauthorized. Only administrators can recreate Job Cards for editing.');
+        }
+
         try {
             DB::beginTransaction();
 
@@ -2265,28 +2342,6 @@ class JobCardController extends Controller
 
             $invoiceIds = $linkedInvoices->pluck('id')->filter()->all();
 
-            // Check payments on job_card_id
-            $hasJobPayments = Payment::where('job_card_id', $lockedJobCard->id)
-                ->where('status', '!=', 'cancelled')
-                ->exists();
-
-            // Check payments on linked invoices
-            $hasInvoicePayments = ! empty($invoiceIds) && Payment::whereIn('invoice_id', $invoiceIds)
-                ->where('status', '!=', 'cancelled')
-                ->exists();
-
-            // Check payment allocations
-            $hasPaymentAllocations = ! empty($invoiceIds) && PaymentAllocation::whereIn('invoice_id', $invoiceIds)->exists();
-
-            // Check if any invoice has amount_paid > 0
-            $hasPaidAmount = $linkedInvoices->contains(fn ($inv) => (float) $inv->amount_paid > 0.0001);
-
-            if ($hasJobPayments || $hasInvoicePayments || $hasPaymentAllocations || $hasPaidAmount) {
-                DB::rollBack();
-
-                return back()->with('error', 'This job has recorded payments. Please reverse or refund them through the Cashier section before recreating or deleting the job.');
-            }
-
             $primaryInvoice = $lockedJobCard->getResolvedInvoice() ?? $linkedInvoices->first();
             $adminName = $user->name;
             $reopenedTimestamp = now('Asia/Colombo')->format('Y-m-d H:i:s');
@@ -2294,50 +2349,58 @@ class JobCardController extends Controller
             $jobNumber = $lockedJobCard->job_number;
             $oldInvoiceNumber = $primaryInvoice?->invoice_number ?? 'None';
 
-            // Save Reopen Audit Log before modifying records
-            $auditPayload = [
-                'job_id' => $lockedJobCard->id,
-                'job_number' => $jobNumber,
-                'original_invoice_id' => $primaryInvoice?->id,
-                'original_invoice_number' => $oldInvoiceNumber,
-                'reason_for_reopening' => $reason,
-                'additional_explanation' => $explanation ?: null,
-                'reopened_by' => $adminName,
-                'reopened_by_id' => $user->id,
-                'reopened_at' => $reopenedTimestamp,
-                'previous_completion_status' => $prevStatus,
-                'new_status' => 'pending',
-            ];
-
-            ActivityLog::log(
-                action: 'reopened_job_for_editing',
-                description: "{$jobNumber} reopened for editing by {$adminName}. Previous invoice {$oldInvoiceNumber} removed from active billing. Reason: {$reason}.".($explanation ? " Explanation: {$explanation}." : ''),
-                module: 'Job Cards'
-            );
-
-            // Clear existing invoice_id on Job Card
-            $lockedJobCard->update(['invoice_id' => null]);
-
-            // Remove/void old invoices from active billing
-            foreach ($linkedInvoices as $inv) {
-                if ($inv->status === 'draft') {
-                    // For an eligible unpaid draft invoice: delete line items and invoice record
-                    $inv->items()->delete();
-                    $inv->delete();
-                } else {
-                    // For an issued or finalized invoice: void/archive so it no longer appears as active receivable
-                    $inv->update([
-                        'status' => 'cancelled',
-                        'balance_amount' => 0.00,
-                        'job_card_id' => null,
-                        'reference' => "{$inv->reference} (Reopened)",
-                        'notes' => trim(($inv->notes ?? '')."\nVoided/Archived: Job Card #{$jobNumber} reopened for editing by {$adminName}. Reason: {$reason}"),
-                    ]);
+            // Find all valid (non-cancelled, non-reversed) recorded payments associated with linked invoices or this job card
+            $validPayments = Payment::where(function ($query) use ($invoiceIds, $lockedJobCard) {
+                if (! empty($invoiceIds)) {
+                    $query->whereIn('invoice_id', $invoiceIds);
                 }
+                $query->orWhere('job_card_id', $lockedJobCard->id);
+            })
+                ->whereNotIn('status', ['cancelled', 'reversed'])
+                ->lockForUpdate()
+                ->get();
+
+            // Automatically transfer valid payments to job advance
+            $totalAdvancePreserved = 0.0;
+            foreach ($validPayments as $payment) {
+                $origInvoiceNum = $payment->invoice?->invoice_number ?? ($payment->invoice_id ? "INV#{$payment->invoice_id}" : 'None');
+                $noteAppend = "[Transferred to Job Advance upon reopening Job #{$jobNumber}. Orig Invoice: {$origInvoiceNum}]";
+
+                $payment->update([
+                    'invoice_id' => null,
+                    'job_card_id' => $lockedJobCard->id,
+                    'is_advance' => true,
+                    'status' => 'completed',
+                    'notes' => trim(($payment->notes ?? '').' '.$noteAppend),
+                ]);
+
+                $totalAdvancePreserved += (float) $payment->amount;
             }
 
-            // Reopen Job Card: change status to pending, reset completion timestamp and user
-            // RETAIN: existing services, products, prices, quantities, vehicle details, issues, notes, carpets
+            // Update payment allocations linked to the voided invoices
+            if (! empty($invoiceIds)) {
+                PaymentAllocation::whereIn('invoice_id', $invoiceIds)
+                    ->update([
+                        'notes' => DB::raw("CONCAT(COALESCE(notes, ''), ' [Invoice voided: Job #{$jobNumber} reopened]')"),
+                    ]);
+            }
+
+            // Void old invoices and remove them from active receivables and sales
+            foreach ($linkedInvoices as $inv) {
+                $inv->update([
+                    'status' => 'cancelled',
+                    'amount_paid' => 0.00,
+                    'balance_amount' => 0.00,
+                    'job_card_id' => null,
+                    'cancellation_reason' => "Job Card #{$jobNumber} reopened for editing by {$adminName}.",
+                    'cancelled_by' => $user->id,
+                    'cancelled_at' => now(),
+                    'reference' => "{$inv->reference} (Reopened)",
+                    'notes' => trim(($inv->notes ?? '')."\nVoided/Archived: Job Card #{$jobNumber} reopened for editing by {$adminName} on {$reopenedTimestamp}."),
+                ]);
+            }
+
+            // Clear existing invoice_id on Job Card and services/products
             $lockedJobCard->update([
                 'status' => 'pending',
                 'completed_at' => null,
@@ -2345,13 +2408,29 @@ class JobCardController extends Controller
                 'invoice_id' => null,
             ]);
 
-            // Ensure totals reflect retained items
+            $lockedJobCard->services()->update(['invoice_id' => null]);
+            $lockedJobCard->products()->update(['invoice_id' => null]);
+
+            // Ensure totals reflect retained services and products
             $lockedJobCard->recalculateTotals();
+
+            // Activity Log
+            ActivityLog::log(
+                action: 'reopened_job_for_editing',
+                description: "{$jobNumber} reopened for editing by {$adminName}. Previous invoice {$oldInvoiceNumber} voided and removed from active billing. LKR ".number_format($totalAdvancePreserved, 2).' preserved as job advance.',
+                module: 'Job Cards',
+                userId: $user->id
+            );
 
             DB::commit();
 
+            $successMsg = "Job {$jobNumber} reopened successfully. Previous services and products are available for editing. The old invoice has been removed from active billing.";
+            if ($totalAdvancePreserved > 0) {
+                $successMsg .= ' LKR '.number_format($totalAdvancePreserved, 2).' previous payment preserved as job advance.';
+            }
+
             return redirect()->route('operations.job-cards.show', $lockedJobCard->id)
-                ->with('success', "Job {$jobNumber} reopened successfully. Previous services and products are available for editing. The old invoice has been removed from active billing.");
+                ->with('success', $successMsg);
         } catch (\Throwable $e) {
             DB::rollBack();
             Log::error("Failed to reopen Job Card #{$jobCard->job_number} for editing: {$e->getMessage()}", [
@@ -2365,10 +2444,15 @@ class JobCardController extends Controller
 
     /**
      * OPTION 1: Permanently Delete Job.
-     * Permanently deletes original Job Card, reverses FIFO stock, deletes eligible linked invoices.
+     * Permanently deletes original Job Card, reverses FIFO stock, cancels eligible linked invoices,
+     * and moves valid payments into unapplied customer credit balance.
      */
     protected function permanentlyDeleteJob(Request $request, JobCard $jobCard, string $reason, string $explanation, User $user): RedirectResponse
     {
+        if (! $user->isAdmin()) {
+            abort(403, 'Unauthorized. Only administrators can permanently delete Job Cards.');
+        }
+
         try {
             DB::beginTransaction();
 
@@ -2383,26 +2467,46 @@ class JobCardController extends Controller
 
             $invoiceIds = $linkedInvoices->pluck('id')->filter()->all();
 
-            // Check payments on job_card_id
-            $hasJobPayments = Payment::where('job_card_id', $lockedJobCard->id)
-                ->where('status', '!=', 'cancelled')
-                ->exists();
+            $primaryInvoice = $lockedJobCard->getResolvedInvoice() ?? $linkedInvoices->first();
+            $adminName = $user->name;
+            $deletionTimestamp = now('Asia/Colombo')->format('Y-m-d H:i:s');
+            $jobNumber = $lockedJobCard->job_number;
 
-            // Check payments on linked invoices
-            $hasInvoicePayments = ! empty($invoiceIds) && Payment::whereIn('invoice_id', $invoiceIds)
-                ->where('status', '!=', 'cancelled')
-                ->exists();
+            // Find all valid (non-cancelled, non-reversed) recorded payments associated with linked invoices or this job card
+            $validPayments = Payment::where(function ($query) use ($invoiceIds, $lockedJobCard) {
+                if (! empty($invoiceIds)) {
+                    $query->whereIn('invoice_id', $invoiceIds);
+                }
+                $query->orWhere('job_card_id', $lockedJobCard->id);
+            })
+                ->whereNotIn('status', ['cancelled', 'reversed'])
+                ->lockForUpdate()
+                ->get();
 
-            // Check payment allocations
-            $hasPaymentAllocations = ! empty($invoiceIds) && PaymentAllocation::whereIn('invoice_id', $invoiceIds)->exists();
+            // Move valid unapplied amounts into the customer's credit balance using a properly recorded accounting adjustment
+            $totalCreditPreserved = 0.0;
+            foreach ($validPayments as $payment) {
+                $origInvoiceNum = $payment->invoice?->invoice_number ?? ($payment->invoice_id ? "INV#{$payment->invoice_id}" : 'None');
+                $noteAppend = "[Retained as unapplied customer credit upon deletion of Job #{$jobNumber}. Orig Invoice: {$origInvoiceNum}. Reason: {$reason}]";
 
-            // Check if any invoice has amount_paid > 0
-            $hasPaidAmount = $linkedInvoices->contains(fn ($inv) => (float) $inv->amount_paid > 0.0001);
+                $payment->update([
+                    'invoice_id' => null,
+                    'job_card_id' => null,
+                    'customer_id' => $lockedJobCard->customer_id,
+                    'is_advance' => true,
+                    'status' => 'completed',
+                    'notes' => trim(($payment->notes ?? '').' '.$noteAppend),
+                ]);
 
-            if ($hasJobPayments || $hasInvoicePayments || $hasPaymentAllocations || $hasPaidAmount) {
-                DB::rollBack();
+                $totalCreditPreserved += (float) $payment->amount;
+            }
 
-                return back()->with('error', 'This job has recorded payments. Please reverse or refund them through the Cashier section before permanently deleting the job.');
+            // Update payment allocations linked to the voided invoices
+            if (! empty($invoiceIds)) {
+                PaymentAllocation::whereIn('invoice_id', $invoiceIds)
+                    ->update([
+                        'notes' => DB::raw("CONCAT(COALESCE(notes, ''), ' [Job #{$jobNumber} permanently deleted]')"),
+                    ]);
             }
 
             // FIFO Inventory and Stock Correction:
@@ -2436,10 +2540,6 @@ class JobCardController extends Controller
             }
 
             // Save Permanent Deletion Audit Log
-            $primaryInvoice = $lockedJobCard->getResolvedInvoice();
-            $adminName = $user->name;
-            $deletionTimestamp = now('Asia/Colombo')->format('Y-m-d H:i:s');
-
             $auditPayload = [
                 'job_id' => $lockedJobCard->id,
                 'job_number' => $lockedJobCard->job_number,
@@ -2450,6 +2550,7 @@ class JobCardController extends Controller
                 'invoice_id' => $primaryInvoice?->id,
                 'invoice_number' => $primaryInvoice?->invoice_number ?? 'N/A',
                 'invoice_payment_status' => $primaryInvoice?->payment_status ?? 'Unpaid',
+                'customer_credit_preserved' => $totalCreditPreserved,
                 'deletion_reason' => $reason,
                 'additional_explanation' => $explanation ?: null,
                 'admin_id' => $user->id,
@@ -2460,18 +2561,34 @@ class JobCardController extends Controller
 
             ActivityLog::log(
                 action: 'permanently_deleted_job',
-                description: "{$adminName} permanently deleted Job Card {$lockedJobCard->job_number}. Reason: {$reason}.".($explanation ? " Explanation: {$explanation}." : '').' [Audit Data: '.json_encode($auditPayload).']',
-                module: 'Job Cards'
+                description: "{$adminName} permanently deleted Job Card {$lockedJobCard->job_number}. Reason: {$reason}.".($explanation ? " Explanation: {$explanation}." : '').($totalCreditPreserved > 0 ? ' LKR '.number_format($totalCreditPreserved, 2).' preserved as unapplied customer credit.' : '').' [Audit Data: '.json_encode($auditPayload).']',
+                module: 'Job Cards',
+                userId: $user->id
             );
 
-            $jobNumber = $lockedJobCard->job_number;
-
-            // Clear circular foreign key on job_cards before deleting invoices
+            // Clear circular foreign key on job_cards before deleting or voiding invoices
             $lockedJobCard->update(['invoice_id' => null]);
 
             foreach ($linkedInvoices as $inv) {
-                $inv->items()->delete();
-                $inv->delete();
+                $hasPaymentHistory = Payment::where('invoice_id', $inv->id)->exists()
+                    || PaymentAllocation::where('invoice_id', $inv->id)->exists();
+
+                if (! $hasPaymentHistory && $inv->status === 'draft') {
+                    $inv->items()->delete();
+                    $inv->delete();
+                } else {
+                    // Retain legally mandatory financial history: void and remove from receivables
+                    $inv->update([
+                        'status' => 'cancelled',
+                        'amount_paid' => 0.00,
+                        'balance_amount' => 0.00,
+                        'job_card_id' => null,
+                        'cancellation_reason' => "Job Card #{$jobNumber} permanently deleted by {$adminName}. Reason: {$reason}",
+                        'cancelled_by' => $user->id,
+                        'cancelled_at' => now(),
+                        'notes' => trim(($inv->notes ?? '')."\nVoided: Job Card #{$jobNumber} permanently deleted on {$deletionTimestamp}."),
+                    ]);
+                }
             }
 
             // Unlink any appointments
@@ -2488,8 +2605,13 @@ class JobCardController extends Controller
 
             DB::commit();
 
+            $msg = 'Job permanently deleted successfully.';
+            if ($totalCreditPreserved > 0) {
+                $msg .= ' LKR '.number_format($totalCreditPreserved, 2).' was moved into unapplied customer credit.';
+            }
+
             return redirect()->route('operations.job-cards.index')
-                ->with('success', 'Job permanently deleted successfully.');
+                ->with('success', $msg);
         } catch (\Throwable $e) {
             DB::rollBack();
             Log::error("Failed to permanently delete Job Card: {$e->getMessage()}", [
