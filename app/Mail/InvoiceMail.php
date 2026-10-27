@@ -2,7 +2,6 @@
 
 namespace App\Mail;
 
-use App\Models\CompanySetting;
 use App\Models\Invoice;
 use App\Services\NumberToWordsHelper;
 use Barryvdh\DomPDF\Facade\Pdf;

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\InvoiceNumberService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -65,7 +66,7 @@ class Invoice extends Model
 
     public static function generateInvoiceNumber(?string $date = null): string
     {
-        return \App\Services\InvoiceNumberService::generateNextInvoiceNumber($date);
+        return InvoiceNumberService::generateNextInvoiceNumber($date);
     }
 
     public function customer()

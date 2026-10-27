@@ -33,12 +33,12 @@ class PhoneNumberHelper
 
         // Standard Sri Lankan local mobile format: 07XXXXXXXX (10 digits)
         if (preg_match('/^0([1-9][0-9]{8})$/', $clean, $matches)) {
-            return '94' . $matches[1];
+            return '94'.$matches[1];
         }
 
         // Local 9-digit format without leading 0: 7XXXXXXXX
         if (preg_match('/^([1-9][0-9]{8})$/', $clean, $matches)) {
-            return '94' . $matches[1];
+            return '94'.$matches[1];
         }
 
         // Already with 94 prefix (947XXXXXXXX)
@@ -62,6 +62,6 @@ class PhoneNumberHelper
             return null;
         }
 
-        return 'https://wa.me/' . $normalized . '?text=' . rawurlencode($message);
+        return 'https://wa.me/'.$normalized.'?text='.rawurlencode($message);
     }
 }

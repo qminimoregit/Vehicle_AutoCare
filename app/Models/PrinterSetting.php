@@ -53,7 +53,9 @@ class PrinterSetting extends Model
                 ->where('workstation_name', $workstationName)
                 ->where('is_active', true)
                 ->first();
-            if ($setting) return $setting;
+            if ($setting) {
+                return $setting;
+            }
         }
 
         // 2. Branch + Default-Workstation
@@ -62,7 +64,9 @@ class PrinterSetting extends Model
                 ->where('is_active', true)
                 ->orderByRaw("CASE WHEN workstation_name = 'Default-Workstation' THEN 0 ELSE 1 END")
                 ->first();
-            if ($setting) return $setting;
+            if ($setting) {
+                return $setting;
+            }
         }
 
         // 3. Global + workstation
@@ -71,14 +75,18 @@ class PrinterSetting extends Model
                 ->where('workstation_name', $workstationName)
                 ->where('is_active', true)
                 ->first();
-            if ($setting) return $setting;
+            if ($setting) {
+                return $setting;
+            }
         }
 
         // 4. Any global active setting
         $setting = self::whereNull('branch_id')
             ->where('is_active', true)
             ->first();
-        if ($setting) return $setting;
+        if ($setting) {
+            return $setting;
+        }
 
         // 5. Any active setting in database
         return self::where('is_active', true)->first();

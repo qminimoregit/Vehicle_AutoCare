@@ -150,6 +150,7 @@ class GrnNumberService
                 if (isset($e->errorInfo[1]) && $e->errorInfo[1] === 1062 && $attempts < $maxRetries) {
                     Log::warning("GRN sequence collision on attempt {$attempts}. Retrying...");
                     usleep(50000 * $attempts); // backoff 50ms, 100ms
+
                     continue;
                 }
 

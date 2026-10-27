@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Operations;
 
 use App\Http\Controllers\Controller;
+use App\Mail\InvoiceMail;
 use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\CompanySetting;
@@ -13,7 +14,6 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\Vehicle;
-use App\Mail\InvoiceMail;
 use App\Services\BranchContext;
 use App\Services\Inventory\StockService;
 use App\Services\NumberToWordsHelper;
@@ -513,5 +513,3 @@ class InvoiceController extends Controller
         }
     }
 }
-
-

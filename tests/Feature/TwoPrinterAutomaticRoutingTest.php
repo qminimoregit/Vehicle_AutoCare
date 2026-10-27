@@ -7,13 +7,9 @@ use App\Models\CompanySetting;
 use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
-use App\Models\JobCard;
 use App\Models\Payment;
 use App\Models\PrinterSetting;
-use App\Models\PrintLog;
 use App\Models\User;
-use App\Models\Vehicle;
-use App\Models\VehicleType;
 use App\Services\PrintService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -23,10 +19,15 @@ class TwoPrinterAutomaticRoutingTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $staff;
+
     protected Branch $mainBranch;
+
     protected Branch $secondaryBranch;
+
     protected CompanySetting $company;
+
     protected PrintService $printService;
 
     protected function setUp(): void

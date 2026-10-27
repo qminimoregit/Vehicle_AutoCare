@@ -32,15 +32,25 @@ class PosAndThermalPrintingWorkflowTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $staff;
+
     protected Branch $branch;
+
     protected CompanySetting $company;
+
     protected VehicleType $vehicleType;
+
     protected Customer $customerWithEmail;
+
     protected Customer $customerNoEmail;
+
     protected Vehicle $vehicle;
+
     protected Service $service;
+
     protected Product $product;
+
     protected StockBatch $batch;
 
     protected function setUp(): void
@@ -206,7 +216,7 @@ class PosAndThermalPrintingWorkflowTest extends TestCase
         ]);
 
         $response->assertRedirect();
-        
+
         $customer = Customer::where('phone', '0719876543')->first();
         $this->assertNotNull($customer);
         $this->assertEquals('0719876543', $customer->phone);
@@ -254,7 +264,7 @@ class PosAndThermalPrintingWorkflowTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertJson(['success' => true]);
-        
+
         $data = $response->json();
         $this->assertArrayHasKey('thermal_url', $data);
         $this->assertStringContainsString('/thermal', $data['thermal_url']);
@@ -263,7 +273,7 @@ class PosAndThermalPrintingWorkflowTest extends TestCase
         $invoice = Invoice::find($data['invoice_id']);
         $this->assertNotNull($invoice);
         $this->assertEquals('Paid in Full', $invoice->payment_status);
-        $this->assertEquals(18500.00, (float)$invoice->amount_paid);
+        $this->assertEquals(18500.00, (float) $invoice->amount_paid);
 
         // Check stock batch FIFO reduction
         $this->batch->refresh();
@@ -431,7 +441,7 @@ class PosAndThermalPrintingWorkflowTest extends TestCase
         $log = ActivityLog::where('action', 'reassigned_technician')
             ->where('description', 'like', "%{$jobCard->job_number}%")
             ->first();
-        
+
         $this->assertNotNull($log);
         $this->assertStringContainsString('Technician Beta', $log->description);
     }

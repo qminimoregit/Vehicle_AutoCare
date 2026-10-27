@@ -133,4 +133,3 @@ class Customer extends Model
             : $this->customer_name;
     }
 }
-

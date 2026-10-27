@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\GrnNumberService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -126,6 +127,6 @@ class GoodsReceivedNote extends Model
      */
     public static function generateGrnNumber(?string $date = null): string
     {
-        return \App\Services\GrnNumberService::generateNextGrnNumber($date);
+        return GrnNumberService::generateNextGrnNumber($date);
     }
 }

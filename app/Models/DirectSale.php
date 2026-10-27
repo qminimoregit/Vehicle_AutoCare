@@ -181,14 +181,13 @@ class DirectSale extends Model
         $status = $this->payment_status;
 
         return "Thank you for choosing {$companyName}!\n\n"
-            . "Your payment details:\n\n"
-            . "Bill No: {$this->bill_number}\n"
-            . "Total: LKR {$total}\n"
-            . "Paid: LKR {$paid}\n"
-            . "Balance: LKR {$balance}\n"
-            . "Status: {$status}\n\n"
-            . "Thank you for visiting {$companyName}, {$location}.\n\n"
-            . "Tel: {$tel}";
+            ."Your payment details:\n\n"
+            ."Bill No: {$this->bill_number}\n"
+            ."Total: LKR {$total}\n"
+            ."Paid: LKR {$paid}\n"
+            ."Balance: LKR {$balance}\n"
+            ."Status: {$status}\n\n"
+            ."Thank you for visiting {$companyName}, {$location}.\n\n"
+            ."Tel: {$tel}";
     }
 }
-

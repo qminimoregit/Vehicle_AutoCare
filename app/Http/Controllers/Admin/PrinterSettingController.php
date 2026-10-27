@@ -68,7 +68,7 @@ class PrinterSettingController extends Controller
 
         ActivityLog::log(
             action: 'updated_printer_settings',
-            description: "Configured printer mapping for workstation '{$setting->workstation_name}' by " . Auth::user()->name . ".",
+            description: "Configured printer mapping for workstation '{$setting->workstation_name}' by ".Auth::user()->name.'.',
             module: 'Administration'
         );
 
@@ -104,7 +104,7 @@ class PrinterSettingController extends Controller
 
         ActivityLog::log(
             action: 'updated_printer_settings',
-            description: "Updated printer mapping for workstation '{$printerSetting->workstation_name}' by " . Auth::user()->name . ".",
+            description: "Updated printer mapping for workstation '{$printerSetting->workstation_name}' by ".Auth::user()->name.'.',
             module: 'Administration'
         );
 
@@ -129,7 +129,7 @@ class PrinterSettingController extends Controller
 
         ActivityLog::log(
             action: 'deleted_printer_setting',
-            description: "Deleted printer mapping for workstation '{$name}' by " . Auth::user()->name . ".",
+            description: "Deleted printer mapping for workstation '{$name}' by ".Auth::user()->name.'.',
             module: 'Administration'
         );
 

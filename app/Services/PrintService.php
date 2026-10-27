@@ -12,14 +12,16 @@ use Illuminate\Support\Facades\Log;
 class PrintService
 {
     protected string $storagePath;
+
     protected string $certPath;
+
     protected string $keyPath;
 
     public function __construct()
     {
         $this->storagePath = storage_path('app/qz');
-        $this->certPath = $this->storagePath . '/digital-certificate.txt';
-        $this->keyPath = $this->storagePath . '/private-key.pem';
+        $this->certPath = $this->storagePath.'/digital-certificate.txt';
+        $this->keyPath = $this->storagePath.'/private-key.pem';
     }
 
     /**
@@ -52,14 +54,14 @@ class PrintService
         $privateKey = openssl_pkey_get_private($privateKeyContent);
 
         if (! $privateKey) {
-            throw new \RuntimeException('Invalid QZ Tray private key: ' . openssl_error_string());
+            throw new \RuntimeException('Invalid QZ Tray private key: '.openssl_error_string());
         }
 
         $signature = '';
         $success = openssl_sign($toSign, $signature, $privateKey, OPENSSL_ALGO_SHA512);
 
         if (! $success) {
-            throw new \RuntimeException('Failed to sign QZ Tray request: ' . openssl_error_string());
+            throw new \RuntimeException('Failed to sign QZ Tray request: '.openssl_error_string());
         }
 
         return base64_encode($signature);
@@ -82,7 +84,7 @@ class PrintService
 
         $privateKey = openssl_pkey_new($openSslConfig);
         if (! $privateKey) {
-            Log::error('OpenSSL Key Generation Error: ' . openssl_error_string());
+            Log::error('OpenSSL Key Generation Error: '.openssl_error_string());
             throw new \RuntimeException('Failed to generate OpenSSL private key. Check OpenSSL configuration.');
         }
 
@@ -128,8 +130,8 @@ class PrintService
 
         // Try candidate paths for openssl.cnf on Windows/Linux
         $candidates = [
-            dirname(PHP_BINARY) . '/extras/ssl/openssl.cnf',
-            dirname(PHP_BINARY) . '/openssl.cnf',
+            dirname(PHP_BINARY).'/extras/ssl/openssl.cnf',
+            dirname(PHP_BINARY).'/openssl.cnf',
             'C:/php/extras/ssl/openssl.cnf',
             'C:/xampp/apache/bin/openssl.cnf',
             'C:/xampp/php/extras/ssl/openssl.cnf',
@@ -183,7 +185,7 @@ class PrintService
             'paper_size' => $setting->paper_size ?? '80mm',
             'workstation' => $setting->workstation_name,
             'branch_id' => $setting->branch_id,
-            'message' => empty($targetPrinter) 
+            'message' => empty($targetPrinter)
                 ? ($role === 'bill' ? 'Bill Printer is not connected.' : 'Job Card Printer is not connected.')
                 : 'Printer resolved successfully.',
         ];
@@ -221,7 +223,7 @@ class PrintService
         $branch = $branchId ? Branch::find($branchId) : null;
         $isBill = strtolower($printerRole) === 'bill';
         $roleTitle = $isBill ? 'BILL PRINTER' : 'JOB CARD PRINTER';
-        $roleScope = $isBill 
+        $roleScope = $isBill
             ? 'Bills, 80mm Invoices, POS Direct Sales, Payment Receipts'
             : 'Job Cards, Selected Services/Products, Job Instructions';
 
@@ -231,8 +233,8 @@ class PrintService
         $now = now()->format('Y-m-d H:i:s');
 
         $logoHtml = '';
-        if (! empty($company->logo) && file_exists(public_path('storage/' . $company->logo))) {
-            $logoHtml = '<img src="' . asset('storage/' . $company->logo) . '" style="max-height: 48px; max-width: 140px; margin: 0 auto 6px auto; display: block;" alt="Logo" />';
+        if (! empty($company->logo) && file_exists(public_path('storage/'.$company->logo))) {
+            $logoHtml = '<img src="'.asset('storage/'.$company->logo).'" style="max-height: 48px; max-width: 140px; margin: 0 auto 6px auto; display: block;" alt="Logo" />';
         }
 
         return <<<HTML
