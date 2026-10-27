@@ -9,7 +9,6 @@ use App\Models\Invoice;
 use App\Services\BranchContext;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 

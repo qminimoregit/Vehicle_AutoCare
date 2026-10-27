@@ -58,9 +58,9 @@ class MoneyBookController extends Controller
         if ($branchId && $branchId !== 'all') {
             $paymentQuery->where(function ($q) use ($branchId) {
                 $q->whereHas('invoice', fn ($iq) => $iq->where('branch_id', $branchId))
-                  ->orWhereHas('jobCard', fn ($jq) => $jq->where('branch_id', $branchId))
-                  ->orWhereHas('receipt', fn ($rq) => $rq->where('branch_id', $branchId))
-                  ->orWhereHas('directSale', fn ($dq) => $dq->where('branch_id', $branchId));
+                    ->orWhereHas('jobCard', fn ($jq) => $jq->where('branch_id', $branchId))
+                    ->orWhereHas('receipt', fn ($rq) => $rq->where('branch_id', $branchId))
+                    ->orWhereHas('directSale', fn ($dq) => $dq->where('branch_id', $branchId));
             });
         }
 
@@ -261,7 +261,7 @@ class MoneyBookController extends Controller
         if ($branchId && $branchId !== 'all') {
             $paymentQuery->where(function ($q) use ($branchId) {
                 $q->whereHas('invoice', fn ($iq) => $iq->where('branch_id', $branchId))
-                  ->orWhereHas('jobCard', fn ($jq) => $jq->where('branch_id', $branchId));
+                    ->orWhereHas('jobCard', fn ($jq) => $jq->where('branch_id', $branchId));
             });
         }
 
@@ -339,9 +339,9 @@ class MoneyBookController extends Controller
         if ($branchId && $branchId !== 'all') {
             $paymentQuery->where(function ($q) use ($branchId) {
                 $q->whereHas('invoice', fn ($iq) => $iq->where('branch_id', $branchId))
-                  ->orWhereHas('jobCard', fn ($jq) => $jq->where('branch_id', $branchId))
-                  ->orWhereHas('receipt', fn ($rq) => $rq->where('branch_id', $branchId))
-                  ->orWhereHas('directSale', fn ($dq) => $dq->where('branch_id', $branchId));
+                    ->orWhereHas('jobCard', fn ($jq) => $jq->where('branch_id', $branchId))
+                    ->orWhereHas('receipt', fn ($rq) => $rq->where('branch_id', $branchId))
+                    ->orWhereHas('directSale', fn ($dq) => $dq->where('branch_id', $branchId));
             });
         }
 

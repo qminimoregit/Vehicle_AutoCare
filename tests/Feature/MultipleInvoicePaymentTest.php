@@ -9,7 +9,6 @@ use App\Models\CustomerCreditAccount;
 use App\Models\Invoice;
 use App\Models\JobCard;
 use App\Models\Payment;
-use App\Models\PaymentAllocation;
 use App\Models\PaymentReceipt;
 use App\Models\User;
 use App\Models\Vehicle;

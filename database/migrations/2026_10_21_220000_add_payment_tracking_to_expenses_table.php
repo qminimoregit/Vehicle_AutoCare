@@ -55,7 +55,7 @@ return new class extends Migration
             // Create initial payment record if none exists
             $hasPayment = DB::table('expense_payments')->where('expense_id', $exp->id)->exists();
             if (! $hasPayment && (float) $exp->amount > 0) {
-                $payNumber = 'EPAY-INIT-' . str_pad((string) $exp->id, 5, '0', STR_PAD_LEFT);
+                $payNumber = 'EPAY-INIT-'.str_pad((string) $exp->id, 5, '0', STR_PAD_LEFT);
                 DB::table('expense_payments')->insert([
                     'expense_id' => $exp->id,
                     'branch_id' => $exp->branch_id,

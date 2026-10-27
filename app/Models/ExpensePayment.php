@@ -35,8 +35,8 @@ class ExpensePayment extends Model
      */
     public static function generatePaymentNumber(): string
     {
-        $prefix = 'EPAY-' . date('Ym') . '-';
-        $latest = static::where('payment_number', 'LIKE', $prefix . '%')->orderByDesc('id')->first();
+        $prefix = 'EPAY-'.date('Ym').'-';
+        $latest = static::where('payment_number', 'LIKE', $prefix.'%')->orderByDesc('id')->first();
         if ($latest && preg_match('/EPAY-\d{6}-(\d+)/', $latest->payment_number, $matches)) {
             $seq = (int) $matches[1] + 1;
         } else {

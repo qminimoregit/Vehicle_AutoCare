@@ -192,4 +192,3 @@ class Expense extends Model
         ]);
     }
 }
-

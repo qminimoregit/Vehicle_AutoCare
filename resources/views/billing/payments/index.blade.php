@@ -69,6 +69,8 @@
                 Multiple Invoice Payment
             </a>
         </div>
+    </div>
+
     <!-- Instant Payment Receipt & Updated Bill Print Alert -->
     @if(session('recent_payment_id'))
         @php
@@ -117,7 +119,7 @@
     @endif
 
     <!-- Stats Bar -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
             <span class="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">Total Outstanding</span>
             <div class="text-xl sm:text-2xl font-black text-rose-600 mt-1">

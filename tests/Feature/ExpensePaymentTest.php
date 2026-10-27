@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
-use App\Models\Employee;
+use App\Models\CompanySetting;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use App\Models\ExpensePayment;
@@ -30,7 +30,7 @@ class ExpensePaymentTest extends TestCase
         parent::setUp();
 
         // 1. Create Branches
-        $company = \App\Models\CompanySetting::getSettings();
+        $company = CompanySetting::getSettings();
 
         $this->mainBranch = Branch::create([
             'company_id' => $company->id,

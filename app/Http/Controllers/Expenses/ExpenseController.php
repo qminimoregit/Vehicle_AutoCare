@@ -337,11 +337,11 @@ class ExpenseController extends Controller
 
         ActivityLog::log(
             'create_staff_expense',
-            "Recorded staff expense {$expenseNumber} for {$employee->name} (LKR " . number_format($totalAmount, 2) . ')',
+            "Recorded staff expense {$expenseNumber} for {$employee->name} (LKR ".number_format($totalAmount, 2).')',
             'Expenses'
         );
 
-        $successMsg = "Staff expense {$expenseNumber} of LKR " . number_format($totalAmount, 2) . ' saved successfully.';
+        $successMsg = "Staff expense {$expenseNumber} of LKR ".number_format($totalAmount, 2).' saved successfully.';
         if ($employeeAdvanceId) {
             $successMsg .= ' Linked to Employee Salary Advance for payroll deduction.';
         }
@@ -508,11 +508,11 @@ class ExpenseController extends Controller
 
         ActivityLog::log(
             'create_shop_expense',
-            "Recorded shop expense {$expenseNumber} for {$category->name} (LKR " . number_format($totalAmount, 2) . ', Status: ' . ($paymentChoice === 'paid_now' ? 'Paid' : 'Pay Later') . ')',
+            "Recorded shop expense {$expenseNumber} for {$category->name} (LKR ".number_format($totalAmount, 2).', Status: '.($paymentChoice === 'paid_now' ? 'Paid' : 'Pay Later').')',
             'Expenses'
         );
 
-        $msg = "Shop expense {$expenseNumber} of LKR " . number_format($totalAmount, 2) . ' saved successfully.';
+        $msg = "Shop expense {$expenseNumber} of LKR ".number_format($totalAmount, 2).' saved successfully.';
         if ($paymentChoice === 'pay_later') {
             $msg .= ' Saved with outstanding balance for later payment.';
         }
@@ -562,7 +562,7 @@ class ExpenseController extends Controller
 
             if ($paymentAmount > (float) $lockedExpense->balance_amount + 0.001) {
                 throw ValidationException::withMessages([
-                    'payment_amount' => 'Payment amount (LKR ' . number_format($paymentAmount, 2) . ') cannot exceed the outstanding balance of LKR ' . number_format($lockedExpense->balance_amount, 2) . '.',
+                    'payment_amount' => 'Payment amount (LKR '.number_format($paymentAmount, 2).') cannot exceed the outstanding balance of LKR '.number_format($lockedExpense->balance_amount, 2).'.',
                 ]);
             }
 
@@ -587,11 +587,11 @@ class ExpenseController extends Controller
 
         ActivityLog::log(
             'pay_expense',
-            "Recorded payment of LKR " . number_format($paymentAmount, 2) . " for expense {$expense->expense_number} (Method: " . ucwords(str_replace('_', ' ', $validated['payment_method'])) . ")",
+            'Recorded payment of LKR '.number_format($paymentAmount, 2)." for expense {$expense->expense_number} (Method: ".ucwords(str_replace('_', ' ', $validated['payment_method'])).')',
             'Expenses'
         );
 
-        return back()->with('success', "Payment of LKR " . number_format($paymentAmount, 2) . " saved successfully. Remaining balance: LKR " . number_format($freshExpense->balance_amount, 2));
+        return back()->with('success', 'Payment of LKR '.number_format($paymentAmount, 2).' saved successfully. Remaining balance: LKR '.number_format($freshExpense->balance_amount, 2));
     }
 
     /**
@@ -680,7 +680,7 @@ class ExpenseController extends Controller
 
         if ($newAmount < $currentPaid) {
             throw ValidationException::withMessages([
-                'amount' => 'Expense total amount (LKR ' . number_format($newAmount, 2) . ') cannot be less than already paid amount of LKR ' . number_format($currentPaid, 2) . '.',
+                'amount' => 'Expense total amount (LKR '.number_format($newAmount, 2).') cannot be less than already paid amount of LKR '.number_format($currentPaid, 2).'.',
             ]);
         }
 
@@ -764,7 +764,7 @@ class ExpenseController extends Controller
 
         ActivityLog::log(
             'void_expense',
-            "Voided expense {$expense->expense_number} of LKR " . number_format($expense->amount, 2) . ". Reason: {$validated['void_reason']}",
+            "Voided expense {$expense->expense_number} of LKR ".number_format($expense->amount, 2).". Reason: {$validated['void_reason']}",
             'Expenses'
         );
 
@@ -844,7 +844,7 @@ class ExpenseController extends Controller
 
         $headers = [
             'Content-type' => 'text/csv',
-            'Content-Disposition' => 'attachment; filename=Expense_Records_' . date('Y-m-d') . '.csv',
+            'Content-Disposition' => 'attachment; filename=Expense_Records_'.date('Y-m-d').'.csv',
             'Pragma' => 'no-cache',
             'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
             'Expires' => '0',

@@ -80,15 +80,15 @@ class MultipleInvoicePaymentController extends Controller
             $candidates = array_unique(array_filter([
                 $rawInvoiceSearch,
                 $normSearch,
-                '#' . $normSearch,
+                '#'.$normSearch,
                 strtoupper($normSearch),
-                '#' . strtoupper($normSearch),
+                '#'.strtoupper($normSearch),
             ]));
 
             $splitQuery = Invoice::with(['customer', 'jobCard.vehicle', 'payments'])
                 ->where(function ($q) use ($candidates, $normSearch) {
                     $q->whereIn('invoice_number', $candidates)
-                      ->orWhereRaw('LOWER(invoice_number) = ?', [strtolower($normSearch)]);
+                        ->orWhereRaw('LOWER(invoice_number) = ?', [strtolower($normSearch)]);
                 });
 
             if ($activeBranchId) {
@@ -134,16 +134,16 @@ class MultipleInvoicePaymentController extends Controller
         $candidates = array_unique(array_filter([
             $rawNumber,
             $normalized,
-            '#' . $normalized,
+            '#'.$normalized,
             strtoupper($normalized),
-            '#' . strtoupper($normalized),
+            '#'.strtoupper($normalized),
         ]));
 
         // Check if invoice exists anywhere in the system first
         $invoice = Invoice::with(['customer', 'jobCard.vehicle'])
             ->where(function ($q) use ($candidates, $normalized) {
                 $q->whereIn('invoice_number', $candidates)
-                  ->orWhereRaw('LOWER(invoice_number) = ?', [strtolower($normalized)]);
+                    ->orWhereRaw('LOWER(invoice_number) = ?', [strtolower($normalized)]);
             })
             ->first();
 
@@ -158,7 +158,7 @@ class MultipleInvoicePaymentController extends Controller
         if ($invoice->branch_id && $user && ! $user->canAccessBranch($invoice->branch_id)) {
             return response()->json([
                 'success' => false,
-                'message' => "You are not authorized to view or collect payments for this invoice branch.",
+                'message' => 'You are not authorized to view or collect payments for this invoice branch.',
             ], 403);
         }
 
