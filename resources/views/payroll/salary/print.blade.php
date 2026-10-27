@@ -150,8 +150,8 @@
 
         .attendance-summary {
             display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 10px;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 6px;
             text-align: center;
             margin-bottom: 20px;
         }
@@ -335,8 +335,14 @@
                 <div class="value">{{ $payrollItem->employee->position ?: 'Staff' }}</div>
             </div>
             <div class="meta-item">
-                <div class="label">Daily Wage Rate</div>
-                <div class="value font-mono">LKR {{ number_format($payrollItem->daily_wage_snapshot, 2) }}</div>
+                <div class="label">{{ $payrollItem->isMonthly() ? 'Monthly Basic Salary' : 'Daily Wage Rate' }}</div>
+                <div class="value font-mono">
+                    @if($payrollItem->isMonthly())
+                        LKR {{ number_format($payrollItem->monthly_basic_snapshot, 2) }}
+                    @else
+                        LKR {{ number_format($payrollItem->daily_wage_snapshot, 2) }}
+                    @endif
+                </div>
             </div>
         </div>
 
@@ -351,15 +357,23 @@
                 <div class="num">{{ $payrollItem->half_days_count }}</div>
             </div>
             <div class="att-box">
-                <div class="title">Absent Days</div>
-                <div class="num">{{ $payrollItem->absent_days_count }}</div>
+                <div class="title">Off-Days</div>
+                <div class="num" style="color: #6b21a8;">{{ number_format($payrollItem->company_off_days_count, 1) }}</div>
             </div>
             <div class="att-box">
-                <div class="title">Leave / Off</div>
-                <div class="num">{{ $payrollItem->leave_days_count + $payrollItem->day_off_days_count }}</div>
+                <div class="title">Paid Hol.</div>
+                <div class="num" style="color: #3730a3;">{{ number_format($payrollItem->paid_holidays_count, 1) }}</div>
+            </div>
+            <div class="att-box">
+                <div class="title">Leave</div>
+                <div class="num" style="color: #92400e;">{{ number_format($payrollItem->approved_leave_count, 1) }}</div>
+            </div>
+            <div class="att-box" style="{{ $payrollItem->no_pay_days_count > 0 ? 'background: #fff1f2; border-color: #fecdd3;' : '' }}">
+                <div class="title" style="{{ $payrollItem->no_pay_days_count > 0 ? 'color: #9f1239; font-weight: 700;' : '' }}">No-Pay</div>
+                <div class="num" style="{{ $payrollItem->no_pay_days_count > 0 ? 'color: #be123c;' : '' }}">{{ number_format($payrollItem->no_pay_days_count, 1) }}</div>
             </div>
             <div class="att-box" style="background: #eef2ff; border-color: #c7d2fe;">
-                <div class="title" style="color: #3730a3;">Payable Days</div>
+                <div class="title" style="color: #3730a3;">Payable</div>
                 <div class="num" style="color: #3730a3;">{{ number_format($payrollItem->payable_days, 1) }}</div>
             </div>
         </div>
@@ -376,18 +390,41 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td>Base Daily Wage Pay</td>
-                            <td class="text-right font-mono">{{ number_format($payrollItem->base_earnings, 2) }}</td>
-                        </tr>
+                        @if($payrollItem->isMonthly())
+                            <tr>
+                                <td>Monthly Basic Salary</td>
+                                <td class="text-right font-mono">{{ number_format($payrollItem->base_earnings, 2) }}</td>
+                            </tr>
+                        @else
+                            @php
+                                $paidHolidayWage = (float) ($payrollItem->reconciliation_summary['paid_holiday_wage'] ?? 0);
+                                $attendanceWage = max(0, (float) $payrollItem->base_earnings - $paidHolidayWage);
+                            @endphp
+                            <tr>
+                                <td>Base Attendance Daily Wages</td>
+                                <td class="text-right font-mono">{{ number_format($attendanceWage, 2) }}</td>
+                            </tr>
+                            @if($paidHolidayWage > 0)
+                                <tr>
+                                    <td>Paid Company Holidays ({{ number_format($payrollItem->paid_holidays_count, 1) }} d)</td>
+                                    <td class="text-right font-mono">{{ number_format($paidHolidayWage, 2) }}</td>
+                                </tr>
+                            @endif
+                        @endif
                         <tr>
                             <td>Overtime Pay</td>
                             <td class="text-right font-mono">{{ number_format($payrollItem->overtime_amount, 2) }}</td>
                         </tr>
                         <tr>
-                            <td>Bonuses / Allowances</td>
+                            <td>Bonuses</td>
                             <td class="text-right font-mono">{{ number_format($payrollItem->bonus_amount, 2) }}</td>
                         </tr>
+                        @if($payrollItem->allowances_amount > 0)
+                            <tr>
+                                <td>Allowances</td>
+                                <td class="text-right font-mono">{{ number_format($payrollItem->allowances_amount, 2) }}</td>
+                            </tr>
+                        @endif
                         <tr class="total-row">
                             <td>Gross Earnings</td>
                             <td class="text-right font-mono">{{ number_format($payrollItem->gross_salary, 2) }}</td>
@@ -406,24 +443,39 @@
                         </tr>
                     </thead>
                     <tbody>
+                        @if($payrollItem->no_pay_deduction > 0)
+                            <tr style="background: #fff1f2;">
+                                <td style="color: #9f1239; font-weight: 600;">No-Pay Deduction ({{ number_format($payrollItem->no_pay_days_count, 1) }} d)</td>
+                                <td class="text-right font-mono" style="color: #be123c;">- {{ number_format($payrollItem->no_pay_deduction, 2) }}</td>
+                            </tr>
+                        @endif
                         <tr>
                             <td>Salary Advances Applied</td>
-                            <td class="text-right font-mono">{{ number_format($payrollItem->advances_applied, 2) }}</td>
+                            <td class="text-right font-mono">{{ $payrollItem->advances_applied > 0 ? '- ' . number_format($payrollItem->advances_applied, 2) : '0.00' }}</td>
                         </tr>
                         <tr>
                             <td>Other Authorized Deductions</td>
-                            <td class="text-right font-mono">{{ number_format($payrollItem->deductions, 2) }}</td>
+                            <td class="text-right font-mono">{{ $payrollItem->deductions > 0 ? '- ' . number_format($payrollItem->deductions, 2) : '0.00' }}</td>
                         </tr>
                         @if($payrollItem->epf_employee_amount > 0)
                             <tr>
                                 <td>EPF (Employee 8%)</td>
-                                <td class="text-right font-mono">{{ number_format($payrollItem->epf_employee_amount, 2) }}</td>
+                                <td class="text-right font-mono">- {{ number_format($payrollItem->epf_employee_amount, 2) }}</td>
                             </tr>
                         @endif
+                        @if($payrollItem->apit_amount > 0)
+                            <tr style="background: #faf5ff;">
+                                <td style="color: #6b21a8; font-weight: 600;">APIT (PAYE Tax)</td>
+                                <td class="text-right font-mono" style="color: #581c87;">- {{ number_format($payrollItem->apit_amount, 2) }}</td>
+                            </tr>
+                        @endif
+                        @php
+                            $totDedPrint = (float) $payrollItem->advances_applied + (float) $payrollItem->deductions + (float) $payrollItem->no_pay_deduction + (float) $payrollItem->epf_employee_amount + (float) $payrollItem->apit_amount;
+                        @endphp
                         <tr class="total-row">
                             <td>Total Deductions</td>
-                            <td class="text-right font-mono">
-                                {{ number_format($payrollItem->advances_applied + $payrollItem->deductions + $payrollItem->epf_employee_amount, 2) }}
+                            <td class="text-right font-mono" style="color: #be123c;">
+                                - {{ number_format($totDedPrint, 2) }}
                             </td>
                         </tr>
                     </tbody>
@@ -432,14 +484,45 @@
         </div>
 
         <!-- Net Pay Bar -->
-        <div class="net-bar">
+        <div class="net-bar" style="{{ $payrollItem->net_salary < 0 ? 'background: #450a0a; border-color: #991b1b;' : '' }}">
             <div>
-                <div class="label">Net Salary Payable</div>
+                <div class="label">{{ $payrollItem->net_salary < 0 ? 'Net Salary Deficit / Shortfall' : 'Net Salary Payable' }}</div>
                 <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">
-                    Amount Paid: LKR {{ number_format($payrollItem->paid_amount, 2) }} | Due: LKR {{ number_format($payrollItem->balance_due, 2) }}
+                    Amount Paid: LKR {{ number_format($payrollItem->paid_amount, 2) }} | Due: {{ $payrollItem->balance_due < 0 ? '- LKR '.number_format(abs($payrollItem->balance_due), 2) : 'LKR '.number_format($payrollItem->balance_due, 2) }}
                 </div>
             </div>
-            <div class="amount">LKR {{ number_format($payrollItem->net_salary, 2) }}</div>
+            <div class="amount" style="{{ $payrollItem->net_salary < 0 ? 'color: #fca5a5;' : '' }}">
+                {{ $payrollItem->net_salary < 0 ? '- LKR '.number_format(abs($payrollItem->net_salary), 2) : 'LKR '.number_format($payrollItem->net_salary, 2) }}
+            </div>
+        </div>
+
+        <!-- Statutory Employer Contributions Information Box -->
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 14px; margin-bottom: 20px; font-size: 11px;">
+            <div style="font-weight: 700; color: #334155; margin-bottom: 6px; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px;">
+                Statutory Contributions & Company Liability (Not Deducted From Net Pay)
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; text-align: center;">
+                <div>
+                    <span style="color: #64748b; font-size: 10px; display: block;">EPF/ETF Base</span>
+                    <strong class="font-mono">LKR {{ number_format($payrollItem->epf_qualifying_earnings, 2) }}</strong>
+                </div>
+                <div>
+                    <span style="color: #64748b; font-size: 10px; display: block;">Member EPF (8%)</span>
+                    <strong class="font-mono" style="color: #1e40af;">LKR {{ number_format($payrollItem->epf_employee_amount, 2) }}</strong>
+                </div>
+                <div>
+                    <span style="color: #64748b; font-size: 10px; display: block;">Employer EPF (12%)</span>
+                    <strong class="font-mono" style="color: #3730a3;">LKR {{ number_format($payrollItem->epf_employer_amount, 2) }}</strong>
+                </div>
+                <div>
+                    <span style="color: #64748b; font-size: 10px; display: block;">Employer ETF (3%)</span>
+                    <strong class="font-mono" style="color: #065f46;">LKR {{ number_format($payrollItem->etf_employer_amount, 2) }}</strong>
+                </div>
+                <div>
+                    <span style="color: #64748b; font-size: 10px; display: block;">Total Cost to Co.</span>
+                    <strong class="font-mono" style="color: #78350f;">LKR {{ number_format($payrollItem->total_cost_to_company, 2) }}</strong>
+                </div>
+            </div>
         </div>
 
         @if($payrollItem->notes)
