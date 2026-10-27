@@ -95,7 +95,7 @@
                             <th class="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Employee</th>
                             <th class="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Mobile Number</th>
                             <th class="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Position</th>
-                            <th class="px-5 py-3.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Daily Wage</th>
+                            <th class="px-5 py-3.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Salary / Wage</th>
                             <th class="px-5 py-3.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
                             <th class="px-5 py-3.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
                         </tr>
@@ -124,8 +124,22 @@
                                 <td class="px-5 py-4 whitespace-nowrap text-sm text-gray-600">
                                     {{ $emp->position ?: 'General Staff' }}
                                 </td>
-                                <td class="px-5 py-4 whitespace-nowrap text-sm font-semibold text-right text-gray-900 font-mono">
-                                    LKR {{ number_format($emp->daily_wage, 2) }}
+                                <td class="px-5 py-4 whitespace-nowrap text-right">
+                                    @if(($emp->salary_type ?? 'daily') === 'monthly')
+                                        <div class="text-sm font-semibold text-gray-900 font-mono">
+                                            LKR {{ number_format($emp->monthly_basic_salary, 2) }}
+                                        </div>
+                                        <span class="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                            Monthly
+                                        </span>
+                                    @else
+                                        <div class="text-sm font-semibold text-gray-900 font-mono">
+                                            LKR {{ number_format($emp->daily_wage, 2) }}
+                                        </div>
+                                        <span class="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                            Daily
+                                        </span>
+                                    @endif
                                 </td>
                                 <td class="px-5 py-4 whitespace-nowrap text-center">
                                     @if($emp->is_active)
@@ -241,8 +255,12 @@
 
                 <div class="grid grid-cols-2 gap-2 text-xs py-2 border-y border-gray-100 bg-slate-50/50 rounded-lg px-3">
                     <div>
-                        <span class="text-gray-500 block">Daily Wage</span>
-                        <span class="font-bold text-gray-900 font-mono">LKR {{ number_format($emp->daily_wage, 2) }}</span>
+                        <span class="text-gray-500 block">
+                            {{ ($emp->salary_type ?? 'daily') === 'monthly' ? 'Monthly Salary' : 'Daily Wage' }}
+                        </span>
+                        <span class="font-bold text-gray-900 font-mono">
+                            LKR {{ number_format(($emp->salary_type ?? 'daily') === 'monthly' ? $emp->monthly_basic_salary : $emp->daily_wage, 2) }}
+                        </span>
                     </div>
                     <div>
                         <span class="text-gray-500 block">Mobile</span>

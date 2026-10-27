@@ -34,8 +34,12 @@ use App\Http\Controllers\Operations\JobIssueController;
 use App\Http\Controllers\Operations\VehicleRegistrationController;
 use App\Http\Controllers\Payroll\AttendanceController;
 use App\Http\Controllers\Payroll\AttendanceReminderController;
+use App\Http\Controllers\Payroll\BonusAllowanceController;
+use App\Http\Controllers\Payroll\CompanyHolidayController;
 use App\Http\Controllers\Payroll\EmployeeController;
+use App\Http\Controllers\Payroll\SalaryAdvanceController;
 use App\Http\Controllers\Payroll\SalaryController;
+use App\Http\Controllers\Payroll\StatutoryReportController;
 use App\Http\Controllers\Reports\CreditManagementController;
 use App\Http\Controllers\Reports\MoneyBookController;
 use App\Http\Controllers\Reports\ProfitLossController;
@@ -326,8 +330,39 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/attendance/reminder-status', [AttendanceReminderController::class, 'status'])->name('attendance.reminder.status');
         Route::post('/attendance/reminder-dismiss', [AttendanceReminderController::class, 'dismiss'])->name('attendance.reminder.dismiss');
 
-        // Employee Advances
-        Route::post('/advances', [SalaryController::class, 'storeAdvance'])->name('advances.store');
+        // Company Holidays
+        Route::get('/holidays', [CompanyHolidayController::class, 'index'])->name('holidays.index');
+        Route::post('/holidays', [CompanyHolidayController::class, 'store'])->name('holidays.store');
+        Route::put('/holidays/{holiday}', [CompanyHolidayController::class, 'update'])->name('holidays.update');
+        Route::patch('/holidays/{holiday}/cancel', [CompanyHolidayController::class, 'cancel'])->name('holidays.cancel');
+        Route::delete('/holidays/{holiday}', [CompanyHolidayController::class, 'destroy'])->name('holidays.destroy');
+
+        // Employee Advances (Step 5)
+        Route::get('/advances', [SalaryAdvanceController::class, 'index'])->name('advances.index');
+        Route::post('/advances', [SalaryAdvanceController::class, 'store'])->name('advances.store');
+        Route::get('/advances/{advance}/history', [SalaryAdvanceController::class, 'history'])->name('advances.history');
+        Route::post('/advances/{advance}/approve', [SalaryAdvanceController::class, 'approve'])->name('advances.approve');
+        Route::post('/advances/{advance}/reject', [SalaryAdvanceController::class, 'reject'])->name('advances.reject');
+        Route::post('/advances/{advance}/disburse', [SalaryAdvanceController::class, 'disburse'])->name('advances.disburse');
+        Route::post('/advances/{advance}/cancel', [SalaryAdvanceController::class, 'cancel'])->name('advances.cancel');
+        Route::post('/advances/{advance}/reverse-disbursement', [SalaryAdvanceController::class, 'reverseDisbursement'])->name('advances.reverse-disbursement');
+
+        // Bonuses, Allowances & Overtime (Step 6)
+        Route::get('/bonuses-allowances', [BonusAllowanceController::class, 'index'])->name('bonuses-allowances.index');
+        Route::post('/bonuses-allowances/bonuses', [BonusAllowanceController::class, 'storeBonus'])->name('bonuses-allowances.bonuses.store');
+        Route::post('/bonuses-allowances/bonuses/{bonus}/approve', [BonusAllowanceController::class, 'approveBonus'])->name('bonuses-allowances.bonuses.approve');
+        Route::post('/bonuses-allowances/bonuses/{bonus}/reject', [BonusAllowanceController::class, 'rejectBonus'])->name('bonuses-allowances.bonuses.reject');
+        Route::post('/bonuses-allowances/bonuses/{bonus}/cancel', [BonusAllowanceController::class, 'cancelBonus'])->name('bonuses-allowances.bonuses.cancel');
+
+        Route::post('/bonuses-allowances/allowances', [BonusAllowanceController::class, 'storeAllowance'])->name('bonuses-allowances.allowances.store');
+        Route::post('/bonuses-allowances/allowances/{allowance}/toggle', [BonusAllowanceController::class, 'toggleAllowanceStatus'])->name('bonuses-allowances.allowances.toggle');
+        Route::post('/bonuses-allowances/allowances/{allowance}/cancel', [BonusAllowanceController::class, 'cancelAllowance'])->name('bonuses-allowances.allowances.cancel');
+
+        Route::post('/bonuses-allowances/overtime', [BonusAllowanceController::class, 'storeOvertime'])->name('bonuses-allowances.overtime.store');
+        Route::post('/bonuses-allowances/overtime/{overtime}/approve', [BonusAllowanceController::class, 'approveOvertime'])->name('bonuses-allowances.overtime.approve');
+        Route::post('/bonuses-allowances/overtime/{overtime}/reject', [BonusAllowanceController::class, 'rejectOvertime'])->name('bonuses-allowances.overtime.reject');
+        Route::post('/bonuses-allowances/overtime/{overtime}/cancel', [BonusAllowanceController::class, 'cancelOvertime'])->name('bonuses-allowances.overtime.cancel');
+        Route::get('/bonuses-allowances/overtime-rate', [BonusAllowanceController::class, 'calculateOvertimeRate'])->name('bonuses-allowances.overtime-rate');
 
         // Employee Salary Management
         Route::get('/salary', [SalaryController::class, 'index'])->name('salary.index');
@@ -335,7 +370,18 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/salary/{payrollItem}/print', [SalaryController::class, 'print'])->name('salary.print');
         Route::put('/salary/{payrollItem}/adjustments', [SalaryController::class, 'updateItem'])->name('salary.update-item');
         Route::post('/salary/{payrollItem}/payments', [SalaryController::class, 'recordPayment'])->name('salary.payments.store');
+        Route::post('/salary/periods/{period}/review', [SalaryController::class, 'markReviewed'])->name('salary.review');
         Route::post('/salary/periods/{period}/approve', [SalaryController::class, 'approve'])->name('salary.approve');
+        Route::post('/salary/periods/{period}/rollback', [SalaryController::class, 'rollbackApproval'])->name('salary.rollback');
+
+        // Statutory & Tax Reports (EPF, ETF, APIT) - Step 8
+        Route::get('/statutory', [StatutoryReportController::class, 'index'])->name('statutory.index');
+        Route::get('/statutory/epf', [StatutoryReportController::class, 'epfReport'])->name('statutory.epf');
+        Route::get('/statutory/etf', [StatutoryReportController::class, 'etfReport'])->name('statutory.etf');
+        Route::get('/statutory/apit', [StatutoryReportController::class, 'apitReport'])->name('statutory.apit');
+        Route::get('/statutory/employer-summary', [StatutoryReportController::class, 'employerSummary'])->name('statutory.employer-summary');
+        Route::get('/statutory/settings', [StatutoryReportController::class, 'settings'])->name('statutory.settings');
+        Route::post('/statutory/settings', [StatutoryReportController::class, 'updateSettings'])->name('statutory.settings.update');
     });
 
     // Expense Management Module (Stage 5)

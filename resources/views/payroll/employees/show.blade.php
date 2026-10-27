@@ -65,9 +65,15 @@
     <!-- Quick Stats Cards -->
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-xs">
-            <span class="text-xs text-gray-500 block">Current Daily Wage</span>
-            <span class="text-lg font-bold text-gray-900 font-mono">LKR {{ number_format($employee->daily_wage, 2) }}</span>
-            <span class="text-[10px] text-gray-400 block mt-0.5">Base per working day</span>
+            <span class="text-xs text-gray-500 block">
+                {{ $employee->isMonthlySalary() ? 'Monthly Basic Salary' : 'Current Daily Wage' }}
+            </span>
+            <span class="text-lg font-bold text-gray-900 font-mono">
+                LKR {{ number_format($employee->isMonthlySalary() ? $employee->monthly_basic_salary : $employee->daily_wage, 2) }}
+            </span>
+            <span class="text-[10px] text-gray-400 block mt-0.5">
+                {{ $employee->isMonthlySalary() ? 'Fixed monthly rate' : 'Base per working day' }} &bull; <strong class="text-[#0B1849]">{{ ucfirst($employee->salary_type ?? 'daily') }}</strong>
+            </span>
         </div>
 
         <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-xs">
@@ -95,6 +101,75 @@
                 LKR {{ number_format($pendingSum, 2) }}
             </span>
             <span class="text-[10px] text-gray-400 block mt-0.5">To deduct on next payroll</span>
+        </div>
+    </div>
+
+    <!-- Salary, Statutory & Banking Profile Card -->
+    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-xs space-y-3">
+        <div class="flex items-center justify-between pb-2 border-b border-gray-100">
+            <h3 class="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center">
+                <svg class="w-4 h-4 mr-1.5 text-[#0B1849]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Salary, Statutory & Banking Settings
+            </h3>
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold {{ $employee->isMonthlySalary() ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200' }}">
+                {{ $employee->isMonthlySalary() ? 'Monthly Salary Employee' : 'Daily Wage Employee' }}
+            </span>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+            <div>
+                <span class="text-gray-500 block">Assigned Branch</span>
+                <span class="font-semibold text-gray-900">{{ $employee->branch?->branch_name ?? 'All / Main' }}</span>
+            </div>
+
+            <div>
+                <span class="text-gray-500 block">EPF Membership No</span>
+                <span class="font-mono font-semibold text-gray-900">{{ $employee->epf_number ?: 'Not Enrolled' }}</span>
+            </div>
+
+            <div>
+                <span class="text-gray-500 block">Payment Method</span>
+                <span class="font-semibold text-gray-900">{{ ucfirst(str_replace('_', ' ', $employee->payment_method ?? 'cash')) }}</span>
+            </div>
+
+            <div>
+                <span class="text-gray-500 block">Company 5-Off-Day Policy</span>
+                @if($employee->eligible_for_off_days ?? true)
+                    <span class="inline-flex items-center text-emerald-700 font-semibold">&#x2713; Eligible (5 Days/Mo)</span>
+                @else
+                    <span class="text-gray-400">Not Applicable</span>
+                @endif
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs pt-2 border-t border-gray-100">
+            <div>
+                <span class="text-gray-500 block">Statutory Eligibility</span>
+                <div class="flex items-center gap-2 mt-1">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold {{ ($employee->is_epf_eligible ?? true) ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600' }}">
+                        EPF (8%/12%): {{ ($employee->is_epf_eligible ?? true) ? 'Yes' : 'No' }}
+                    </span>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold {{ ($employee->is_etf_eligible ?? true) ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600' }}">
+                        ETF (3%): {{ ($employee->is_etf_eligible ?? true) ? 'Yes' : 'No' }}
+                    </span>
+                </div>
+            </div>
+
+            <div>
+                <span class="text-gray-500 block">Bank Account Details</span>
+                @if($employee->bank_name || $employee->bank_account_number)
+                    <div class="font-medium text-gray-900 mt-1 font-mono">
+                        {{ $employee->bank_name }} {{ $employee->bank_branch ? '(' . $employee->bank_branch . ')' : '' }} &bull; A/C: {{ $employee->bank_account_number }}
+                        @if($employee->bank_account_name)
+                            <span class="text-gray-500 block text-[11px] font-sans">({{ $employee->bank_account_name }})</span>
+                        @endif
+                    </div>
+                @else
+                    <span class="text-gray-400 mt-1 block">No bank details recorded (Cash Payment)</span>
+                @endif
+            </div>
         </div>
     </div>
 
@@ -290,8 +365,8 @@
     <!-- Tab 3: Wage Rate History -->
     <div x-show="activeTab === 'wages'" class="bg-white rounded-b-xl border border-gray-200 shadow-xs overflow-hidden" style="display: none;">
         <div class="p-4 border-b border-gray-100">
-            <h3 class="text-sm font-semibold text-gray-900">Daily Wage History & Historical Snapshots</h3>
-            <p class="text-xs text-gray-500 mt-0.5">Wage rate periods are immutable to safeguard historical payroll calculations.</p>
+            <h3 class="text-sm font-semibold text-gray-900">Wage & Salary Rate History & Historical Snapshots</h3>
+            <p class="text-xs text-gray-500 mt-0.5">Salary rate periods are immutable to safeguard historical payroll and attendance calculations.</p>
         </div>
         <div class="responsive-table-wrapper">
             <table class="min-w-full divide-y divide-gray-200 text-sm">
@@ -299,13 +374,15 @@
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Effective From</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Effective To</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600">Daily Wage</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600">Type</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600">Salary Rate</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Reason / Notes</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600">Status</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     @forelse($employee->wageRates as $rate)
+                        @php $isMonthly = ($rate->salary_type ?? 'daily') === 'monthly'; @endphp
                         <tr class="hover:bg-slate-50">
                             <td class="px-4 py-3 font-semibold text-gray-900 whitespace-nowrap">
                                 {{ $rate->effective_from->format('d M Y') }}
@@ -313,13 +390,19 @@
                             <td class="px-4 py-3 text-gray-600 whitespace-nowrap">
                                 {{ $rate->effective_to ? $rate->effective_to->format('d M Y') : 'Present (Current)' }}
                             </td>
-                            <td class="px-4 py-3 text-right font-mono font-bold text-gray-900">
-                                LKR {{ number_format($rate->daily_wage, 2) }}
+                            <td class="px-4 py-3 text-center whitespace-nowrap">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold {{ $isMonthly ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200' }}">
+                                    {{ $isMonthly ? 'Monthly' : 'Daily' }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 text-right font-mono font-bold text-gray-900 whitespace-nowrap">
+                                LKR {{ number_format($isMonthly ? ($rate->monthly_basic_salary ?? 0) : $rate->daily_wage, 2) }}
+                                <span class="text-[10px] text-gray-400 font-sans font-normal">{{ $isMonthly ? '/ mo' : '/ day' }}</span>
                             </td>
                             <td class="px-4 py-3 text-gray-600 text-xs">
                                 {{ $rate->reason ?: '—' }}
                             </td>
-                            <td class="px-4 py-3 text-center">
+                            <td class="px-4 py-3 text-center whitespace-nowrap">
                                 @if(is_null($rate->effective_to))
                                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                         Active
@@ -333,8 +416,8 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="p-4 text-center text-gray-400 text-xs">
-                                No separate wage rate history recorded.
+                            <td colspan="6" class="p-4 text-center text-gray-400 text-xs">
+                                No separate salary rate history recorded.
                             </td>
                         </tr>
                     @endforelse
