@@ -1,7 +1,10 @@
 <?php
-require __DIR__ . '/vendor/autoload.php';
-$app = require_once __DIR__ . '/bootstrap/app.php';
-$kernel = $app->make(Illuminate\Contracts\Http\Kernel::class);
+
+use Illuminate\Contracts\Http\Kernel;
+
+require __DIR__.'/vendor/autoload.php';
+$app = require_once __DIR__.'/bootstrap/app.php';
+$kernel = $app->make(Kernel::class);
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
 $compiler = app('blade.compiler');

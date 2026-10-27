@@ -8,8 +8,6 @@ use App\Models\Customer;
 use App\Models\GoodsReceivedNote;
 use App\Models\Invoice;
 use App\Models\JobCard;
-use App\Models\JobCardProduct;
-use App\Models\JobCardService;
 use App\Models\JobIssue;
 use App\Models\Product;
 use App\Models\Service;
@@ -28,13 +26,21 @@ class JobCardUiAndWorkflowTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected Branch $branch;
+
     protected CompanySetting $company;
+
     protected VehicleType $vehicleType;
+
     protected Customer $customer;
+
     protected Vehicle $vehicle;
+
     protected Service $service;
+
     protected Product $product;
+
     protected StockBatch $batch;
 
     protected function setUp(): void
