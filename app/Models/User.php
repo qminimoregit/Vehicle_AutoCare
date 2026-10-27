@@ -84,6 +84,7 @@ class User extends Authenticatable
             'record_payments',
             'view_employees',
             'mark_attendance',
+            'view_holidays',
             'view_expenses',
             'create_expenses',
             'view_stock_reports',
@@ -91,6 +92,8 @@ class User extends Authenticatable
             'view_vehicle_service_reports',
             'view_money_book',
             'view_credit_management',
+            'view_advances',
+            'view_bonuses_allowances',
         ];
 
         return in_array($permission, $staffAllowed);

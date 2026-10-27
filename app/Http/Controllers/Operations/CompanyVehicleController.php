@@ -6,12 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\Customer;
 use App\Models\CustomerCreditAccount;
-use App\Models\Invoice;
 use App\Models\JobCard;
 use App\Models\Vehicle;
 use App\Models\VehicleType;
 use App\Services\BranchContext;
-use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -127,6 +125,7 @@ class CompanyVehicleController extends Controller
                     'errors' => ['company_name' => [$msg]],
                 ], 422);
             }
+
             return back()->withInput()->with('error', $msg);
         }
 
@@ -240,6 +239,7 @@ class CompanyVehicleController extends Controller
                     'errors' => ['company_name' => [$msg]],
                 ], 422);
             }
+
             return back()->withInput()->with('error', $msg);
         }
 
@@ -471,6 +471,7 @@ class CompanyVehicleController extends Controller
                     'errors' => ['vehicle_number' => [$msg]],
                 ], 422);
             }
+
             return back()->withInput()->with('error', $msg);
         }
 
@@ -694,4 +695,3 @@ class CompanyVehicleController extends Controller
         ]);
     }
 }
-

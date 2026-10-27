@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\CompanySetting;
+use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\User;
@@ -15,14 +17,16 @@ class LoginPageRedesignTest extends TestCase
     use RefreshDatabase;
 
     protected User $adminUser;
+
     protected User $staffUser;
+
     protected Branch $branch;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $company = \App\Models\CompanySetting::getSettings();
+        $company = CompanySetting::getSettings();
 
         $this->branch = Branch::firstOrCreate(
             ['branch_code' => 'CMB'],
@@ -60,7 +64,7 @@ class LoginPageRedesignTest extends TestCase
         for ($i = 1; $i <= 6; $i++) {
             $filename = sprintf('vehicle-0%d.webp', $i);
             $this->assertFileExists(
-                public_path('images/login/' . $filename),
+                public_path('images/login/'.$filename),
                 "Expected {$filename} to exist in public/images/login/"
             );
         }
@@ -163,7 +167,7 @@ class LoginPageRedesignTest extends TestCase
 
     public function test_money_book_queries_real_records_and_respects_date_and_branch_filtering(): void
     {
-        $customer = \App\Models\Customer::firstOrCreate(
+        $customer = Customer::firstOrCreate(
             ['phone' => '0771234567'],
             [
                 'customer_name' => 'Test Customer',

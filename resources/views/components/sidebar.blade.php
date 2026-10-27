@@ -522,6 +522,39 @@
                             <span class="truncate">Employee Attendance</span>
                         </a>
 
+                        <!-- Company Holidays -->
+                        @php $isHolidays = request()->routeIs('payroll.holidays.*'); @endphp
+                        <a 
+                            href="{{ route('payroll.holidays.index') }}" 
+                            @click="if (window.innerWidth < 1024) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isHolidays ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isHolidays ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Company Holidays</span>
+                        </a>
+
+                        <!-- Salary Advances -->
+                        @php $isAdvances = request()->routeIs('payroll.advances.*'); @endphp
+                        <a 
+                            href="{{ route('payroll.advances.index') }}" 
+                            @click="if (window.innerWidth < 1024) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isAdvances ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isAdvances ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Salary Advances</span>
+                        </a>
+
+                        <!-- Bonuses & Allowances -->
+                        @php $isBonuses = request()->routeIs('payroll.bonuses-allowances.*'); @endphp
+                        <a 
+                            href="{{ route('payroll.bonuses-allowances.index') }}" 
+                            @click="if (window.innerWidth < 1024) sidebarOpen = false"
+                            class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isBonuses ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isBonuses ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                            <span class="truncate">Bonuses & Allowances</span>
+                        </a>
+
                         <!-- Employee Salary -->
                         @if(Auth::user() && (Auth::user()->isAdmin() || Auth::user()->hasPermission('view_salary')))
                             @php $isSalary = request()->routeIs('payroll.salary.*'); @endphp
@@ -532,6 +565,17 @@
                             >
                                 <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isSalary ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
                                 <span class="truncate">Employee Salary</span>
+                            </a>
+
+                            <!-- Statutory & Tax Reports (Step 8) -->
+                            @php $isStatutory = request()->routeIs('payroll.statutory.*'); @endphp
+                            <a 
+                                href="{{ route('payroll.statutory.index') }}" 
+                                @click="if (window.innerWidth < 1024) sidebarOpen = false"
+                                class="group flex items-center px-2.5 py-1.5 text-[13px] rounded-lg transition {{ $isStatutory ? 'bg-[#EEF1FA] text-[#0B1849] font-semibold' : 'text-[#4A4A4A] font-medium hover:bg-slate-50 hover:text-gray-900' }}"
+                            >
+                                <span class="w-1.5 h-1.5 rounded-full mr-2 shrink-0 {{ $isStatutory ? 'bg-[#0B1849]' : 'bg-gray-300 group-hover:bg-gray-400' }}"></span>
+                                <span class="truncate">Statutory & Tax (EPF/ETF)</span>
                             </a>
                         @endif
                     </div>

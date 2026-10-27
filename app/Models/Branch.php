@@ -47,7 +47,8 @@ class Branch extends Model
      */
     public function newEloquentBuilder($query): Builder
     {
-        return new class($query) extends Builder {
+        return new class($query) extends Builder
+        {
             public function orderBy($column, $direction = 'asc')
             {
                 if ($column === 'name') {

@@ -8,8 +8,6 @@ use App\Models\Customer;
 use App\Models\GoodsReceivedNote;
 use App\Models\Invoice;
 use App\Models\JobCard;
-use App\Models\JobCardProduct;
-use App\Models\JobCardService;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\ServiceVehiclePrice;
@@ -29,17 +27,29 @@ class DashboardAndJobCardPrintingTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $staff;
+
     protected Branch $branchColombo;
+
     protected Branch $branchKandy;
+
     protected CompanySetting $company;
+
     protected VehicleType $vehicleType;
+
     protected Customer $customer;
+
     protected Vehicle $vehicle;
+
     protected Service $service1;
+
     protected Service $service2;
+
     protected Product $product1;
+
     protected Product $product2;
+
     protected JobCard $jobCard;
 
     protected function setUp(): void

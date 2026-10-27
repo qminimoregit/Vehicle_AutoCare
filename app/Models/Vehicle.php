@@ -113,4 +113,3 @@ class Vehicle extends Model
         return $this->hasMany(Appointment::class, 'vehicle_id');
     }
 }
-

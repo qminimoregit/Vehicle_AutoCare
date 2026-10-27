@@ -18,8 +18,11 @@ class PageNavigationAndRenderingTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected Branch $branch;
+
     protected Customer $customer;
+
     protected Invoice $invoice;
 
     protected function setUp(): void

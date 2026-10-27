@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Branch;
 use App\Models\CarpetCategory;
+use App\Models\CompanySetting;
 use App\Models\Customer;
 use App\Models\CustomerCreditAccount;
 use App\Models\Invoice;
@@ -19,19 +20,26 @@ class VehicleAutoFillAndCarpetDetailsTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $staff;
+
     protected Branch $branch;
+
     protected VehicleType $carType;
+
     protected VehicleType $bikeType;
+
     protected CarpetCategory $frontCarpet;
+
     protected CarpetCategory $rearCarpet;
+
     protected CarpetCategory $bootCarpet;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $company = \App\Models\CompanySetting::getSettings();
+        $company = CompanySetting::getSettings();
 
         $this->branch = Branch::create([
             'company_id' => $company->id,

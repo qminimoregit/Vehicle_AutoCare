@@ -77,10 +77,10 @@ class JobIssueController extends Controller
             $message = "Customer approval recorded for: '{$issue->recommended_repair}'. You may now add additional repair work.";
         } elseif ($decision === 'declined') {
             $updateData['status'] = 'declined';
-            $message = "Issue marked as declined by customer.";
+            $message = 'Issue marked as declined by customer.';
         } else {
             $updateData['status'] = 'deferred';
-            $message = "Issue deferred for future attention.";
+            $message = 'Issue deferred for future attention.';
         }
 
         $issue->update($updateData);

@@ -27,12 +27,19 @@ class JobCardImprovementsAndAppointmentsTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected Branch $branch;
+
     protected CompanySetting $company;
+
     protected VehicleType $vehicleType;
+
     protected Customer $customer;
+
     protected Vehicle $vehicle;
+
     protected Service $service;
+
     protected Product $product;
 
     protected function setUp(): void
