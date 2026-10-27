@@ -8,7 +8,8 @@
     showAdjustModal: false, 
     showAdvanceModal: false,
     showPaymentModal: false,
-    paymentItem: null
+    paymentItem: null,
+    showWarningModal: false
 }">
     <!-- Header -->
     <x-page-header 
@@ -95,19 +96,14 @@
 
                 <!-- 4. Employee Filter -->
                 <div>
-                    <label for="employee_id" class="block text-xs font-semibold text-gray-700 mb-1">Employee</label>
-                    <select 
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">Employee</label>
+                    <x-searchable-select 
                         name="employee_id" 
-                        id="employee_id" 
-                        class="w-full py-2 px-3 text-xs font-medium text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white"
-                    >
-                        <option value="">All Employees</option>
-                        @foreach($activeEmployees as $emp)
-                            <option value="{{ $emp->id }}" {{ (string)$selectedEmployeeId === (string)$emp->id ? 'selected' : '' }}>
-                                {{ $emp->name }} ({{ $emp->employee_number }})
-                            </option>
-                        @endforeach
-                    </select>
+                        :value="$selectedEmployeeId"
+                        placeholder="All Employees"
+                        :endpoint="route('search.employees')"
+                        :clearable="true"
+                    />
                 </div>
 
                 <!-- 5. Salary Type Filter -->
@@ -260,7 +256,26 @@
                     <span class="text-xs font-bold uppercase tracking-wider text-gray-500">Payroll Approval Workflow:</span>
                     <span class="text-xs font-bold text-gray-900 font-mono">{{ $period->formatted_period }}</span>
                 </div>
-                <div>
+                <div class="flex flex-wrap items-center gap-2">
+                    @if(!empty($validation['warnings']) || count($unmarkedDaysWarning) > 0)
+                        <button 
+                            type="button" 
+                            @click="showWarningModal = true"
+                            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100 transition shadow-2xs cursor-pointer"
+                            title="Click to view warning and unrecorded attendance details"
+                        >
+                            <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                            <span>
+                                @if(count($unmarkedDaysWarning) > 0)
+                                    Attendance: {{ count($unmarkedDaysWarning) }} {{ count($unmarkedDaysWarning) === 1 ? 'date needs' : 'dates need' }} review
+                                @else
+                                    Payroll: {{ count($validation['warnings']) }} {{ count($validation['warnings']) === 1 ? 'warning' : 'warnings' }} to review
+                                @endif
+                            </span>
+                            <span class="text-xs font-bold text-amber-950 underline ml-0.5">View Details</span>
+                        </button>
+                    @endif
+
                     @if($period->status === 'paid')
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
                             &#x2713; Fully Disbursed & Paid
@@ -361,53 +376,6 @@
                             <li>{{ $blocker }}</li>
                         @endforeach
                     </ul>
-                </div>
-            </div>
-        </div>
-    @endif
-
-    <!-- PAYROLL REVIEW WARNINGS (AMBER BANNER) -->
-    @if(!empty($validation['warnings']) || count($unmarkedDaysWarning) > 0)
-        <div class="bg-amber-50 border-l-4 border-amber-500 rounded-r-xl p-4 shadow-xs">
-            <div class="flex items-start">
-                <svg class="w-5 h-5 text-amber-600 mr-3 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <div class="flex-1">
-                    <h4 class="text-sm font-bold text-amber-900">
-                        Payroll Review Warnings
-                    </h4>
-                    <p class="text-xs text-amber-800 mt-1">
-                        Please review the following non-blocking warnings before approving payroll:
-                    </p>
-                    <ul class="list-disc list-inside mt-2 space-y-1 text-xs text-amber-900">
-                        @foreach($validation['warnings'] as $warning)
-                            <li>{{ $warning }}</li>
-                        @endforeach
-                    </ul>
-
-                    @if(count($unmarkedDaysWarning) > 0)
-                        <div class="mt-2 pt-2 border-t border-amber-200/60">
-                            <span class="text-xs font-semibold text-amber-900 block mb-1">
-                                Unrecorded attendance dates in this period ({{ count($unmarkedDaysWarning) }} dates):
-                            </span>
-                            <div class="flex flex-wrap gap-1.5">
-                                @foreach(array_slice($unmarkedDaysWarning, 0, 8) as $warn)
-                                    <a 
-                                        href="{{ route('payroll.attendance.index', ['date' => $warn['date']]) }}" 
-                                        class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-200/70 text-amber-900 hover:bg-amber-300 transition"
-                                    >
-                                        {{ \Carbon\Carbon::parse($warn['date'])->format('d M') }} ({{ $warn['missing'] }} unrecorded) &rarr;
-                                    </a>
-                                @endforeach
-                                @if(count($unmarkedDaysWarning) > 8)
-                                    <span class="text-xs text-amber-700 font-semibold self-center">
-                                        +{{ count($unmarkedDaysWarning) - 8 }} more
-                                    </span>
-                                @endif
-                            </div>
-                        </div>
-                    @endif
                 </div>
             </div>
         </div>
@@ -1220,12 +1188,12 @@
                     @csrf
                     <div>
                         <label class="block text-xs font-semibold text-gray-700 mb-1">Select Employee *</label>
-                        <select name="employee_id" required class="block w-full py-2 px-3 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-[#0B1849]">
-                            <option value="">-- Choose Employee --</option>
-                            @foreach($activeEmployees as $emp)
-                                <option value="{{ $emp->id }}">{{ $emp->name }} ({{ $emp->employee_number }}) - LKR {{ number_format($emp->daily_wage, 2) }}/day</option>
-                            @endforeach
-                        </select>
+                        <x-searchable-select 
+                            name="employee_id" 
+                            :endpoint="route('search.employees')" 
+                            :required="true" 
+                            placeholder="-- Choose Employee --" 
+                        />
                     </div>
 
                     <div>
@@ -1279,6 +1247,179 @@
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- PAYROLL REVIEW WARNINGS DETAILS MODAL -->
+    <div 
+        x-cloak 
+        x-show="showWarningModal" 
+        class="fixed inset-0 z-50 overflow-y-auto"
+        @keydown.escape.window="showWarningModal = false"
+        role="dialog"
+        aria-modal="true"
+    >
+        <div class="flex items-center justify-center min-h-screen p-4 text-center sm:p-0">
+            <!-- Backdrop -->
+            <div 
+                x-show="showWarningModal" 
+                x-transition:enter="ease-out duration-300" 
+                x-transition:enter-start="opacity-0" 
+                x-transition:enter-end="opacity-100" 
+                x-transition:leave="ease-in duration-200" 
+                x-transition:leave-start="opacity-100" 
+                x-transition:leave-end="opacity-0" 
+                @click="showWarningModal = false" 
+                class="fixed inset-0 transition-opacity bg-gray-900/60 backdrop-blur-xs"
+            ></div>
+
+            <!-- Modal Panel -->
+            <div 
+                x-show="showWarningModal" 
+                x-transition:enter="ease-out duration-300" 
+                x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" 
+                x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" 
+                x-transition:leave="ease-in duration-200" 
+                x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" 
+                x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" 
+                @click.stop 
+                class="relative z-10 w-full max-w-2xl max-h-[85vh] flex flex-col p-6 my-8 text-left transition-all transform bg-white shadow-2xl rounded-2xl border border-gray-100 overflow-hidden"
+            >
+                <!-- Modal Header -->
+                <div class="flex items-start justify-between pb-4 border-b border-gray-100 shrink-0">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h3 class="text-base font-bold text-gray-900">Payroll Review Warnings & Attendance Details</h3>
+                                <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200 uppercase tracking-wider">
+                                    Needs Review
+                                </span>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-0.5">
+                                Review unrecorded attendance dates and non-blocking calculation notices for {{ $period?->formatted_period ?? 'current period' }}.
+                            </p>
+                        </div>
+                    </div>
+                    <button 
+                        type="button" 
+                        @click="showWarningModal = false" 
+                        class="text-gray-400 hover:text-gray-600 transition cursor-pointer p-1.5 rounded-lg hover:bg-gray-100"
+                        aria-label="Close dialog"
+                    >
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Guidance Pills -->
+                <div class="py-3 px-4 bg-gray-50 rounded-xl border border-gray-200 my-4 text-xs flex flex-wrap gap-4 items-center shrink-0">
+                    <span class="inline-flex items-center gap-1.5 text-blue-700 font-semibold">
+                        <span class="w-2 h-2 rounded-full bg-blue-500"></span> Information
+                    </span>
+                    <span class="inline-flex items-center gap-1.5 text-amber-700 font-semibold">
+                        <span class="w-2 h-2 rounded-full bg-amber-500"></span> Needs Review (Non-blocking)
+                    </span>
+                    <span class="inline-flex items-center gap-1.5 text-rose-700 font-semibold">
+                        <span class="w-2 h-2 rounded-full bg-rose-500"></span> Blocks Approval (Critical Errors)
+                    </span>
+                </div>
+
+                <!-- Modal Body (Scrollable) -->
+                <div class="overflow-y-auto space-y-4 pr-1 flex-1">
+                    <!-- Unrecorded Attendance Dates Section -->
+                    @if(count($unmarkedDaysWarning) > 0)
+                        <div class="border border-amber-200 bg-amber-50/50 rounded-xl p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="text-xs font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                                    <svg class="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                    Unrecorded Attendance Dates ({{ count($unmarkedDaysWarning) }} Dates)
+                                </h4>
+                                <span class="text-[11px] font-medium text-amber-700">Financial Safety Notice</span>
+                            </div>
+                            <p class="text-xs text-amber-800 mb-3">
+                                Attendance was not recorded for the following dates in this period. Unrecorded dates are NOT automatically marked absent or deducted; workshop supervisors should review and mark attendance as appropriate.
+                            </p>
+
+                            <div class="divide-y divide-amber-200/60 border border-amber-200/80 rounded-lg bg-white overflow-hidden max-h-60 overflow-y-auto">
+                                @foreach($unmarkedDaysWarning as $warn)
+                                    <div class="px-3.5 py-2.5 flex items-center justify-between hover:bg-amber-50/40 transition text-xs">
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-mono font-bold text-gray-900">
+                                                {{ \Carbon\Carbon::parse($warn['date'])->format('d M Y') }}
+                                            </span>
+                                            <span class="text-gray-400 font-normal">({{ \Carbon\Carbon::parse($warn['date'])->format('l') }})</span>
+                                        </div>
+                                        <div class="flex items-center gap-3">
+                                            <span class="text-[11px] font-semibold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
+                                                {{ $warn['missing'] }} {{ $warn['missing'] === 1 ? 'employee unrecorded' : 'employees unrecorded' }}
+                                            </span>
+                                            <a 
+                                                href="{{ route('payroll.attendance.index', ['date' => $warn['date']]) }}" 
+                                                class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-[#0B1849] hover:bg-[#0B1849] hover:text-white border border-[#0B1849]/30 rounded-md transition"
+                                                title="Open attendance marking screen for this date"
+                                            >
+                                                Mark Attendance &rarr;
+                                            </a>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+
+                    <!-- Non-blocking Payroll Warnings Section -->
+                    @if(!empty($validation['warnings']))
+                        <div class="border border-gray-200 bg-white rounded-xl p-4">
+                            <h4 class="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                <svg class="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                Calculation & Rate Notices ({{ count($validation['warnings']) }})
+                            </h4>
+                            <ul class="space-y-2 text-xs text-gray-700">
+                                @foreach($validation['warnings'] as $warning)
+                                    <li class="p-2.5 rounded-lg bg-gray-50 border border-gray-100 flex items-start gap-2">
+                                        <span class="text-blue-500 font-bold shrink-0">&bull;</span>
+                                        <span>{{ $warning }}</span>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+
+                    @if(empty($validation['warnings']) && count($unmarkedDaysWarning) === 0)
+                        <div class="p-6 text-center text-xs text-gray-500">
+                            <svg class="w-8 h-8 text-emerald-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <p class="font-bold text-gray-800">No Review Warnings</p>
+                            <p class="text-gray-500 mt-1">All attendance reconciliation and non-blocking calculations look complete.</p>
+                        </div>
+                    @endif
+                </div>
+
+                <!-- Modal Footer -->
+                <div class="pt-4 border-t border-gray-100 flex items-center justify-between shrink-0 mt-4">
+                    <span class="text-[11px] text-gray-400">
+                        Viran Auto Care &bull; Safe Payroll Engine
+                    </span>
+                    <button 
+                        type="button" 
+                        @click="showWarningModal = false" 
+                        class="px-4 py-2 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition cursor-pointer"
+                    >
+                        Close Details
+                    </button>
+                </div>
             </div>
         </div>
     </div>

@@ -75,18 +75,13 @@
                     <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
                         Employee Name <span class="text-rose-500">*</span>
                     </label>
-                    <select 
+                    <x-searchable-select 
                         name="employee_id" 
-                        required 
-                        class="block w-full px-3.5 py-2.5 text-sm text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] bg-white"
-                    >
-                        <option value="">Select Employee...</option>
-                        @foreach($employees as $emp)
-                            <option value="{{ $emp->id }}" {{ old('employee_id') == $emp->id ? 'selected' : '' }}>
-                                {{ $emp->name }} ({{ $emp->employee_number }}) - {{ $emp->designation ?? 'Staff' }}
-                            </option>
-                        @endforeach
-                    </select>
+                        :value="old('employee_id')"
+                        :endpoint="route('search.employees')"
+                        :required="true"
+                        placeholder="Search employee by name or number..."
+                    />
                     @error('employee_id')
                         <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
                     @enderror

@@ -47,6 +47,7 @@ use App\Http\Controllers\Reports\SalesReportController;
 use App\Http\Controllers\Reports\StockReportController as Stage7StockReportController;
 use App\Http\Controllers\Reports\StockValueReportController;
 use App\Http\Controllers\Reports\VehicleServiceReportController;
+use App\Http\Controllers\SearchController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -486,4 +487,15 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/print/log', [PrinterSettingController::class, 'logStatus'])->name('print.log');
     Route::get('/print/certificate', [PrinterSettingController::class, 'getCertificate'])->name('print.certificate');
     Route::post('/print/sign', [PrinterSettingController::class, 'sign'])->name('print.sign');
+
+    // Fast Entity Search Endpoints for SearchableSelect Component
+    Route::prefix('search')->name('search.')->group(function () {
+        Route::get('/employees', [SearchController::class, 'employees'])->name('employees');
+        Route::get('/customers', [SearchController::class, 'customers'])->name('customers');
+        Route::get('/vehicles', [SearchController::class, 'vehicles'])->name('vehicles');
+        Route::get('/suppliers', [SearchController::class, 'suppliers'])->name('suppliers');
+        Route::get('/products', [SearchController::class, 'products'])->name('products');
+        Route::get('/services', [SearchController::class, 'services'])->name('services');
+        Route::get('/invoices', [SearchController::class, 'invoices'])->name('invoices');
+    });
 });

@@ -124,14 +124,14 @@
             <!-- Employee Filter -->
             <div>
                 <label class="block text-xs font-semibold text-gray-700 mb-1">Employee</label>
-                <select name="employee_id" class="block w-full py-2 px-3 text-xs border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-[#0B1849]">
-                    <option value="">All Employees</option>
-                    @foreach($employees as $emp)
-                        <option value="{{ $emp->id }}" {{ request('employee_id') == $emp->id ? 'selected' : '' }}>
-                            {{ $emp->name }} ({{ $emp->employee_number }})
-                        </option>
-                    @endforeach
-                </select>
+                <x-searchable-select 
+                    name="employee_id" 
+                    :value="request('employee_id')" 
+                    placeholder="All Employees" 
+                    searchPlaceholder="Search employee name or mobile..."
+                    :endpoint="route('search.employees')" 
+                    :clearable="true" 
+                />
             </div>
 
             <!-- Month Filter -->
@@ -448,19 +448,14 @@
                     @csrf
                     <div>
                         <label class="block text-xs font-semibold text-gray-700 mb-1">Employee *</label>
-                        <select name="employee_id" required class="block w-full py-2 px-3 text-xs border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-[#0B1849]">
-                            <option value="">-- Choose Employee --</option>
-                            @foreach($employees as $emp)
-                                <option value="{{ $emp->id }}">
-                                    {{ $emp->name }} ({{ $emp->employee_number }}) - {{ ucfirst($emp->salary_type) }} 
-                                    @if($emp->isMonthlySalary())
-                                        (Basic: LKR {{ number_format($emp->monthly_basic_salary, 2) }})
-                                    @else
-                                        (Wage: LKR {{ number_format($emp->daily_wage, 2) }}/day)
-                                    @endif
-                                </option>
-                            @endforeach
-                        </select>
+                        <x-searchable-select 
+                            name="employee_id" 
+                            :value="old('employee_id')" 
+                            placeholder="-- Choose Employee --" 
+                            searchPlaceholder="Search employee name, number or mobile..."
+                            :endpoint="route('search.employees')" 
+                            :required="true" 
+                        />
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">

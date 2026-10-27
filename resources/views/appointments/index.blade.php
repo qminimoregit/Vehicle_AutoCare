@@ -832,17 +832,12 @@
                             <label for="new_service_id" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
                                 Service
                             </label>
-                            <select 
+                            <x-searchable-select 
                                 name="service_id" 
-                                id="new_service_id" 
-                                x-model="newServiceId"
-                                class="block w-full py-2.5 px-3 text-sm text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B1849] bg-white min-h-[44px]"
-                            >
-                                <option value="">-- Select Service (Optional) --</option>
-                                @foreach($services as $srv)
-                                    <option value="{{ $srv->id }}">{{ $srv->name }}</option>
-                                @endforeach
-                            </select>
+                                :endpoint="route('search.services')" 
+                                placeholder="-- Select Service (Optional) --" 
+                                :clearable="true" 
+                            />
                         </div>
                     </div>
 

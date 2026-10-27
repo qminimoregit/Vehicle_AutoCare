@@ -185,22 +185,17 @@
                 <!-- Preferred Supplier & Selling Price -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                        <label for="preferred_supplier_id" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-700">
                             Preferred Supplier <span class="text-gray-400 font-normal normal-case">(Optional)</span>
                         </label>
                         <div class="mt-1.5">
-                            <select 
+                            <x-searchable-select 
                                 name="preferred_supplier_id" 
-                                id="preferred_supplier_id" 
-                                class="block w-full px-3.5 py-2.5 text-sm text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] bg-white"
-                            >
-                                <option value="">No Preferred Supplier (Any)</option>
-                                @foreach($suppliers as $supplier)
-                                    <option value="{{ $supplier->id }}" {{ old('preferred_supplier_id', $product->preferred_supplier_id) == $supplier->id ? 'selected' : '' }}>
-                                        {{ $supplier->name }}
-                                    </option>
-                                @endforeach
-                            </select>
+                                :value="old('preferred_supplier_id', $product->preferred_supplier_id)"
+                                :endpoint="route('search.suppliers')"
+                                placeholder="No Preferred Supplier (Any)"
+                                :clearable="true"
+                            />
                         </div>
                     </div>
 

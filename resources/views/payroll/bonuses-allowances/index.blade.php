@@ -179,14 +179,14 @@
             <!-- Employee Filter -->
             <div class="lg:col-span-2">
                 <label class="block text-xs font-semibold text-gray-700 mb-1">Employee</label>
-                <select name="employee_id" class="block w-full py-2 px-3 text-xs border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-[#0B1849]">
-                    <option value="">All Employees</option>
-                    @foreach($employees as $emp)
-                        <option value="{{ $emp->id }}" {{ request('employee_id') == $emp->id ? 'selected' : '' }}>
-                            {{ $emp->name }} ({{ $emp->employee_number }})
-                        </option>
-                    @endforeach
-                </select>
+                <x-searchable-select 
+                    name="employee_id" 
+                    :value="request('employee_id')" 
+                    placeholder="All Employees" 
+                    searchPlaceholder="Search employee name or mobile..."
+                    :endpoint="route('search.employees')" 
+                    :clearable="true" 
+                />
             </div>
 
             <!-- Year Filter -->
@@ -615,12 +615,12 @@
 
                     <div x-show="bonusTarget === 'single'">
                         <label class="block text-xs font-semibold text-gray-700 mb-1">Select Employee *</label>
-                        <select name="employee_id" class="block w-full py-2 px-3 text-xs border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-[#0B1849]">
-                            <option value="">-- Choose Employee --</option>
-                            @foreach($employees as $emp)
-                                <option value="{{ $emp->id }}">{{ $emp->name }} ({{ $emp->employee_number }})</option>
-                            @endforeach
-                        </select>
+                        <x-searchable-select 
+                            name="employee_id" 
+                            placeholder="-- Choose Employee --" 
+                            searchPlaceholder="Search employee name or mobile..."
+                            :endpoint="route('search.employees')" 
+                        />
                     </div>
 
                     <div x-show="bonusTarget === 'selected'" class="space-y-1">
@@ -735,12 +735,13 @@
 
                     <div>
                         <label class="block text-xs font-semibold text-gray-700 mb-1">Employee *</label>
-                        <select name="employee_id" required class="block w-full py-2 px-3 text-xs border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-[#0B1849]">
-                            <option value="">-- Choose Employee --</option>
-                            @foreach($employees as $emp)
-                                <option value="{{ $emp->id }}">{{ $emp->name }} ({{ $emp->employee_number }})</option>
-                            @endforeach
-                        </select>
+                        <x-searchable-select 
+                            name="employee_id" 
+                            placeholder="-- Choose Employee --" 
+                            searchPlaceholder="Search employee name or mobile..."
+                            :endpoint="route('search.employees')" 
+                            :required="true" 
+                        />
                     </div>
 
                     <div class="grid grid-cols-2 gap-3">
@@ -823,14 +824,15 @@
                     @csrf
                     <div>
                         <label class="block text-xs font-semibold text-gray-700 mb-1">Employee *</label>
-                        <select name="employee_id" x-model="otEmployeeId" @change="fetchOvertimeRate()" required class="block w-full py-2 px-3 text-xs border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-[#0B1849]">
-                            <option value="">-- Choose Employee --</option>
-                            @foreach($employees as $emp)
-                                <option value="{{ $emp->id }}">
-                                    {{ $emp->name }} ({{ $emp->employee_number }}) - {{ ucfirst($emp->salary_type) }}
-                                </option>
-                            @endforeach
-                        </select>
+                        <x-searchable-select 
+                            name="employee_id" 
+                            placeholder="-- Choose Employee --" 
+                            searchPlaceholder="Search employee name or mobile..."
+                            :endpoint="route('search.employees')" 
+                            :required="true" 
+                            @selected="otEmployeeId = $event.detail.id; fetchOvertimeRate();"
+                            @cleared="otEmployeeId = ''; otHourlyRate = 0;"
+                        />
                     </div>
 
                     <div class="grid grid-cols-2 gap-3">

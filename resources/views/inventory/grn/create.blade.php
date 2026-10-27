@@ -84,23 +84,17 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <!-- Supplier -->
                     <div>
-                        <label for="supplier_id" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-700">
                             Supplier <span class="text-rose-500">*</span>
                         </label>
                         <div class="mt-1.5">
-                            <select 
+                            <x-searchable-select 
                                 name="supplier_id" 
-                                id="supplier_id" 
-                                required
-                                class="block w-full px-3.5 py-2.5 text-sm text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] bg-white @error('supplier_id') border-rose-400 bg-rose-50/30 @enderror"
-                            >
-                                <option value="">Select a Supplier...</option>
-                                @foreach($suppliers as $supplier)
-                                    <option value="{{ $supplier->id }}" {{ old('supplier_id', $selectedSupplierId) == $supplier->id ? 'selected' : '' }}>
-                                        {{ $supplier->name }}
-                                    </option>
-                                @endforeach
-                            </select>
+                                :value="old('supplier_id', $selectedSupplierId)"
+                                :endpoint="route('search.suppliers')"
+                                :required="true"
+                                placeholder="Search supplier by name or phone..."
+                            />
                         </div>
                         @error('supplier_id')
                             <p class="mt-1.5 text-xs text-rose-600 font-medium">{{ $message }}</p>

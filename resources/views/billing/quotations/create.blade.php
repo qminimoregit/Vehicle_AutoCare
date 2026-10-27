@@ -66,24 +66,15 @@
                     <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
                         Customer <span class="text-rose-500">*</span>
                     </label>
-                    <select 
+                    <x-searchable-select 
                         name="customer_id" 
-                        x-model="selectedCustomerId"
-                        @change="onCustomerChange()"
-                        required
-                        class="block w-full px-3 py-2.5 text-sm text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] bg-white"
-                    >
-                        <option value="">-- Select Customer --</option>
-                        @foreach($customers as $c)
-                            <option value="{{ $c->id }}">
-                                {{ $c->customer_name }} 
-                                @if($c->customer_type === 'company' && $c->company_name)
-                                    — [{{ $c->company_name }}]
-                                @endif
-                                ({{ $c->phone ?? 'No Phone' }})
-                            </option>
-                        @endforeach
-                    </select>
+                        :value="old('customer_id', $selectedCustomerId ?? '')"
+                        :endpoint="route('search.customers')"
+                        :required="true"
+                        placeholder="Search customer by name or phone..."
+                        @selected="selectedCustomerId = $event.detail.id; onCustomerChange()"
+                        @cleared="selectedCustomerId = ''; onCustomerChange()"
+                    />
                 </div>
 
                 <!-- Vehicle Picker (Optional) -->

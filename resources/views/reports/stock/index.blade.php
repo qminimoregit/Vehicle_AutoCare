@@ -83,15 +83,14 @@
 
             <!-- Supplier -->
             <div>
-                <label for="supplier_id" class="block text-xs font-semibold text-gray-600 mb-1">Supplier</label>
-                <select id="supplier_id" name="supplier_id" class="w-full text-xs rounded-lg border-gray-300 focus:border-[#0B1849] focus:ring-1 focus:ring-[#0B1849]">
-                    <option value="">All Suppliers</option>
-                    @foreach($suppliers as $supplier)
-                        <option value="{{ $supplier->id }}" {{ (string)$supplierId === (string)$supplier->id ? 'selected' : '' }}>
-                            {{ $supplier->name }}
-                        </option>
-                    @endforeach
-                </select>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Supplier</label>
+                <x-searchable-select 
+                    name="supplier_id" 
+                    :value="$supplierId" 
+                    :endpoint="route('search.suppliers')" 
+                    placeholder="All Suppliers" 
+                    :clearable="true" 
+                />
             </div>
 
             <!-- Stock Status -->
