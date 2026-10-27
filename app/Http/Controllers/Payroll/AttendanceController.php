@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Payroll;
 
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
+use App\Models\CompanyHoliday;
 use App\Models\Employee;
 use App\Models\EmployeeAttendance;
 use App\Services\BranchContext;
@@ -51,13 +52,18 @@ class AttendanceController extends Controller
         // Existing records for selected date
         $hasBranchCol = Schema::hasColumn('employee_attendance', 'branch_id');
         $attendanceQuery = EmployeeAttendance::whereDate('attendance_date', $selectedDate->toDateString());
-        if ($hasBranchCol && ($activeBranchId = BranchContext::getActiveBranchId())) {
+        $activeBranchId = BranchContext::getActiveBranchId();
+        if ($hasBranchCol && $activeBranchId) {
             $attendanceQuery->where(function ($q) use ($activeBranchId) {
                 $q->where('branch_id', $activeBranchId)
                     ->orWhereNull('branch_id');
             });
         }
         $existingRecords = $attendanceQuery->get()->keyBy('employee_id');
+
+        // Check for declared company holidays on selected date
+        $holidaysForDate = CompanyHoliday::getHolidaysForDate($selectedDate->toDateString(), $activeBranchId);
+        $holidayForSelectedDate = $holidaysForDate->first();
 
         // Attendance summary for selected date
         $summary = [
@@ -100,6 +106,9 @@ class AttendanceController extends Controller
             ->pluck('marked_count', 'attendance_date')
             ->toArray();
 
+        // Retrieve month holidays map
+        $monthHolidaysMap = CompanyHoliday::getHolidaysForMonth($calYear, $calMonth, $activeBranchId);
+
         // Build calendar days status map
         $calendarDays = [];
         for ($day = 1; $day <= $daysInMonth; $day++) {
@@ -108,8 +117,12 @@ class AttendanceController extends Controller
             $markedCount = $monthAttendanceCounts[$dayKey] ?? 0;
             $isSunday = $currentDay->isSunday();
             $isFuture = $currentDay->isAfter($today);
+            $holidayOnDay = $monthHolidaysMap[$dayKey][0] ?? null;
 
-            if ($isFuture || ($isSunday && $markedCount === 0)) {
+            if ($holidayOnDay) {
+                $color = 'purple';
+                $statusText = $markedCount > 0 ? "Holiday ({$markedCount})" : 'Holiday: '.$holidayOnDay->name;
+            } elseif ($isFuture || ($isSunday && $markedCount === 0)) {
                 $color = 'grey'; // Future or non-working day
                 $statusText = $isFuture ? 'Future' : 'Non-working';
             } elseif ($activeEmployeesCount > 0 && $markedCount >= $activeEmployeesCount) {
@@ -132,6 +145,11 @@ class AttendanceController extends Controller
                 'marked_count' => $markedCount,
                 'color' => $color,
                 'status_text' => $statusText,
+                'holiday' => $holidayOnDay ? [
+                    'name' => $holidayOnDay->name,
+                    'is_paid' => $holidayOnDay->isPaid(),
+                    'is_full_day' => $holidayOnDay->isFullDay(),
+                ] : null,
             ];
         }
 
@@ -145,7 +163,8 @@ class AttendanceController extends Controller
             'calendarDate',
             'calendarDays',
             'calMonth',
-            'calYear'
+            'calYear',
+            'holidayForSelectedDate'
         ));
     }
 

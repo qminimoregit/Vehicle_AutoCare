@@ -12,7 +12,9 @@ class EmployeeWageRate extends Model
 
     protected $fillable = [
         'employee_id',
+        'salary_type',
         'daily_wage',
+        'monthly_basic_salary',
         'effective_from',
         'effective_to',
         'reason',
@@ -22,6 +24,7 @@ class EmployeeWageRate extends Model
     {
         return [
             'daily_wage' => 'decimal:2',
+            'monthly_basic_salary' => 'decimal:2',
             'effective_from' => 'date',
             'effective_to' => 'date',
         ];

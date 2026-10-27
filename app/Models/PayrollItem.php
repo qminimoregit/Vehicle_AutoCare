@@ -2,12 +2,12 @@
 
 namespace App\Models;
 
-use App\Models\EmployeeAttendance;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Schema;
 
 class PayrollItem extends Model
 {
@@ -25,20 +25,32 @@ class PayrollItem extends Model
         'payroll_period_id',
         'employee_id',
         'employee_name_snapshot',
+        'salary_type_snapshot',
         'daily_wage_snapshot',
+        'monthly_basic_snapshot',
         'full_days_count',
         'half_days_count',
         'absent_days_count',
         'leave_days_count',
         'day_off_days_count',
+        'company_off_days_count',
+        'paid_holidays_count',
+        'approved_leave_count',
+        'no_pay_days_count',
         'payable_days',
         'base_earnings',
         'overtime_amount',
         'bonus_amount',
+        'allowances_amount',
         'deductions',
+        'no_pay_deduction',
         'epf_employee_amount',
         'epf_employer_amount',
         'etf_employer_amount',
+        'apit_amount',
+        'epf_qualifying_earnings',
+        'etf_qualifying_earnings',
+        'apit_taxable_earnings',
         'advances_applied',
         'gross_salary',
         'net_salary',
@@ -53,14 +65,25 @@ class PayrollItem extends Model
     {
         return [
             'daily_wage_snapshot' => 'decimal:2',
+            'monthly_basic_snapshot' => 'decimal:2',
+            'company_off_days_count' => 'decimal:2',
+            'paid_holidays_count' => 'decimal:2',
+            'approved_leave_count' => 'decimal:2',
+            'no_pay_days_count' => 'decimal:2',
             'payable_days' => 'decimal:2',
             'base_earnings' => 'decimal:2',
             'overtime_amount' => 'decimal:2',
             'bonus_amount' => 'decimal:2',
+            'allowances_amount' => 'decimal:2',
             'deductions' => 'decimal:2',
+            'no_pay_deduction' => 'decimal:2',
             'epf_employee_amount' => 'decimal:2',
             'epf_employer_amount' => 'decimal:2',
             'etf_employer_amount' => 'decimal:2',
+            'apit_amount' => 'decimal:2',
+            'epf_qualifying_earnings' => 'decimal:2',
+            'etf_qualifying_earnings' => 'decimal:2',
+            'apit_taxable_earnings' => 'decimal:2',
             'advances_applied' => 'decimal:2',
             'gross_salary' => 'decimal:2',
             'net_salary' => 'decimal:2',
@@ -83,6 +106,16 @@ class PayrollItem extends Model
     public function advances(): HasMany
     {
         return $this->hasMany(EmployeeAdvance::class, 'payroll_item_id');
+    }
+
+    public function bonuses(): HasMany
+    {
+        return $this->hasMany(EmployeeBonus::class, 'payroll_item_id');
+    }
+
+    public function overtimes(): HasMany
+    {
+        return $this->hasMany(EmployeeOvertime::class, 'payroll_item_id');
     }
 
     public function payments(): HasMany
@@ -110,16 +143,22 @@ class PayrollItem extends Model
 
         // 1. If breakdown is already stored in DB, calculate counts from it
         $rawBreakdown = $this->attributes['attendance_breakdown'] ?? null;
-        if (!empty($rawBreakdown)) {
+        if (! empty($rawBreakdown)) {
             $parsed = is_string($rawBreakdown) ? json_decode($rawBreakdown, true) : (array) $rawBreakdown;
             if (is_array($parsed) && count($parsed) > 0) {
                 foreach ($parsed as $row) {
                     $st = $row['status'] ?? '';
-                    if ($st === EmployeeAttendance::STATUS_FULL_DAY) $full++;
-                    elseif ($st === EmployeeAttendance::STATUS_HALF_DAY) $half++;
-                    elseif ($st === EmployeeAttendance::STATUS_ABSENT) $absent++;
-                    elseif ($st === EmployeeAttendance::STATUS_LEAVE) $leave++;
-                    elseif ($st === EmployeeAttendance::STATUS_DAY_OFF) $dayOff++;
+                    if ($st === EmployeeAttendance::STATUS_FULL_DAY) {
+                        $full++;
+                    } elseif ($st === EmployeeAttendance::STATUS_HALF_DAY) {
+                        $half++;
+                    } elseif ($st === EmployeeAttendance::STATUS_ABSENT) {
+                        $absent++;
+                    } elseif ($st === EmployeeAttendance::STATUS_LEAVE) {
+                        $leave++;
+                    } elseif ($st === EmployeeAttendance::STATUS_DAY_OFF) {
+                        $dayOff++;
+                    }
                 }
                 $this->resolvedAttendanceData = [
                     'full' => $full,
@@ -129,6 +168,7 @@ class PayrollItem extends Model
                     'day_off' => $dayOff,
                     'breakdown' => $parsed,
                 ];
+
                 return $this->resolvedAttendanceData;
             }
         }
@@ -197,6 +237,7 @@ class PayrollItem extends Model
                 return $data['full'];
             }
         }
+
         return (int) $value;
     }
 
@@ -208,6 +249,7 @@ class PayrollItem extends Model
                 return $data['half'];
             }
         }
+
         return (int) $value;
     }
 
@@ -219,6 +261,7 @@ class PayrollItem extends Model
                 return $data['absent'];
             }
         }
+
         return (int) $value;
     }
 
@@ -230,6 +273,7 @@ class PayrollItem extends Model
                 return $data['leave'];
             }
         }
+
         return (int) $value;
     }
 
@@ -241,17 +285,171 @@ class PayrollItem extends Model
                 return $data['day_off'];
             }
         }
+
         return (int) $value;
     }
 
     public function getAttendanceBreakdownAttribute($value): array
     {
-        if (!empty($value)) {
-            return is_string($value) ? json_decode($value, true) : (array) $value;
+        if (! empty($value)) {
+            $parsed = is_string($value) ? json_decode($value, true) : (array) $value;
+            if (isset($parsed['reconciled_days']) && is_array($parsed['reconciled_days'])) {
+                return $parsed['reconciled_days'];
+            }
+
+            return (array) $parsed;
         }
 
         $data = $this->resolveAttendanceData();
+
         return $data['breakdown'];
+    }
+
+    public function getReconciliationSummary(): array
+    {
+        $raw = $this->attributes['attendance_breakdown'] ?? null;
+        if (! empty($raw)) {
+            $parsed = is_string($raw) ? json_decode($raw, true) : (array) $raw;
+            if (isset($parsed['summary']) && is_array($parsed['summary'])) {
+                return $parsed['summary'];
+            }
+        }
+
+        return [];
+    }
+
+    public function getCompanyOffDaysCountAttribute($value): float
+    {
+        if ($value !== null) {
+            return (float) $value;
+        }
+
+        return (float) ($this->getReconciliationSummary()['company_off_days_used'] ?? $this->attributes['day_off_days_count'] ?? 0);
+    }
+
+    public function getPaidHolidaysCountAttribute($value): float
+    {
+        if ($value !== null) {
+            return (float) $value;
+        }
+
+        return (float) ($this->getReconciliationSummary()['paid_holidays_count'] ?? 0);
+    }
+
+    public function getApprovedLeaveCountAttribute($value): float
+    {
+        if ($value !== null) {
+            return (float) $value;
+        }
+
+        return (float) ($this->getReconciliationSummary()['approved_leave_count'] ?? $this->attributes['leave_days_count'] ?? 0);
+    }
+
+    public function getNoPayDaysCountAttribute($value): float
+    {
+        if ($value !== null) {
+            return (float) $value;
+        }
+
+        return (float) ($this->getReconciliationSummary()['no_pay_days_count'] ?? 0);
+    }
+
+    public function getNoPayDeductionAttribute($value): float
+    {
+        if ($value !== null) {
+            return (float) $value;
+        }
+
+        return (float) ($this->getReconciliationSummary()['no_pay_deduction'] ?? 0);
+    }
+
+    public function getSalaryTypeSnapshotAttribute($value): string
+    {
+        if (! empty($value)) {
+            return (string) $value;
+        }
+
+        return (string) ($this->getReconciliationSummary()['salary_type'] ?? ($this->employee?->salary_type ?? Employee::SALARY_TYPE_DAILY));
+    }
+
+    public function getMonthlyBasicSnapshotAttribute($value): float
+    {
+        if ($value !== null && (float) $value > 0) {
+            return (float) $value;
+        }
+
+        return (float) ($this->getReconciliationSummary()['monthly_basic_salary'] ?? ($this->employee?->monthly_basic_salary ?? 0));
+    }
+
+    public function getAllowancesAmountAttribute($value): float
+    {
+        if ($value !== null) {
+            return (float) $value;
+        }
+
+        return (float) ($this->getReconciliationSummary()['allowances_amount'] ?? 0.00);
+    }
+
+    public function isMonthly(): bool
+    {
+        return $this->salary_type_snapshot === Employee::SALARY_TYPE_MONTHLY;
+    }
+
+    public function isDaily(): bool
+    {
+        return $this->salary_type_snapshot === Employee::SALARY_TYPE_DAILY;
+    }
+
+    public function getApitAmountAttribute($value): float
+    {
+        if ($value !== null) {
+            return (float) $value;
+        }
+
+        return (float) ($this->attendance_breakdown['statutory_breakdown']['apit_amount'] ?? 0.00);
+    }
+
+    public function getEpfQualifyingEarningsAttribute($value): float
+    {
+        if ($value !== null) {
+            return (float) $value;
+        }
+
+        return (float) ($this->attendance_breakdown['statutory_breakdown']['epf_qualifying_salary'] ?? 0.00);
+    }
+
+    public function getEtfQualifyingEarningsAttribute($value): float
+    {
+        if ($value !== null) {
+            return (float) $value;
+        }
+
+        return (float) ($this->attendance_breakdown['statutory_breakdown']['etf_qualifying_salary'] ?? $this->epf_qualifying_earnings);
+    }
+
+    public function getApitTaxableEarningsAttribute($value): float
+    {
+        if ($value !== null) {
+            return (float) $value;
+        }
+
+        return (float) ($this->attendance_breakdown['statutory_breakdown']['apit_taxable_earnings'] ?? 0.00);
+    }
+
+    /**
+     * Total employer contribution = EPF 12% + ETF 3%
+     */
+    public function getEmployerTotalContributionAttribute(): float
+    {
+        return round((float) $this->epf_employer_amount + (float) $this->etf_employer_amount, 2);
+    }
+
+    /**
+     * Total cost to company for this employee = Gross Salary + Employer EPF (12%) + Employer ETF (3%)
+     */
+    public function getTotalCostToCompanyAttribute(): float
+    {
+        return round((float) $this->gross_salary + (float) $this->epf_employer_amount + (float) $this->etf_employer_amount, 2);
     }
 
     /**
@@ -262,16 +460,19 @@ class PayrollItem extends Model
         $base = (float) $this->base_earnings;
         $overtime = (float) $this->overtime_amount;
         $bonus = (float) $this->bonus_amount;
+        $allowances = (float) $this->allowances_amount;
         $deductions = (float) $this->deductions;
+        $noPayDeduction = (float) $this->no_pay_deduction;
         $epfEmployee = (float) $this->epf_employee_amount;
+        $apit = (float) $this->apit_amount;
         $advances = (float) $this->advances_applied;
 
-        $gross = round($base + $overtime + $bonus, 2);
-        $totalDeductions = round($deductions + $epfEmployee + $advances, 2);
-        $net = round(max(0, $gross - $totalDeductions), 2);
+        $gross = round($base + $overtime + $bonus + $allowances, 2);
+        $totalDeductions = round($deductions + $noPayDeduction + $epfEmployee + $apit + $advances, 2);
+        $net = round($gross - $totalDeductions, 2);
 
         $paid = (float) $this->payments()->sum('amount');
-        $balance = round(max(0, $net - $paid), 2);
+        $balance = round($net - $paid, 2);
 
         $status = $this->status;
         if ($this->period && $this->period->status !== PayrollPeriod::STATUS_DRAFT) {
@@ -284,13 +485,19 @@ class PayrollItem extends Model
             }
         }
 
-        $this->update([
+        $payload = [
             'gross_salary' => $gross,
             'net_salary' => $net,
             'paid_amount' => $paid,
             'balance_due' => $balance,
             'status' => $status,
-        ]);
+        ];
+
+        if (Schema::hasColumn('payroll_items', 'apit_amount')) {
+            $payload['apit_amount'] = $apit;
+        }
+
+        $this->update($payload);
 
         if ($this->period) {
             $this->period->recalculateTotals();

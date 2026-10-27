@@ -7,12 +7,15 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Schema;
 
 class PayrollPeriod extends Model
 {
     use HasFactory;
 
     public const STATUS_DRAFT = 'draft';
+
+    public const STATUS_REVIEWED = 'reviewed';
 
     public const STATUS_APPROVED = 'approved';
 
@@ -32,6 +35,10 @@ class PayrollPeriod extends Model
         'total_gross',
         'total_net',
         'total_paid',
+        'total_epf_employee',
+        'total_epf_employer',
+        'total_etf_employer',
+        'total_apit',
         'notes',
         'approved_by',
         'approved_at',
@@ -48,6 +55,10 @@ class PayrollPeriod extends Model
             'total_gross' => 'decimal:2',
             'total_net' => 'decimal:2',
             'total_paid' => 'decimal:2',
+            'total_epf_employee' => 'decimal:2',
+            'total_epf_employer' => 'decimal:2',
+            'total_etf_employer' => 'decimal:2',
+            'total_apit' => 'decimal:2',
             'approved_at' => 'datetime',
         ];
     }
@@ -77,6 +88,16 @@ class PayrollPeriod extends Model
         return $this->status === self::STATUS_DRAFT;
     }
 
+    public function isReviewed(): bool
+    {
+        return $this->status === self::STATUS_REVIEWED;
+    }
+
+    public function isModifiable(): bool
+    {
+        return in_array($this->status, [self::STATUS_DRAFT, self::STATUS_REVIEWED]);
+    }
+
     public function isApproved(): bool
     {
         return in_array($this->status, [self::STATUS_APPROVED, self::STATUS_PARTIALLY_PAID, self::STATUS_PAID]);
@@ -85,6 +106,50 @@ class PayrollPeriod extends Model
     public function isPaid(): bool
     {
         return $this->status === self::STATUS_PAID;
+    }
+
+    public function getTotalEpfEmployeeAttribute($value): float
+    {
+        if ($value !== null) {
+            return (float) $value;
+        }
+
+        return (float) $this->items->sum('epf_employee_amount');
+    }
+
+    public function getTotalEpfEmployerAttribute($value): float
+    {
+        if ($value !== null) {
+            return (float) $value;
+        }
+
+        return (float) $this->items->sum('epf_employer_amount');
+    }
+
+    public function getTotalEtfEmployerAttribute($value): float
+    {
+        if ($value !== null) {
+            return (float) $value;
+        }
+
+        return (float) $this->items->sum('etf_employer_amount');
+    }
+
+    public function getTotalApitAttribute($value): float
+    {
+        if ($value !== null) {
+            return (float) $value;
+        }
+
+        return (float) $this->items->sum('apit_amount');
+    }
+
+    /**
+     * Total cost to company = Gross Salary + Employer EPF (12%) + Employer ETF (3%)
+     */
+    public function getTotalCostToCompanyAttribute(): float
+    {
+        return round((float) $this->total_gross + (float) $this->total_epf_employer + (float) $this->total_etf_employer, 2);
     }
 
     /**
@@ -97,14 +162,21 @@ class PayrollPeriod extends Model
         $totalBase = (float) $this->items->sum('base_earnings');
         $totalOvertime = (float) $this->items->sum('overtime_amount');
         $totalBonuses = (float) $this->items->sum('bonus_amount');
-        $totalDeductions = (float) $this->items->sum('deductions');
+        $totalEpfEmployee = (float) $this->items->sum('epf_employee_amount');
+        $totalEpfEmployer = (float) $this->items->sum('epf_employer_amount');
+        $totalEtfEmployer = (float) $this->items->sum('etf_employer_amount');
+        $totalApit = (float) $this->items->sum('apit_amount');
+
+        $totalDeductions = (float) $this->items->sum(function ($item) {
+            return (float) $item->deductions + (float) $item->no_pay_deduction + (float) $item->epf_employee_amount + (float) $item->apit_amount;
+        });
         $totalAdvances = (float) $this->items->sum('advances_applied');
         $totalGross = (float) $this->items->sum('gross_salary');
         $totalNet = (float) $this->items->sum('net_salary');
         $totalPaid = (float) $this->items->sum('paid_amount');
 
         $status = $this->status;
-        if ($status !== self::STATUS_DRAFT) {
+        if (! in_array($status, [self::STATUS_DRAFT, self::STATUS_REVIEWED])) {
             if ($totalPaid >= $totalNet && $totalNet > 0) {
                 $status = self::STATUS_PAID;
             } elseif ($totalPaid > 0) {
@@ -114,7 +186,7 @@ class PayrollPeriod extends Model
             }
         }
 
-        $this->update([
+        $payload = [
             'total_base_earnings' => $totalBase,
             'total_overtime' => $totalOvertime,
             'total_bonuses' => $totalBonuses,
@@ -124,6 +196,21 @@ class PayrollPeriod extends Model
             'total_net' => $totalNet,
             'total_paid' => $totalPaid,
             'status' => $status,
-        ]);
+        ];
+
+        if (Schema::hasColumn('payroll_periods', 'total_epf_employee')) {
+            $payload['total_epf_employee'] = $totalEpfEmployee;
+        }
+        if (Schema::hasColumn('payroll_periods', 'total_epf_employer')) {
+            $payload['total_epf_employer'] = $totalEpfEmployer;
+        }
+        if (Schema::hasColumn('payroll_periods', 'total_etf_employer')) {
+            $payload['total_etf_employer'] = $totalEtfEmployer;
+        }
+        if (Schema::hasColumn('payroll_periods', 'total_apit')) {
+            $payload['total_apit'] = $totalApit;
+        }
+
+        $this->update($payload);
     }
 }

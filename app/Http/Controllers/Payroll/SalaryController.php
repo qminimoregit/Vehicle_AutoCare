@@ -4,22 +4,32 @@ namespace App\Http\Controllers\Payroll;
 
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
+use App\Models\Branch;
 use App\Models\CompanySetting;
 use App\Models\Employee;
 use App\Models\EmployeeAdvance;
+use App\Models\EmployeeAdvanceRecovery;
 use App\Models\EmployeeAttendance;
+use App\Models\EmployeeBonus;
+use App\Models\EmployeeOvertime;
 use App\Models\PayrollItem;
 use App\Models\PayrollPayment;
 use App\Models\PayrollPeriod;
+use App\Services\Payroll\PayrollCalculationService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class SalaryController extends Controller
 {
+    public function __construct(
+        public PayrollCalculationService $calculationService
+    ) {}
+
     /**
      * Ensure only authorized users access salary modules.
      */
@@ -58,7 +68,7 @@ class SalaryController extends Controller
         // Check if payroll period exists in database
         $period = PayrollPeriod::where('year', $year)
             ->where('month', $month)
-            ->with(['items.employee', 'items.payments', 'approver'])
+            ->with(['items.employee.branch', 'items.payments', 'approver'])
             ->first();
 
         if ($period) {
@@ -71,9 +81,9 @@ class SalaryController extends Controller
         if ($request->has('generate') || $request->input('action') === 'generate') {
             $this->authorizeAdmin();
 
-            if ($period && ! $period->isDraft()) {
+            if ($period && ! $period->isModifiable()) {
                 return redirect()->route('payroll.salary.index', ['year' => $year, 'month' => $month])
-                    ->with('error', 'Approved or paid payroll periods cannot be regenerated.');
+                    ->with('error', 'Approved or paid payroll periods cannot be regenerated without an authorized rollback.');
             }
 
             $period = $this->generateOrUpdateDraftPeriod($year, $month);
@@ -87,6 +97,54 @@ class SalaryController extends Controller
             return redirect()->route('payroll.salary.index', ['year' => $year, 'month' => $month])
                 ->with('success', "Draft salary for {$period->formatted_period} generated successfully.");
         }
+
+        // Filter items based on user criteria
+        $filteredItems = $period ? $period->items : collect();
+
+        $selectedBranchId = $request->input('branch_id');
+        if ($request->filled('branch_id')) {
+            $bId = (int) $selectedBranchId;
+            $filteredItems = $filteredItems->filter(fn ($item) => (int) ($item->employee?->branch_id) === $bId);
+        }
+
+        $selectedEmployeeId = $request->input('employee_id');
+        if ($request->filled('employee_id')) {
+            $eId = (int) $selectedEmployeeId;
+            $filteredItems = $filteredItems->filter(fn ($item) => (int) $item->employee_id === $eId);
+        }
+
+        $selectedSalaryType = $request->input('salary_type');
+        if ($request->filled('salary_type')) {
+            $sType = strtolower($selectedSalaryType);
+            $filteredItems = $filteredItems->filter(fn ($item) => strtolower($item->salary_type_snapshot ?? $item->employee?->salary_type ?? '') === $sType);
+        }
+
+        $selectedStatus = $request->input('status');
+        if ($request->filled('status')) {
+            $sStatus = strtolower($selectedStatus);
+            $filteredItems = $filteredItems->filter(fn ($item) => strtolower($item->status) === $sStatus);
+        }
+
+        // Calculate payroll summary cards (based on current filtered items)
+        $summary = [
+            'total_employees' => $filteredItems->count(),
+            'total_gross' => (float) $filteredItems->sum('gross_salary'),
+            'total_deductions' => (float) $filteredItems->sum(function ($item) {
+                return (float) $item->deductions + (float) $item->no_pay_deduction + (float) $item->epf_employee_amount + (float) $item->apit_amount + (float) $item->advances_applied;
+            }),
+            'total_net' => (float) $filteredItems->sum('net_salary'),
+            'total_paid' => (float) $filteredItems->sum('paid_amount'),
+            'outstanding_salary' => max(0.0, round((float) $filteredItems->sum('net_salary') - (float) $filteredItems->sum('paid_amount'), 2)),
+            'total_epf_employer' => (float) $filteredItems->sum('epf_employer_amount'),
+            'total_etf_employer' => (float) $filteredItems->sum('etf_employer_amount'),
+        ];
+
+        // Perform pre-approval verification
+        $validation = $period ? $this->validateForApproval($period) : [
+            'can_approve' => false,
+            'blockers' => [],
+            'warnings' => [],
+        ];
 
         // Attendance missing days warning check for this month
         $unmarkedDaysWarning = [];
@@ -123,151 +181,35 @@ class SalaryController extends Controller
             ->get();
 
         $activeEmployees = Employee::where('is_active', true)->orderBy('name')->get();
+        $branches = Branch::where('is_active', true)->orderBy('branch_name')->get();
 
         return view('payroll.salary.index', compact(
             'year',
             'month',
             'periodDate',
             'period',
+            'filteredItems',
+            'summary',
+            'validation',
             'unmarkedDaysWarning',
             'years',
             'pendingAdvances',
-            'activeEmployees'
+            'activeEmployees',
+            'branches',
+            'selectedBranchId',
+            'selectedEmployeeId',
+            'selectedSalaryType',
+            'selectedStatus'
         ));
     }
 
     /**
-     * Generate or update draft PayrollPeriod and PayrollItems based on actual attendance and wage rates.
+     * Generate or update draft PayrollPeriod and PayrollItems based on actual attendance,
+     * company 5-off-days reconciliation, and wage rates via PayrollCalculationService.
      */
     private function generateOrUpdateDraftPeriod(int $year, int $month): PayrollPeriod
     {
-        $periodDate = Carbon::createFromDate($year, $month, 1);
-        $monthStart = $periodDate->copy()->startOfMonth()->toDateString();
-        $monthEnd = $periodDate->copy()->endOfMonth()->toDateString();
-
-        $period = PayrollPeriod::firstOrCreate(
-            ['year' => $year, 'month' => $month],
-            ['status' => PayrollPeriod::STATUS_DRAFT]
-        );
-
-        // Active employees eligible in this period (joined on or before month end), plus any employee with recorded attendance in this month
-        $empIdsWithAttendance = EmployeeAttendance::whereBetween('attendance_date', [$monthStart, $monthEnd])
-            ->pluck('employee_id');
-
-        $employees = Employee::query()
-            ->where(function ($query) use ($monthEnd) {
-                $query->where('is_active', true)
-                    ->where(function ($sub) use ($monthEnd) {
-                        $sub->whereDate('joining_date', '<=', $monthEnd)
-                            ->orWhereNull('joining_date');
-                    });
-            })
-            ->orWhereIn('id', $empIdsWithAttendance)
-            ->orderBy('name')
-            ->get();
-
-        foreach ($employees as $employee) {
-            // Find existing draft item if present to preserve manual adjustments
-            $existingItem = PayrollItem::where('payroll_period_id', $period->id)
-                ->where('employee_id', $employee->id)
-                ->first();
-
-            $overtime = $existingItem ? (float) $existingItem->overtime_amount : 0.00;
-            $bonus = $existingItem ? (float) $existingItem->bonus_amount : 0.00;
-            $deductions = $existingItem ? (float) $existingItem->deductions : 0.00;
-            $notes = $existingItem ? $existingItem->notes : null;
-
-            // Fetch all attendance for this employee in this month
-            $attendances = EmployeeAttendance::where('employee_id', $employee->id)
-                ->whereBetween('attendance_date', [$monthStart, $monthEnd])
-                ->orderBy('attendance_date', 'asc')
-                ->get();
-
-            $fullDays = 0;
-            $halfDays = 0;
-            $absentDays = 0;
-            $leaveDays = 0;
-            $dayOffDays = 0;
-            $baseEarnings = 0.00;
-            $payableDays = 0.00;
-            $breakdown = [];
-
-            foreach ($attendances as $att) {
-                switch ($att->status) {
-                    case EmployeeAttendance::STATUS_FULL_DAY:
-                        $fullDays++;
-                        break;
-                    case EmployeeAttendance::STATUS_HALF_DAY:
-                        $halfDays++;
-                        break;
-                    case EmployeeAttendance::STATUS_ABSENT:
-                        $absentDays++;
-                        break;
-                    case EmployeeAttendance::STATUS_LEAVE:
-                        $leaveDays++;
-                        break;
-                    case EmployeeAttendance::STATUS_DAY_OFF:
-                        $dayOffDays++;
-                        break;
-                }
-
-                $payableDays += (float) $att->payable_day_fraction;
-                $baseEarnings += (float) $att->daily_earnings;
-
-                $breakdown[] = [
-                    'date' => $att->attendance_date->toDateString(),
-                    'status' => $att->status,
-                    'fraction' => (float) $att->payable_day_fraction,
-                    'wage' => (float) $att->applied_daily_wage,
-                    'earnings' => (float) $att->daily_earnings,
-                    'notes' => $att->notes,
-                ];
-            }
-
-            // Calculate pending advances for this employee (up to end of month)
-            // Advances that have not been deducted in any previous finalized payroll
-            $pendingAdvancesSum = (float) EmployeeAdvance::where('employee_id', $employee->id)
-                ->where('status', EmployeeAdvance::STATUS_PENDING)
-                ->where('advance_date', '<=', $monthEnd)
-                ->sum('amount');
-
-            $grossSalary = round($baseEarnings + $overtime + $bonus, 2);
-            $totalDeductions = round($deductions + $pendingAdvancesSum, 2);
-            $netSalary = round(max(0, $grossSalary - $totalDeductions), 2);
-
-            PayrollItem::updateOrCreate(
-                [
-                    'payroll_period_id' => $period->id,
-                    'employee_id' => $employee->id,
-                ],
-                [
-                    'employee_name_snapshot' => $employee->name,
-                    'daily_wage_snapshot' => $employee->daily_wage,
-                    'full_days_count' => $fullDays,
-                    'half_days_count' => $halfDays,
-                    'absent_days_count' => $absentDays,
-                    'leave_days_count' => $leaveDays,
-                    'day_off_days_count' => $dayOffDays,
-                    'payable_days' => $payableDays,
-                    'base_earnings' => $baseEarnings,
-                    'overtime_amount' => $overtime,
-                    'bonus_amount' => $bonus,
-                    'deductions' => $deductions,
-                    'advances_applied' => $pendingAdvancesSum,
-                    'gross_salary' => $grossSalary,
-                    'net_salary' => $netSalary,
-                    'paid_amount' => $existingItem ? (float) $existingItem->paid_amount : 0.00,
-                    'balance_due' => round(max(0, $netSalary - ($existingItem ? (float) $existingItem->paid_amount : 0.00)), 2),
-                    'status' => PayrollItem::STATUS_DRAFT,
-                    'attendance_breakdown' => $breakdown,
-                    'notes' => $notes,
-                ]
-            );
-        }
-
-        $period->recalculateTotals();
-
-        return $period->fresh(['items.employee']);
+        return $this->calculationService->calculatePeriod($year, $month);
     }
 
     /**
@@ -286,12 +228,22 @@ class SalaryController extends Controller
 
         $company = CompanySetting::getSettings();
 
-        // If payroll item has linked advances, load them; if draft, find pending advances matching amount
+        // Load advances or recoveries
         $advances = $payrollItem->advances;
+        if ($advances->isEmpty() && Schema::hasTable('employee_advance_recoveries')) {
+            $recoveredAdvanceIds = EmployeeAdvanceRecovery::where('payroll_item_id', $payrollItem->id)->pluck('employee_advance_id');
+            if ($recoveredAdvanceIds->isNotEmpty()) {
+                $advances = EmployeeAdvance::whereIn('id', $recoveredAdvanceIds)->get();
+            }
+        }
         if ($advances->isEmpty() && $payrollItem->period->isDraft()) {
             $monthEnd = Carbon::createFromDate($payrollItem->period->year, $payrollItem->period->month, 1)->endOfMonth()->toDateString();
             $advances = EmployeeAdvance::where('employee_id', $payrollItem->employee_id)
-                ->where('status', EmployeeAdvance::STATUS_PENDING)
+                ->whereIn('status', [
+                    EmployeeAdvance::STATUS_PENDING,
+                    EmployeeAdvance::STATUS_DISBURSED,
+                    EmployeeAdvance::STATUS_PARTIALLY_RECOVERED,
+                ])
                 ->where('advance_date', '<=', $monthEnd)
                 ->get();
         }
@@ -316,10 +268,20 @@ class SalaryController extends Controller
         $company = CompanySetting::getSettings();
 
         $advances = $payrollItem->advances;
+        if ($advances->isEmpty() && Schema::hasTable('employee_advance_recoveries')) {
+            $recoveredAdvanceIds = EmployeeAdvanceRecovery::where('payroll_item_id', $payrollItem->id)->pluck('employee_advance_id');
+            if ($recoveredAdvanceIds->isNotEmpty()) {
+                $advances = EmployeeAdvance::whereIn('id', $recoveredAdvanceIds)->get();
+            }
+        }
         if ($advances->isEmpty() && $payrollItem->period->isDraft()) {
             $monthEnd = Carbon::createFromDate($payrollItem->period->year, $payrollItem->period->month, 1)->endOfMonth()->toDateString();
             $advances = EmployeeAdvance::where('employee_id', $payrollItem->employee_id)
-                ->where('status', EmployeeAdvance::STATUS_PENDING)
+                ->whereIn('status', [
+                    EmployeeAdvance::STATUS_PENDING,
+                    EmployeeAdvance::STATUS_DISBURSED,
+                    EmployeeAdvance::STATUS_PARTIALLY_RECOVERED,
+                ])
                 ->where('advance_date', '<=', $monthEnd)
                 ->get();
         }
@@ -334,8 +296,8 @@ class SalaryController extends Controller
     {
         $this->authorizeAdmin();
 
-        if (! $payrollItem->period->isDraft()) {
-            return back()->with('error', 'Adjustments can only be updated when payroll is in draft status.');
+        if (! $payrollItem->period->isModifiable()) {
+            return back()->with('error', 'Adjustments can only be updated when payroll is in draft or reviewed status.');
         }
 
         $validated = $request->validate([
@@ -353,6 +315,11 @@ class SalaryController extends Controller
 
         $payrollItem->recalculate();
 
+        // If period was previously marked as reviewed, reset it to draft so modified figures are re-reviewed
+        if ($payrollItem->period->isReviewed()) {
+            $payrollItem->period->update(['status' => PayrollPeriod::STATUS_DRAFT]);
+        }
+
         ActivityLog::log(
             'update_payroll_item',
             "Updated payroll adjustments for {$payrollItem->employee_name_snapshot} ({$payrollItem->period->formatted_period})",
@@ -363,14 +330,136 @@ class SalaryController extends Controller
     }
 
     /**
+     * Comprehensive pre-approval audit: validate rates, net salary, attendance, advances & taxes.
+     */
+    public function validateForApproval(PayrollPeriod $period): array
+    {
+        $period->loadMissing(['items.employee']);
+        $blockers = [];
+        $warnings = [];
+
+        if ($period->items->isEmpty()) {
+            $blockers[] = 'Payroll has no employee items to approve.';
+        }
+
+        foreach ($period->items as $item) {
+            $empName = $item->employee_name_snapshot ?: ($item->employee?->name ?: "Employee #{$item->employee_id}");
+
+            // 1. Critical Blocker: Negative net salary (unresolved deduction shortfall)
+            if ((float) $item->net_salary < 0) {
+                $blockers[] = "{$empName} has negative net pay (LKR ".number_format($item->net_salary, 2).'). Unresolved deduction shortfall must be adjusted before approval.';
+            }
+
+            // 2. Critical Blocker: Zero or negative wage/basic rates
+            $isMonthly = $item->isMonthly();
+            if ($isMonthly && (float) $item->monthly_basic_snapshot <= 0) {
+                $blockers[] = "{$empName} (Monthly) has zero basic salary configured in payroll snapshot.";
+            } elseif (! $isMonthly && (float) $item->daily_wage_snapshot <= 0) {
+                $blockers[] = "{$empName} (Daily) has zero daily wage configured in payroll snapshot.";
+            }
+
+            // 3. Warning: EPF eligible but missing EPF number
+            if ($item->employee && $item->employee->is_epf_eligible && empty($item->employee->epf_number)) {
+                $warnings[] = "{$empName} is EPF eligible but does not have an EPF member number recorded.";
+            }
+        }
+
+        // 4. Warning: Incomplete attendance dates
+        $periodDate = Carbon::createFromDate($period->year, $period->month, 1, 'Asia/Colombo');
+        $today = Carbon::today('Asia/Colombo');
+        $checkUntil = $periodDate->isCurrentMonth() ? $today->copy()->subDay() : ($periodDate->isPast() ? $periodDate->copy()->endOfMonth() : null);
+        if ($checkUntil && $checkUntil->greaterThanOrEqualTo($periodDate->copy()->startOfMonth())) {
+            $activeEmpCount = Employee::where('is_active', true)->count();
+            $cursor = $periodDate->copy()->startOfMonth();
+            $unmarkedDays = 0;
+            while ($cursor->lessThanOrEqualTo($checkUntil)) {
+                if (! $cursor->isSunday()) {
+                    $markedCount = EmployeeAttendance::where('attendance_date', $cursor->toDateString())->count();
+                    if ($markedCount < $activeEmpCount) {
+                        $unmarkedDays++;
+                    }
+                }
+                $cursor->addDay();
+            }
+            if ($unmarkedDays > 0) {
+                $warnings[] = "{$unmarkedDays} working dates have unrecorded or incomplete staff attendance records.";
+            }
+        }
+
+        // 5. Warning: Pending unapproved bonuses
+        if (Schema::hasTable('employee_bonuses')) {
+            $pendingBonuses = EmployeeBonus::where('period_year', $period->year)
+                ->where('period_month', $period->month)
+                ->where('status', EmployeeBonus::STATUS_PENDING)
+                ->count();
+            if ($pendingBonuses > 0) {
+                $warnings[] = "{$pendingBonuses} employee bonus request(s) are still pending approval for this month.";
+            }
+        }
+
+        // 6. Warning: Pending unapproved overtime
+        if (Schema::hasTable('employee_overtimes')) {
+            $monthStart = $periodDate->copy()->startOfMonth()->toDateString();
+            $monthEnd = $periodDate->copy()->endOfMonth()->toDateString();
+            $pendingOT = EmployeeOvertime::whereBetween('overtime_date', [$monthStart, $monthEnd])
+                ->where('status', EmployeeOvertime::STATUS_PENDING)
+                ->count();
+            if ($pendingOT > 0) {
+                $warnings[] = "{$pendingOT} employee overtime record(s) are still pending approval for this month.";
+            }
+        }
+
+        return [
+            'can_approve' => empty($blockers),
+            'blockers' => $blockers,
+            'warnings' => $warnings,
+        ];
+    }
+
+    /**
+     * Mark draft payroll as reviewed after performing pre-approval verification.
+     */
+    public function markReviewed(PayrollPeriod $period): RedirectResponse
+    {
+        $this->authorizeAdmin();
+
+        if (! $period->isDraft()) {
+            return back()->with('error', 'Only draft payroll periods can be marked as reviewed.');
+        }
+
+        $validation = $this->validateForApproval($period);
+        if (! $validation['can_approve']) {
+            return back()->with('error', 'Cannot mark payroll as reviewed. Critical blockers remain: '.implode(' | ', $validation['blockers']));
+        }
+
+        $period->update([
+            'status' => PayrollPeriod::STATUS_REVIEWED,
+        ]);
+
+        ActivityLog::log(
+            'review_payroll',
+            "Verified and marked monthly payroll for {$period->formatted_period} as Reviewed.",
+            'Payroll'
+        );
+
+        return redirect()->route('payroll.salary.index', ['year' => $period->year, 'month' => $period->month])
+            ->with('success', "Payroll for {$period->formatted_period} has been reviewed and verified. Ready for Admin approval.");
+    }
+
+    /**
      * Finalize and approve the monthly payroll period.
      */
     public function approve(Request $request, PayrollPeriod $period): RedirectResponse
     {
         $this->authorizeAdmin();
 
-        if (! $period->isDraft()) {
-            return back()->with('error', 'This payroll period is already approved.');
+        if (! $period->isModifiable()) {
+            return back()->with('error', 'This payroll period is already approved or locked.');
+        }
+
+        $validation = $this->validateForApproval($period);
+        if (! $validation['can_approve']) {
+            return back()->with('error', 'Payroll approval blocked! Please resolve: '.implode(' | ', $validation['blockers']));
         }
 
         $periodDate = Carbon::createFromDate($period->year, $period->month, 1);
@@ -380,22 +469,106 @@ class SalaryController extends Controller
             $period->loadMissing('items');
 
             foreach ($period->items as $item) {
-                // Link pending advances for this employee and mark them deducted
-                $advancesToDeduct = EmployeeAdvance::where('employee_id', $item->employee_id)
-                    ->where('status', EmployeeAdvance::STATUS_PENDING)
-                    ->where('advance_date', '<=', $monthEnd)
-                    ->get();
+                $breakdown = $item->attendance_breakdown ?? [];
+                $plannedRecoveries = $breakdown['planned_advance_recoveries'] ?? [];
 
-                foreach ($advancesToDeduct as $adv) {
-                    $adv->update([
-                        'status' => EmployeeAdvance::STATUS_DEDUCTED,
-                        'payroll_item_id' => $item->id,
-                    ]);
+                if (! empty($plannedRecoveries)) {
+                    foreach ($plannedRecoveries as $plan) {
+                        $adv = EmployeeAdvance::find($plan['advance_id']);
+                        if (! $adv) {
+                            continue;
+                        }
+
+                        $amountToRecover = (float) $plan['recovery_amount'];
+
+                        if (Schema::hasTable('employee_advance_recoveries')) {
+                            EmployeeAdvanceRecovery::create([
+                                'employee_advance_id' => $adv->id,
+                                'payroll_period_id' => $period->id,
+                                'payroll_item_id' => $item->id,
+                                'employee_id' => $item->employee_id,
+                                'recovery_date' => $monthEnd,
+                                'amount' => $amountToRecover,
+                                'status' => EmployeeAdvanceRecovery::STATUS_RECOVERED,
+                                'created_by' => Auth::id(),
+                            ]);
+                        }
+
+                        $newRemaining = max(0.0, round($adv->remaining_balance - $amountToRecover, 2));
+
+                        if ($newRemaining <= 0.001) {
+                            $adv->update([
+                                'status' => EmployeeAdvance::STATUS_DEDUCTED,
+                                'payroll_item_id' => $item->id,
+                            ]);
+                        } else {
+                            $adv->update([
+                                'status' => EmployeeAdvance::STATUS_PARTIALLY_RECOVERED,
+                            ]);
+                        }
+                    }
+                } else {
+                    // Fallback for legacy items or test scenarios without planned_advance_recoveries
+                    $advancesToDeduct = EmployeeAdvance::where('employee_id', $item->employee_id)
+                        ->whereIn('status', [
+                            EmployeeAdvance::STATUS_DISBURSED,
+                            EmployeeAdvance::STATUS_PARTIALLY_RECOVERED,
+                        ])
+                        ->where('advance_date', '<=', $monthEnd)
+                        ->get();
+
+                    foreach ($advancesToDeduct as $adv) {
+                        $balance = $adv->remaining_balance;
+                        if ($balance <= 0) {
+                            continue;
+                        }
+
+                        if (Schema::hasTable('employee_advance_recoveries')) {
+                            EmployeeAdvanceRecovery::create([
+                                'employee_advance_id' => $adv->id,
+                                'payroll_period_id' => $period->id,
+                                'payroll_item_id' => $item->id,
+                                'employee_id' => $item->employee_id,
+                                'recovery_date' => $monthEnd,
+                                'amount' => $balance,
+                                'status' => EmployeeAdvanceRecovery::STATUS_RECOVERED,
+                                'created_by' => Auth::id(),
+                            ]);
+                        }
+
+                        $adv->update([
+                            'status' => EmployeeAdvance::STATUS_DEDUCTED,
+                            'payroll_item_id' => $item->id,
+                        ]);
+                    }
                 }
 
                 $item->update([
                     'status' => PayrollItem::STATUS_APPROVED,
                 ]);
+
+                // Link and update approved bonuses to applied
+                if (Schema::hasTable('employee_bonuses')) {
+                    EmployeeBonus::where('employee_id', $item->employee_id)
+                        ->where('period_year', $period->year)
+                        ->where('period_month', $period->month)
+                        ->where('status', EmployeeBonus::STATUS_APPROVED)
+                        ->update([
+                            'status' => EmployeeBonus::STATUS_APPLIED,
+                            'payroll_item_id' => $item->id,
+                        ]);
+                }
+
+                // Link and update approved overtime to applied
+                if (Schema::hasTable('employee_overtimes')) {
+                    EmployeeOvertime::where('employee_id', $item->employee_id)
+                        ->whereBetween('overtime_date', [$monthEnd ? Carbon::parse($monthEnd)->startOfMonth()->toDateString() : today()->startOfMonth()->toDateString(), $monthEnd])
+                        ->where('status', EmployeeOvertime::STATUS_APPROVED)
+                        ->update([
+                            'status' => EmployeeOvertime::STATUS_APPLIED,
+                            'payroll_item_id' => $item->id,
+                        ]);
+                }
             }
 
             $period->update([
@@ -465,41 +638,111 @@ class SalaryController extends Controller
     }
 
     /**
+     * Rollback an approved payroll period back to draft (Admin only).
+     * Reverses any employee advance recoveries applied during approval.
+     */
+    public function rollbackApproval(PayrollPeriod $period): RedirectResponse
+    {
+        $this->authorizeAdmin();
+
+        if ($period->status !== PayrollPeriod::STATUS_APPROVED) {
+            return back()->with('error', 'Only approved payroll periods can be rolled back.');
+        }
+
+        // Check if any salary payments have already been disbursed for this period
+        $hasPayments = PayrollPayment::whereIn('payroll_item_id', $period->items()->pluck('id'))->exists();
+        if ($hasPayments) {
+            return back()->with('error', 'Cannot rollback payroll because payments have already been recorded. Please reverse recorded payments first.');
+        }
+
+        DB::transaction(function () use ($period) {
+            // Find recoveries recorded for this payroll period
+            if (Schema::hasTable('employee_advance_recoveries')) {
+                $recoveries = EmployeeAdvanceRecovery::where('payroll_period_id', $period->id)->get();
+                $advanceIds = $recoveries->pluck('employee_advance_id')->unique();
+
+                // Delete recoveries recorded for this payroll period
+                EmployeeAdvanceRecovery::where('payroll_period_id', $period->id)->delete();
+
+                // Reset advance statuses based on remaining recoveries
+                foreach ($advanceIds as $advId) {
+                    $adv = EmployeeAdvance::find($advId);
+                    if (! $adv) {
+                        continue;
+                    }
+
+                    $recovered = $adv->recovered_amount;
+
+                    if ($recovered > 0.001) {
+                        $adv->update([
+                            'status' => EmployeeAdvance::STATUS_PARTIALLY_RECOVERED,
+                            'payroll_item_id' => null,
+                        ]);
+                    } else {
+                        $newStatus = ($adv->disbursed_at || $adv->disbursed_by)
+                            ? EmployeeAdvance::STATUS_DISBURSED
+                            : EmployeeAdvance::STATUS_APPROVED;
+
+                        $adv->update([
+                            'status' => $newStatus,
+                            'payroll_item_id' => null,
+                        ]);
+                    }
+                }
+            } else {
+                // Legacy fallback: reset advances that pointed to this period's items
+                EmployeeAdvance::whereIn('payroll_item_id', $period->items()->pluck('id'))
+                    ->update([
+                        'status' => EmployeeAdvance::STATUS_PENDING,
+                        'payroll_item_id' => null,
+                    ]);
+            }
+
+            // Revert applied bonuses back to approved
+            if (Schema::hasTable('employee_bonuses')) {
+                EmployeeBonus::whereIn('payroll_item_id', $period->items()->pluck('id'))
+                    ->update([
+                        'status' => EmployeeBonus::STATUS_APPROVED,
+                        'payroll_item_id' => null,
+                    ]);
+            }
+
+            // Revert applied overtime back to approved
+            if (Schema::hasTable('employee_overtimes')) {
+                EmployeeOvertime::whereIn('payroll_item_id', $period->items()->pluck('id'))
+                    ->update([
+                        'status' => EmployeeOvertime::STATUS_APPROVED,
+                        'payroll_item_id' => null,
+                    ]);
+            }
+
+            // Reset items and period back to draft
+            $period->items()->update([
+                'status' => PayrollItem::STATUS_DRAFT,
+            ]);
+
+            $period->update([
+                'status' => PayrollPeriod::STATUS_DRAFT,
+                'approved_by' => null,
+                'approved_at' => null,
+            ]);
+        });
+
+        ActivityLog::log(
+            'rollback_payroll',
+            "Rolled back approved payroll for {$period->formatted_period} to draft. Advance recoveries reverted.",
+            'Payroll'
+        );
+
+        return redirect()->route('payroll.salary.index', ['year' => $period->year, 'month' => $period->month])
+            ->with('success', "Payroll for {$period->formatted_period} has been rolled back to draft.");
+    }
+
+    /**
      * Record an employee salary advance.
      */
     public function storeAdvance(Request $request): RedirectResponse
     {
-        $this->authorizeAdmin();
-
-        $validated = $request->validate([
-            'employee_id' => 'required|exists:employees,id',
-            'advance_date' => 'required|date',
-            'amount' => 'required|numeric|min:1',
-            'payment_method' => 'required|string|in:cash,bank_transfer,cheque,other',
-            'notes' => 'nullable|string|max:500',
-        ]);
-
-        $advanceNumber = EmployeeAdvance::generateNextAdvanceNumber();
-
-        $advance = EmployeeAdvance::create([
-            'advance_number' => $advanceNumber,
-            'employee_id' => $validated['employee_id'],
-            'advance_date' => $validated['advance_date'],
-            'amount' => $validated['amount'],
-            'payment_method' => $validated['payment_method'],
-            'notes' => $validated['notes'] ?? null,
-            'status' => EmployeeAdvance::STATUS_PENDING,
-            'created_by' => Auth::id(),
-        ]);
-
-        $employee = Employee::find($validated['employee_id']);
-
-        ActivityLog::log(
-            'record_advance',
-            "Recorded salary advance {$advanceNumber} of LKR ".number_format($advance->amount, 2)." for {$employee->name}",
-            'Payroll'
-        );
-
-        return back()->with('success', "Salary advance {$advanceNumber} of LKR ".number_format($advance->amount, 2)." recorded for {$employee->name}.");
+        return app(SalaryAdvanceController::class)->store($request);
     }
 }

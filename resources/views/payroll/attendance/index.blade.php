@@ -192,6 +192,42 @@
         </div>
     @endif
 
+    @if(isset($holidayForSelectedDate) && $holidayForSelectedDate)
+        <div class="bg-purple-50 border border-purple-200 rounded-xl p-3.5 flex items-start gap-3 text-xs text-purple-900 shadow-xs">
+            <div class="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 mt-0.5">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+            </div>
+            <div class="flex-1">
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="font-bold text-sm text-purple-950">{{ $holidayForSelectedDate->name }}</span>
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold {{ $holidayForSelectedDate->isPaid() ? 'bg-purple-200 text-purple-800' : 'bg-gray-200 text-gray-700' }}">
+                        {{ ucfirst($holidayForSelectedDate->holiday_type) }} Holiday
+                    </span>
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white text-purple-800 border border-purple-200">
+                        {{ $holidayForSelectedDate->isFullDay() ? 'Full Day' : 'Half Day' }}
+                    </span>
+                    @if($holidayForSelectedDate->branch)
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-purple-100 text-purple-800">
+                            {{ $holidayForSelectedDate->branch->name }}
+                        </span>
+                    @else
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-purple-100 text-purple-800">
+                            All Branches
+                        </span>
+                    @endif
+                </div>
+                <p class="text-xs text-purple-800/80 mt-1">
+                    Company holiday declared for this date. Existing employee attendance records are preserved and never automatically overwritten.
+                    @if($holidayForSelectedDate->notes)
+                        <span class="italic block mt-0.5 font-medium">&ldquo;{{ $holidayForSelectedDate->notes }}&rdquo;</span>
+                    @endif
+                </p>
+            </div>
+        </div>
+    @endif
+
     <!-- Attendance Form -->
     <form id="attendance-form" method="POST" action="{{ route('payroll.attendance.store') }}">
         @csrf
@@ -508,6 +544,7 @@
 
                 <!-- Legend -->
                 <div class="hidden sm:flex items-center gap-3 text-[11px] text-gray-500">
+                    <span class="inline-flex items-center"><span class="w-2.5 h-2.5 rounded-full bg-purple-500 mr-1"></span> Holiday</span>
                     <span class="inline-flex items-center"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 mr-1"></span> All Marked</span>
                     <span class="inline-flex items-center"><span class="w-2.5 h-2.5 rounded-full bg-amber-400 mr-1"></span> Partial</span>
                     <span class="inline-flex items-center"><span class="w-2.5 h-2.5 rounded-full bg-rose-500 mr-1"></span> Missing</span>
@@ -533,12 +570,14 @@
                 @foreach($calendarDays as $cDay)
                     @php
                         $bgColor = match($cDay['color']) {
+                            'purple' => 'bg-purple-50 hover:bg-purple-100 border-purple-300 text-purple-950',
                             'green' => 'bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-950',
                             'amber' => 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-950',
                             'red' => 'bg-rose-50 hover:bg-rose-100 border-rose-300 text-rose-950',
                             default => 'bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-500',
                         };
                         $indicatorDot = match($cDay['color']) {
+                            'purple' => 'bg-purple-500',
                             'green' => 'bg-emerald-500',
                             'amber' => 'bg-amber-500',
                             'red' => 'bg-rose-500',

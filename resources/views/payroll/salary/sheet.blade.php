@@ -13,6 +13,10 @@
                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
                         DRAFT
                     </span>
+                @elseif($payrollItem->period->isReviewed())
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-300">
+                        REVIEWED
+                    </span>
                 @elseif($payrollItem->status === 'paid')
                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
                         FULLY PAID
@@ -44,7 +48,7 @@
                 Print Payslip
             </a>
 
-            @if(!$payrollItem->period->isDraft() && $payrollItem->balance_due > 0 && Auth::user()->isAdmin())
+            @if($payrollItem->period->isApproved() && $payrollItem->balance_due > 0 && Auth::user()->isAdmin())
                 <button 
                     type="button" 
                     @click="showPaymentModal = true"
@@ -104,33 +108,55 @@
                 <span class="font-medium text-gray-900 text-sm mt-0.5 block">{{ $payrollItem->employee->position ?: 'Staff' }}</span>
             </div>
             <div>
-                <span class="text-gray-400 block uppercase tracking-wider font-semibold">Snapshot Daily Wage</span>
-                <span class="font-bold text-gray-900 text-sm mt-0.5 font-mono block">LKR {{ number_format($payrollItem->daily_wage_snapshot, 2) }}</span>
+                <span class="text-gray-400 block uppercase tracking-wider font-semibold">
+                    {{ $payrollItem->isMonthly() ? 'Monthly Basic Salary' : 'Snapshot Daily Wage' }}
+                </span>
+                <span class="font-bold text-gray-900 text-sm mt-0.5 font-mono block">
+                    @if($payrollItem->isMonthly())
+                        LKR {{ number_format($payrollItem->monthly_basic_snapshot, 2) }}
+                        <span class="text-[10px] text-purple-700 font-semibold block">(Monthly Salary)</span>
+                    @else
+                        LKR {{ number_format($payrollItem->daily_wage_snapshot, 2) }}
+                        <span class="text-[10px] text-slate-500 font-semibold block">(Daily Wage)</span>
+                    @endif
+                </span>
             </div>
         </div>
 
         <!-- Attendance Breakdown Summary -->
         <div class="p-6 border-b border-gray-100 space-y-3">
-            <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400">Recorded Attendance Breakdown</h3>
-            <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400">Reconciled Monthly Attendance Breakdown</h3>
+            <div class="grid grid-cols-2 sm:grid-cols-7 gap-2.5 text-center">
                 <div class="bg-emerald-50/50 border border-emerald-200 rounded-lg p-2.5">
-                    <span class="text-[11px] text-emerald-800 block font-medium">Full Days (1.0)</span>
+                    <span class="text-[10px] text-emerald-800 block font-semibold uppercase">Full Days</span>
                     <span class="text-lg font-bold text-emerald-800 font-mono">{{ $payrollItem->full_days_count }}</span>
                 </div>
                 <div class="bg-blue-50/50 border border-blue-200 rounded-lg p-2.5">
-                    <span class="text-[11px] text-blue-800 block font-medium">Half Days (0.5)</span>
+                    <span class="text-[10px] text-blue-800 block font-semibold uppercase">Half Days</span>
                     <span class="text-lg font-bold text-blue-800 font-mono">{{ $payrollItem->half_days_count }}</span>
                 </div>
-                <div class="bg-rose-50/50 border border-rose-200 rounded-lg p-2.5">
-                    <span class="text-[11px] text-rose-800 block font-medium">Absent Days (0.0)</span>
-                    <span class="text-lg font-bold text-rose-800 font-mono">{{ $payrollItem->absent_days_count }}</span>
+                <div class="bg-purple-50/50 border border-purple-200 rounded-lg p-2.5">
+                    <span class="text-[10px] text-purple-800 block font-semibold uppercase">Company Off-Days</span>
+                    <span class="text-lg font-bold text-purple-800 font-mono">{{ number_format($payrollItem->company_off_days_count, 1) }}</span>
+                    <span class="text-[9px] text-purple-600 block">Max 5 / mo</span>
+                </div>
+                <div class="bg-indigo-50/50 border border-indigo-200 rounded-lg p-2.5">
+                    <span class="text-[10px] text-indigo-800 block font-semibold uppercase">Paid Holidays</span>
+                    <span class="text-lg font-bold text-indigo-800 font-mono">{{ number_format($payrollItem->paid_holidays_count, 1) }}</span>
+                    <span class="text-[9px] text-indigo-600 block">Protected</span>
                 </div>
                 <div class="bg-amber-50/50 border border-amber-200 rounded-lg p-2.5">
-                    <span class="text-[11px] text-amber-800 block font-medium">Leave / Off Days</span>
-                    <span class="text-lg font-bold text-amber-800 font-mono">{{ $payrollItem->leave_days_count + $payrollItem->day_off_days_count }}</span>
+                    <span class="text-[10px] text-amber-800 block font-semibold uppercase">Other Leave</span>
+                    <span class="text-lg font-bold text-amber-800 font-mono">{{ number_format($payrollItem->approved_leave_count, 1) }}</span>
+                    <span class="text-[9px] text-amber-600 block">Approved</span>
+                </div>
+                <div class="{{ $payrollItem->no_pay_days_count > 0 ? 'bg-rose-50 border-rose-300' : 'bg-gray-50/50 border-gray-200' }} border rounded-lg p-2.5">
+                    <span class="text-[10px] {{ $payrollItem->no_pay_days_count > 0 ? 'text-rose-800 font-bold' : 'text-gray-500' }} block uppercase">No-Pay Days</span>
+                    <span class="text-lg font-bold {{ $payrollItem->no_pay_days_count > 0 ? 'text-rose-800' : 'text-gray-700' }} font-mono">{{ number_format($payrollItem->no_pay_days_count, 1) }}</span>
+                    <span class="text-[9px] {{ $payrollItem->no_pay_days_count > 0 ? 'text-rose-600 font-semibold' : 'text-gray-400' }} block">Excess Absence</span>
                 </div>
                 <div class="bg-[#EEF1FA] border border-[#0B1849]/20 rounded-lg p-2.5">
-                    <span class="text-[11px] text-[#0B1849] block font-bold">Payable Days Equivalent</span>
+                    <span class="text-[10px] text-[#0B1849] block font-bold uppercase">Payable Days</span>
                     <span class="text-lg font-extrabold text-[#0B1849] font-mono">{{ number_format($payrollItem->payable_days, 1) }}</span>
                 </div>
             </div>
@@ -142,18 +168,51 @@
             <div class="p-6 space-y-3">
                 <h3 class="text-xs font-bold uppercase tracking-wider text-emerald-700">Earnings</h3>
                 <div class="space-y-2 text-sm">
-                    <div class="flex justify-between py-1 border-b border-gray-50">
-                        <span class="text-gray-600">Base Wage Earnings</span>
-                        <span class="font-mono font-semibold text-gray-900">LKR {{ number_format($payrollItem->base_earnings, 2) }}</span>
-                    </div>
+                    @if($payrollItem->isMonthly())
+                        <div class="flex justify-between py-1 border-b border-gray-50">
+                            <div>
+                                <span class="text-gray-800 font-medium block">Monthly Basic Salary</span>
+                                <span class="text-[11px] text-gray-400">Fixed monthly wage entitlement</span>
+                            </div>
+                            <span class="font-mono font-bold text-gray-900">LKR {{ number_format($payrollItem->base_earnings, 2) }}</span>
+                        </div>
+                    @else
+                        @php
+                            $paidHolidayWage = (float) ($payrollItem->reconciliation_summary['paid_holiday_wage'] ?? 0);
+                            $attendanceWage = max(0, (float) $payrollItem->base_earnings - $paidHolidayWage);
+                        @endphp
+                        <div class="flex justify-between py-1 border-b border-gray-50">
+                            <div>
+                                <span class="text-gray-800 font-medium block">Attendance Daily Wages</span>
+                                <span class="text-[11px] text-gray-400">{{ $payrollItem->full_days_count }} full + {{ $payrollItem->half_days_count }} half days worked</span>
+                            </div>
+                            <span class="font-mono font-semibold text-gray-900">LKR {{ number_format($attendanceWage, 2) }}</span>
+                        </div>
+                        @if($paidHolidayWage > 0)
+                            <div class="flex justify-between py-1 border-b border-gray-50">
+                                <div>
+                                    <span class="text-indigo-800 font-medium block">Paid Company Holidays</span>
+                                    <span class="text-[11px] text-indigo-500">{{ number_format($payrollItem->paid_holidays_count, 1) }} day(s) credited</span>
+                                </div>
+                                <span class="font-mono font-semibold text-indigo-900">LKR {{ number_format($paidHolidayWage, 2) }}</span>
+                            </div>
+                        @endif
+                    @endif
+
                     <div class="flex justify-between py-1 border-b border-gray-50">
                         <span class="text-gray-600">Overtime Pay</span>
                         <span class="font-mono text-gray-900">LKR {{ number_format($payrollItem->overtime_amount, 2) }}</span>
                     </div>
                     <div class="flex justify-between py-1 border-b border-gray-50">
-                        <span class="text-gray-600">Bonuses & Allowances</span>
+                        <span class="text-gray-600">Bonuses</span>
                         <span class="font-mono text-gray-900">LKR {{ number_format($payrollItem->bonus_amount, 2) }}</span>
                     </div>
+                    @if($payrollItem->allowances_amount > 0)
+                        <div class="flex justify-between py-1 border-b border-gray-50">
+                            <span class="text-gray-600">Allowances (Transport, Meal, etc.)</span>
+                            <span class="font-mono text-gray-900">LKR {{ number_format($payrollItem->allowances_amount, 2) }}</span>
+                        </div>
+                    @endif
                     <div class="flex justify-between pt-2 border-t border-gray-200 text-base font-bold">
                         <span class="text-gray-900">Total Gross Salary</span>
                         <span class="font-mono text-[#0B1849]">LKR {{ number_format($payrollItem->gross_salary, 2) }}</span>
@@ -165,37 +224,115 @@
             <div class="p-6 space-y-3">
                 <h3 class="text-xs font-bold uppercase tracking-wider text-rose-700">Deductions</h3>
                 <div class="space-y-2 text-sm">
+                    @if($payrollItem->no_pay_deduction > 0)
+                        <div class="flex justify-between py-1 border-b border-gray-50 bg-rose-50/50 px-2 rounded">
+                            <div>
+                                <span class="text-rose-800 font-bold block">No-Pay Deduction</span>
+                                <span class="text-[11px] text-rose-600">{{ number_format($payrollItem->no_pay_days_count, 1) }} excess absence day(s) beyond 5 off-days</span>
+                            </div>
+                            <span class="font-mono font-bold text-rose-700">- LKR {{ number_format($payrollItem->no_pay_deduction, 2) }}</span>
+                        </div>
+                    @endif
+
                     <div class="flex justify-between py-1 border-b border-gray-50">
                         <span class="text-gray-600">Salary Advances Deducted</span>
                         <span class="font-mono font-semibold text-amber-700">
-                            {{ $payrollItem->advances_applied > 0 ? 'LKR ' . number_format($payrollItem->advances_applied, 2) : 'LKR 0.00' }}
+                            {{ $payrollItem->advances_applied > 0 ? '- LKR ' . number_format($payrollItem->advances_applied, 2) : 'LKR 0.00' }}
                         </span>
                     </div>
                     <div class="flex justify-between py-1 border-b border-gray-50">
                         <span class="text-gray-600">Other Authorized Deductions</span>
-                        <span class="font-mono text-gray-900">LKR {{ number_format($payrollItem->deductions, 2) }}</span>
+                        <span class="font-mono text-gray-900">
+                            {{ $payrollItem->deductions > 0 ? '- LKR ' . number_format($payrollItem->deductions, 2) : 'LKR 0.00' }}
+                        </span>
                     </div>
                     @if($payrollItem->epf_employee_amount > 0)
                         <div class="flex justify-between py-1 border-b border-gray-50">
-                            <span class="text-gray-600">EPF (Employee 8%)</span>
-                            <span class="font-mono text-gray-900">LKR {{ number_format($payrollItem->epf_employee_amount, 2) }}</span>
+                            <div>
+                                <span class="text-blue-800 font-medium block">EPF (Employee 8%)</span>
+                                <span class="text-[11px] text-gray-400">Qualifying Base: LKR {{ number_format($payrollItem->epf_qualifying_earnings, 2) }}</span>
+                            </div>
+                            <span class="font-mono text-blue-900 font-semibold">- LKR {{ number_format($payrollItem->epf_employee_amount, 2) }}</span>
                         </div>
                     @endif
+                    @if($payrollItem->apit_amount > 0)
+                        <div class="flex justify-between py-1 border-b border-gray-50 bg-purple-50/50 px-2 rounded">
+                            <div>
+                                <span class="text-purple-800 font-bold block">APIT (PAYE Tax)</span>
+                                <span class="text-[11px] text-purple-600">Taxable: LKR {{ number_format($payrollItem->apit_taxable_earnings, 2) }}</span>
+                            </div>
+                            <span class="font-mono font-bold text-purple-900">- LKR {{ number_format($payrollItem->apit_amount, 2) }}</span>
+                        </div>
+                    @endif
+                    @php
+                        $totalDeductionsCalculated = (float) $payrollItem->advances_applied + (float) $payrollItem->deductions + (float) $payrollItem->no_pay_deduction + (float) $payrollItem->epf_employee_amount + (float) $payrollItem->apit_amount;
+                    @endphp
                     <div class="flex justify-between pt-2 border-t border-gray-200 text-base font-bold">
                         <span class="text-gray-900">Total Deductions</span>
                         <span class="font-mono text-rose-700">
-                            LKR {{ number_format($payrollItem->advances_applied + $payrollItem->deductions + $payrollItem->epf_employee_amount, 2) }}
+                            - LKR {{ number_format($totalDeductionsCalculated, 2) }}
                         </span>
                     </div>
                 </div>
             </div>
         </div>
 
+        <!-- Statutory Contributions & Employer Liability Card -->
+        <div class="p-6 bg-slate-50 border-t border-gray-100 space-y-3">
+            <div class="flex items-center justify-between">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center">
+                    <svg class="w-4 h-4 mr-1.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    Statutory Contributions & Employer Liabilities (EPF / ETF / APIT)
+                </h4>
+                <span class="text-[11px] text-gray-500">Employer costs do not reduce employee take-home pay</span>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 pt-2">
+                <div class="bg-white p-3 rounded-lg border border-gray-200 shadow-2xs">
+                    <span class="text-[10px] text-gray-500 uppercase block font-semibold">EPF/ETF Base</span>
+                    <span class="text-sm font-bold text-gray-900 font-mono block mt-1">LKR {{ number_format($payrollItem->epf_qualifying_earnings, 2) }}</span>
+                </div>
+                <div class="bg-blue-50/50 p-3 rounded-lg border border-blue-200 shadow-2xs">
+                    <span class="text-[10px] text-blue-700 uppercase block font-semibold">Employee EPF (8%)</span>
+                    <span class="text-sm font-bold text-blue-900 font-mono block mt-1">LKR {{ number_format($payrollItem->epf_employee_amount, 2) }}</span>
+                </div>
+                <div class="bg-indigo-50/50 p-3 rounded-lg border border-indigo-200 shadow-2xs">
+                    <span class="text-[10px] text-indigo-700 uppercase block font-semibold">Employer EPF (12%)</span>
+                    <span class="text-sm font-bold text-indigo-900 font-mono block mt-1">LKR {{ number_format($payrollItem->epf_employer_amount, 2) }}</span>
+                </div>
+                <div class="bg-emerald-50/50 p-3 rounded-lg border border-emerald-200 shadow-2xs">
+                    <span class="text-[10px] text-emerald-700 uppercase block font-semibold">Employer ETF (3%)</span>
+                    <span class="text-sm font-bold text-emerald-900 font-mono block mt-1">LKR {{ number_format($payrollItem->etf_employer_amount, 2) }}</span>
+                </div>
+                <div class="bg-purple-50/50 p-3 rounded-lg border border-purple-200 shadow-2xs">
+                    <span class="text-[10px] text-purple-700 uppercase block font-semibold">APIT (PAYE Tax)</span>
+                    <span class="text-sm font-bold text-purple-900 font-mono block mt-1">LKR {{ number_format($payrollItem->apit_amount, 2) }}</span>
+                </div>
+                <div class="bg-amber-50/60 p-3 rounded-lg border border-amber-200 shadow-2xs">
+                    <span class="text-[10px] text-amber-800 uppercase block font-bold">Total CTC</span>
+                    <span class="text-sm font-extrabold text-amber-950 font-mono block mt-1">LKR {{ number_format($payrollItem->total_cost_to_company, 2) }}</span>
+                </div>
+            </div>
+        </div>
+
         <!-- Net Pay & Payment Status Highlight Bar -->
-        <div class="p-6 bg-[#0B1849] text-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div class="p-6 {{ $payrollItem->net_salary < 0 ? 'bg-rose-950' : 'bg-[#0B1849]' }} text-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-                <span class="text-xs uppercase tracking-wider text-slate-300 block font-semibold">Net Salary Payable</span>
-                <span class="text-2xl font-extrabold font-mono text-white">LKR {{ number_format($payrollItem->net_salary, 2) }}</span>
+                <span class="text-xs uppercase tracking-wider text-slate-300 block font-semibold">
+                    {{ $payrollItem->net_salary < 0 ? 'Net Salary Deficit / Shortfall' : 'Net Salary Payable' }}
+                </span>
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl font-extrabold font-mono {{ $payrollItem->net_salary < 0 ? 'text-rose-300' : 'text-white' }}">
+                        {{ $payrollItem->net_salary < 0 ? '- LKR '.number_format(abs($payrollItem->net_salary), 2) : 'LKR '.number_format($payrollItem->net_salary, 2) }}
+                    </span>
+                    @if($payrollItem->net_salary < 0)
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/30 text-rose-200 border border-rose-400/40">
+                            Shortfall Requires Review
+                        </span>
+                    @endif
+                </div>
             </div>
 
             <div class="flex items-center gap-6 text-sm font-mono">
@@ -205,12 +342,31 @@
                 </div>
                 <div>
                     <span class="text-[11px] text-slate-300 block">Outstanding Balance</span>
-                    <span class="font-bold {{ $payrollItem->balance_due > 0 ? 'text-amber-300' : 'text-slate-300' }}">
-                        LKR {{ number_format($payrollItem->balance_due, 2) }}
+                    <span class="font-bold {{ $payrollItem->balance_due > 0 ? 'text-amber-300' : ($payrollItem->balance_due < 0 ? 'text-rose-300' : 'text-slate-300') }}">
+                        {{ $payrollItem->balance_due < 0 ? '- LKR '.number_format(abs($payrollItem->balance_due), 2) : 'LKR '.number_format($payrollItem->balance_due, 2) }}
                     </span>
                 </div>
             </div>
         </div>
+
+        @php
+            $statFlags = $payrollItem->attendance_breakdown['statutory_breakdown']['flagged_for_admin_review'] ?? [];
+        @endphp
+        @if(!empty($statFlags))
+            <div class="p-4 bg-amber-50 border-t border-amber-200 text-xs text-amber-900">
+                <div class="font-bold flex items-center mb-1">
+                    <svg class="w-4 h-4 mr-1 text-amber-700" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    </svg>
+                    Statutory / Payroll Compliance Review Flags:
+                </div>
+                <ul class="list-disc pl-5 space-y-0.5 text-amber-800 text-[11px]">
+                    @foreach($statFlags as $flag)
+                        <li>{{ $flag }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
 
         @if($payrollItem->notes)
             <div class="p-4 bg-gray-50 border-t border-gray-100 text-xs text-gray-600">
@@ -305,19 +461,25 @@
     </div>
 
     <!-- Daily Attendance Detailed Audit Log -->
-    @if(!empty($payrollItem->attendance_breakdown))
+    @php
+        $auditRecords = $payrollItem->getDailyAuditRecords();
+    @endphp
+    @if(!empty($auditRecords))
         <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden" x-data="{ openBreakdown: false }">
             <div 
                 @click="openBreakdown = !openBreakdown" 
                 class="p-4 border-b border-gray-100 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition"
             >
                 <div>
-                    <h3 class="text-sm font-bold text-gray-900">Daily Attendance Audit Records ({{ count($payrollItem->attendance_breakdown) }} days recorded)</h3>
-                    <p class="text-xs text-gray-500">Click to expand/collapse day-by-day calculations</p>
+                    <h3 class="text-sm font-bold text-gray-900">Daily Attendance & Reconciliation Audit Log ({{ count($auditRecords) }} days reconciled)</h3>
+                    <p class="text-xs text-gray-500">Day-by-day record of working days, statutory rest days, company holidays, off-days, and absences</p>
                 </div>
-                <svg :class="openBreakdown ? 'rotate-180' : ''" class="w-4 h-4 text-gray-400 transform transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                </svg>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-semibold text-gray-500" x-text="openBreakdown ? 'Collapse Log' : 'Expand Log'"></span>
+                    <svg :class="openBreakdown ? 'rotate-180' : ''" class="w-4 h-4 text-gray-400 transform transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </div>
             </div>
 
             <div x-show="openBreakdown" x-cloak class="responsive-table-wrapper">
@@ -325,24 +487,47 @@
                     <thead class="bg-gray-50">
                         <tr>
                             <th class="px-4 py-2.5 text-left font-semibold text-gray-600">Date</th>
-                            <th class="px-4 py-2.5 text-left font-semibold text-gray-600">Attendance Status</th>
-                            <th class="px-4 py-2.5 text-center font-semibold text-gray-600">Payable Fraction</th>
-                            <th class="px-4 py-2.5 text-right font-semibold text-gray-600">Applied Daily Wage</th>
+                            <th class="px-4 py-2.5 text-left font-semibold text-gray-600">Classification</th>
+                            <th class="px-4 py-2.5 text-center font-semibold text-gray-600">Payable Day</th>
+                            <th class="px-4 py-2.5 text-right font-semibold text-gray-600">Daily Wage</th>
                             <th class="px-4 py-2.5 text-right font-semibold text-gray-600">Calculated Earnings</th>
-                            <th class="px-4 py-2.5 text-left font-semibold text-gray-600">Notes</th>
+                            <th class="px-4 py-2.5 text-left font-semibold text-gray-600">Holiday / Notes</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100">
-                        @foreach($payrollItem->attendance_breakdown as $row)
+                        @foreach($auditRecords as $row)
+                            @php
+                                $statusKey = $row['status'] ?? '';
+                                $rowBadgeClass = match($statusKey) {
+                                    'full_day' => 'bg-emerald-50 text-emerald-800 border border-emerald-200',
+                                    'half_day' => 'bg-blue-50 text-blue-800 border border-blue-200',
+                                    'paid_holiday' => 'bg-indigo-50 text-indigo-800 border border-indigo-200',
+                                    'unpaid_holiday' => 'bg-purple-50 text-purple-800 border border-purple-200',
+                                    'day_off' => 'bg-purple-50 text-purple-700 border border-purple-200',
+                                    'sunday_rest' => 'bg-gray-100 text-gray-600',
+                                    'absent' => 'bg-rose-50 text-rose-700 border border-rose-200',
+                                    'missing_attendance' => 'bg-amber-50 text-amber-800 border border-amber-200',
+                                    default => 'bg-gray-100 text-gray-700',
+                                };
+                            @endphp
                             <tr class="hover:bg-slate-50">
-                                <td class="px-4 py-2 font-mono text-gray-900">{{ $row['date'] }}</td>
-                                <td class="px-4 py-2">
-                                    <span class="font-semibold text-gray-800 capitalize">{{ str_replace('_', ' ', $row['status']) }}</span>
+                                <td class="px-4 py-2 font-mono text-gray-900 whitespace-nowrap">
+                                    {{ $row['date'] }} <span class="text-gray-400 font-sans">({{ $row['day_name'] ?? '' }})</span>
                                 </td>
-                                <td class="px-4 py-2 text-center font-mono">{{ number_format($row['fraction'], 2) }}</td>
-                                <td class="px-4 py-2 text-right font-mono text-gray-600">LKR {{ number_format($row['wage'], 2) }}</td>
-                                <td class="px-4 py-2 text-right font-mono font-bold text-gray-900">LKR {{ number_format($row['earnings'], 2) }}</td>
-                                <td class="px-4 py-2 text-gray-500">{{ $row['notes'] ?? '—' }}</td>
+                                <td class="px-4 py-2 whitespace-nowrap">
+                                    <span class="px-2 py-0.5 rounded text-[11px] font-semibold {{ $rowBadgeClass }}">
+                                        {{ $row['category'] ?? ucfirst(str_replace('_', ' ', $statusKey)) }}
+                                    </span>
+                                </td>
+                                <td class="px-4 py-2 text-center font-mono">{{ number_format($row['fraction'] ?? 0, 1) }}</td>
+                                <td class="px-4 py-2 text-right font-mono text-gray-600">LKR {{ number_format($row['wage'] ?? 0, 2) }}</td>
+                                <td class="px-4 py-2 text-right font-mono font-bold text-gray-900">LKR {{ number_format($row['earnings'] ?? 0, 2) }}</td>
+                                <td class="px-4 py-2 text-gray-500">
+                                    @if(!empty($row['holiday_name']))
+                                        <span class="font-semibold text-indigo-700">[{{ $row['holiday_name'] }}]</span>
+                                    @endif
+                                    {{ $row['notes'] ?? '—' }}
+                                </td>
                             </tr>
                         @endforeach
                     </tbody>
