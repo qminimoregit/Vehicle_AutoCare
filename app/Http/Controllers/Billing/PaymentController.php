@@ -27,7 +27,7 @@ class PaymentController extends Controller
     public function index(Request $request): View
     {
         $user = Auth::user();
-        if (! $user->isAdmin() && ! $user->hasPermission('view_invoices') && ! $user->hasPermission('record_payments')) {
+        if (!$user->isAdmin() && !$user->hasPermission('view_invoices') && !$user->hasPermission('record_payments')) {
             abort(403, 'Unauthorized access to Payments.');
         }
 
@@ -132,12 +132,12 @@ class PaymentController extends Controller
         $user = $request->user();
 
         // Authorization check
-        if (! $user->isAdmin() && ! $user->hasPermission('record_payments')) {
+        if (!$user->isAdmin() && !$user->hasPermission('record_payments')) {
             abort(403, 'Unauthorized to record payments.');
         }
 
         // Branch access check
-        if ($invoice->branch_id && ! $user->canAccessBranch($invoice->branch_id)) {
+        if ($invoice->branch_id && !$user->canAccessBranch($invoice->branch_id)) {
             abort(403, 'Unauthorized access to this branch.');
         }
 
@@ -154,13 +154,13 @@ class PaymentController extends Controller
             $customer = $invoice->customer;
             $creditAccount = $customer?->creditAccount()->where('status', 'active')->first();
 
-            if (! $creditAccount) {
-                return back()->with('error', 'Customer does not have an active approved credit account.');
+            if (!$creditAccount) {
+                return back()->withInput()->with('error', 'Customer does not have an active approved credit account.');
             }
 
             $payAmount = round((float) $validated['amount'], 2);
-            if ($creditAccount->wouldExceedLimit($payAmount) && ! $user->isAdmin()) {
-                return back()->with('error', 'Company credit limit exceeded. Available credit: LKR '.number_format($creditAccount->available_credit, 2).'. Admin override required.');
+            if ($creditAccount->wouldExceedLimit($payAmount) && !$user->isAdmin()) {
+                return back()->withInput()->with('error', 'Company credit limit exceeded. Available credit: LKR ' . number_format($creditAccount->available_credit, 2) . '. Admin override required.');
             }
         }
 
@@ -183,8 +183,20 @@ class PaymentController extends Controller
                 // Prevent overpayment
                 if ($payAmount > $currentBalance) {
                     throw new Exception(
-                        'Payment amount (LKR '.number_format($payAmount, 2).') cannot exceed the outstanding balance of LKR '.number_format($currentBalance, 2).'.'
+                        'Payment amount (LKR ' . number_format($payAmount, 2) . ') cannot exceed the outstanding balance of LKR ' . number_format($currentBalance, 2) . '.'
                     );
+                }
+
+                // Prevent duplicate payment records caused by double-clicking or repeated rapid submissions
+                $duplicatePayment = Payment::where('invoice_id', $freshInvoice->id)
+                    ->where('amount', $payAmount)
+                    ->where('payment_method', $validated['payment_method'])
+                    ->where('created_by', $user->id)
+                    ->where('created_at', '>=', now()->subSeconds(15))
+                    ->first();
+
+                if ($duplicatePayment) {
+                    throw new Exception('A payment of LKR ' . number_format($payAmount, 2) . " was just recorded (#{$duplicatePayment->payment_number}). Duplicate submission prevented.");
                 }
 
                 $paymentNumber = Payment::generatePaymentNumber();
@@ -225,7 +237,7 @@ class PaymentController extends Controller
                 // Audit Log
                 ActivityLog::log(
                     action: 'payment_recorded',
-                    description: "Recorded payment {$paymentNumber} of LKR ".number_format($payAmount, 2)." for Invoice #{$freshInvoice->invoice_number}. New balance: LKR ".number_format($newBalance, 2).'.',
+                    description: "Recorded payment {$paymentNumber} of LKR " . number_format($payAmount, 2) . " for Invoice #{$freshInvoice->invoice_number}. New balance: LKR " . number_format($newBalance, 2) . '.',
                     module: 'Sales & Billing',
                     userId: $user->id
                 );
@@ -233,7 +245,8 @@ class PaymentController extends Controller
                 return $payment;
             });
 
-            return back()->with('success', "Payment {$payment->payment_number} of LKR ".number_format($payment->amount, 2).' recorded successfully.')
+            return redirect()->route('operations.invoices.show', $invoice)
+                ->with('success', "Payment {$payment->payment_number} of LKR " . number_format($payment->amount, 2) . ' recorded successfully.')
                 ->with('recent_payment_id', $payment->id);
         } catch (Exception $e) {
             return back()->withInput()->with('error', "Payment failed: {$e->getMessage()}");
@@ -246,7 +259,7 @@ class PaymentController extends Controller
     public function receipt(Request $request, Payment $payment): View
     {
         $user = $request->user();
-        if (! $user || (! $user->isAdmin() && ! $user->hasPermission('view_invoices') && ! $user->hasPermission('record_payments'))) {
+        if (!$user || (!$user->isAdmin() && !$user->hasPermission('view_invoices') && !$user->hasPermission('record_payments'))) {
             abort(403, 'Unauthorized access to payment receipt.');
         }
 
@@ -264,7 +277,7 @@ class PaymentController extends Controller
         ]);
 
         $branchId = $payment->invoice?->branch_id ?? $payment->jobCard?->branch_id;
-        if ($branchId && ! $user->canAccessBranch($branchId)) {
+        if ($branchId && !$user->canAccessBranch($branchId)) {
             abort(403, 'Unauthorized access to this branch.');
         }
 
@@ -280,7 +293,7 @@ class PaymentController extends Controller
     public function thermalReceipt(Request $request, Payment $payment): View
     {
         $user = $request->user();
-        if (! $user || (! $user->isAdmin() && ! $user->hasPermission('view_invoices') && ! $user->hasPermission('record_payments'))) {
+        if (!$user || (!$user->isAdmin() && !$user->hasPermission('view_invoices') && !$user->hasPermission('record_payments'))) {
             abort(403, 'Unauthorized access to payment receipt.');
         }
 
@@ -298,7 +311,7 @@ class PaymentController extends Controller
         ]);
 
         $branchId = $payment->invoice?->branch_id ?? $payment->jobCard?->branch_id;
-        if ($branchId && ! $user->canAccessBranch($branchId)) {
+        if ($branchId && !$user->canAccessBranch($branchId)) {
             abort(403, 'Unauthorized access to this branch.');
         }
 
@@ -335,7 +348,7 @@ class PaymentController extends Controller
     public function sendEmail(Request $request, Payment $payment): RedirectResponse
     {
         $user = $request->user();
-        if (! $user || (! $user->isAdmin() && ! $user->hasPermission('record_payments'))) {
+        if (!$user || (!$user->isAdmin() && !$user->hasPermission('record_payments'))) {
             abort(403, 'Unauthorized to email receipts.');
         }
 
@@ -384,7 +397,7 @@ class PaymentController extends Controller
     public function reverse(Request $request, Payment $payment): RedirectResponse
     {
         $user = $request->user();
-        if (! $user || ! $user->isAdmin()) {
+        if (!$user || !$user->isAdmin()) {
             abort(403, 'Unauthorized. Only administrators may reverse payments.');
         }
 
@@ -427,7 +440,7 @@ class PaymentController extends Controller
 
                 ActivityLog::log(
                     action: 'payment_reversed',
-                    description: "Reversed payment {$payment->payment_number} of LKR ".number_format($payment->amount, 2)." for Invoice #{$invoice->invoice_number}. Reason: {$request->input('reversal_reason')}",
+                    description: "Reversed payment {$payment->payment_number} of LKR " . number_format($payment->amount, 2) . " for Invoice #{$invoice->invoice_number}. Reason: {$request->input('reversal_reason')}",
                     module: 'Sales & Billing',
                     userId: $user->id
                 );

@@ -31,7 +31,7 @@
 
 <div 
     x-data="{ 
-        showPaymentModal: {{ (request()->query('action') === 'pay' && $invoice->balance_amount > 0 && $invoice->status !== 'cancelled') ? 'true' : 'false' }},
+        showPaymentModal: {{ (!session('success') && ($errors->any() || session('error') || request()->query('action') === 'pay') && $invoice->balance_amount > 0 && $invoice->status !== 'cancelled') ? 'true' : 'false' }},
         showWhatsAppModal: false,
         whatsappPhone: '{{ $normPhone }}',
         whatsappText: {{ json_encode($waInvoiceMessage) }},
@@ -55,11 +55,11 @@
             window.open(url, '_blank');
         },
 
-        paymentAmount: '{{ (float)$invoice->balance_amount }}',
-        paymentMethod: 'cash',
-        paymentDate: '{{ date('Y-m-d') }}',
-        refNumber: '',
-        notes: '',
+        paymentAmount: '{{ old('amount', (float)$invoice->balance_amount) }}',
+        paymentMethod: '{{ old('payment_method', 'cash') }}',
+        paymentDate: '{{ old('payment_date', date('Y-m-d')) }}',
+        refNumber: '{{ old('reference_number', '') }}',
+        notes: '{{ old('notes', '') }}',
         submitting: false,
         showReverseModal: false,
         reversingPaymentId: null,
@@ -80,6 +80,13 @@
             this.showReverseModal = true;
         }
     }"
+    x-init="
+        if (window.location.search.includes('action=pay')) {
+            @if(session('success'))
+                window.history.replaceState({}, document.title, window.location.pathname);
+            @endif
+        }
+    "
     class="max-w-4xl mx-auto space-y-6"
 >
     <!-- Top Action Bar -->
@@ -601,12 +608,39 @@
                     </div>
                 </div>
 
+                @if($errors->any())
+                    <div class="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 space-y-1">
+                        <div class="font-bold flex items-center">
+                            <svg class="w-4 h-4 mr-1 text-red-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Payment could not be processed:
+                        </div>
+                        <ul class="list-disc list-inside pl-1 text-[11px] space-y-0.5">
+                            @foreach($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+
+                @if(session('error'))
+                    <div class="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start">
+                        <svg class="w-4 h-4 mr-1.5 text-red-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div>
+                            <span class="font-bold">Error:</span> {{ session('error') }}
+                        </div>
+                    </div>
+                @endif
+
                 <!-- Payment Form -->
                 <form 
                     action="{{ route('billing.payments.store', $invoice) }}" 
                     method="POST" 
                     class="space-y-4"
-                    @submit="submitting = true"
+                    @submit="if (submitting) { $event.preventDefault(); return false; } submitting = true;"
                 >
                     @csrf
                     <div>
@@ -708,7 +742,7 @@
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
                             </svg>
-                            Save Payment
+                            <span x-text="submitting ? 'Processing Payment...' : 'Save Payment'">Save Payment</span>
                         </button>
                     </div>
                 </form>
