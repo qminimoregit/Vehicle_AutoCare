@@ -39,18 +39,34 @@ class DirectSaleController extends Controller
      */
     public function index(Request $request): View
     {
+        $canViewCost = Auth::user()?->canViewCostAndProfit() ?? false;
+
         // Get all active products with aggregated available stock across all active batches
         $products = Product::active()
             ->with(['uom'])
             ->orderBy('name')
             ->get()
-            ->map(function ($product) {
+            ->map(function ($product) use ($canViewCost) {
                 $product->available_stock = (float) StockBatch::where('product_id', $product->id)
                     ->where('status', 'active')
                     ->sum('remaining_quantity');
                 $product->formatted_stock = QuantityFormatter::format($product->available_stock);
                 $product->allows_fractional = $product->allowsFractionalQuantity();
                 $product->quantity_step = $product->quantity_step;
+
+                if ($canViewCost) {
+                    $oldestBatch = StockBatch::where('product_id', $product->id)
+                        ->where('status', 'active')
+                        ->where('remaining_quantity', '>', 0)
+                        ->orderBy('purchase_date', 'asc')
+                        ->orderBy('id', 'asc')
+                        ->first();
+                    $product->unit_cost = ($oldestBatch && (float) $oldestBatch->inventory_unit_cost > 0)
+                        ? (float) $oldestBatch->inventory_unit_cost
+                        : null;
+                } else {
+                    $product->unit_cost = null;
+                }
 
                 return $product;
             });
@@ -65,6 +81,7 @@ class DirectSaleController extends Controller
      */
     public function searchProducts(Request $request): JsonResponse
     {
+        $canViewCost = Auth::user()?->canViewCostAndProfit() ?? false;
         $term = trim((string) $request->query('query', ''));
 
         $query = Product::active()->with(['uom']);
@@ -77,10 +94,23 @@ class DirectSaleController extends Controller
             });
         }
 
-        $products = $query->limit(30)->get()->map(function ($product) {
+        $products = $query->limit(30)->get()->map(function ($product) use ($canViewCost) {
             $stock = (float) StockBatch::where('product_id', $product->id)
                 ->where('status', 'active')
                 ->sum('remaining_quantity');
+
+            $unitCost = null;
+            if ($canViewCost) {
+                $oldestBatch = StockBatch::where('product_id', $product->id)
+                    ->where('status', 'active')
+                    ->where('remaining_quantity', '>', 0)
+                    ->orderBy('purchase_date', 'asc')
+                    ->orderBy('id', 'asc')
+                    ->first();
+                if ($oldestBatch && (float) $oldestBatch->inventory_unit_cost > 0) {
+                    $unitCost = (float) $oldestBatch->inventory_unit_cost;
+                }
+            }
 
             return [
                 'id' => $product->id,
@@ -90,6 +120,7 @@ class DirectSaleController extends Controller
                 'barcode' => $product->barcode,
                 'unit' => $product->uom?->abbreviation ?? 'Unit',
                 'selling_price' => (float) $product->selling_price,
+                'unit_cost' => $unitCost,
                 'available_stock' => $stock,
                 'formatted_stock' => QuantityFormatter::format($stock),
                 'allows_fractional' => $product->allowsFractionalQuantity(),

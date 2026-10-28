@@ -334,17 +334,39 @@
                 existing.quantity += 1;
                 existing.line_total = Math.round(existing.quantity * existing.unit_price * 100) / 100;
             } else {
+                let cost = null;
+                if (product.unit_cost !== undefined && product.unit_cost !== null) {
+                    let pCost = parseFloat(product.unit_cost);
+                    if (!isNaN(pCost) && pCost > 0) {
+                        cost = pCost;
+                    }
+                }
                 this.cart.push({
                     product_id: product.id,
                     name: product.name || product.product_name || 'Product',
                     sku: product.sku,
                     image_url: product.image_url,
                     unit_price: parseFloat(product.selling_price) || 0,
+                    unit_cost: cost,
                     available_stock: stock,
                     quantity: 1,
                     line_total: parseFloat(product.selling_price) || 0,
+                    showPriceEdit: false,
                 });
             }
+            this.recalculatePayment();
+        },
+
+        // Update item price
+        updateItemPrice(index) {
+            let item = this.cart[index];
+            if (!item) return;
+            let price = parseFloat(item.unit_price);
+            if (isNaN(price) || price < 0) {
+                price = 0;
+            }
+            item.unit_price = price;
+            item.line_total = Math.round(item.quantity * item.unit_price * 100) / 100;
             this.recalculatePayment();
         },
 
@@ -938,11 +960,24 @@
 
                         <!-- Cart Item Rows (Compact Row Layout matching Job Card) -->
                         <template x-for="(item, index) in cart" :key="item.product_id">
-                            <div class="lv-line">
+                            <div class="lv-line flex-wrap">
                                 <!-- Product Details (Name & SKU underneath) -->
                                 <div class="lv-line-main">
                                     <div class="lv-line-name" :title="item.name" x-text="item.name"></div>
-                                    <div class="lv-line-tech" x-text="'SKU: ' + (item.sku || 'N/A')"></div>
+                                    <div class="flex items-center gap-2 mt-0.5">
+                                        <div class="lv-line-tech" x-text="'SKU: ' + (item.sku || 'N/A')"></div>
+                                        @if(Auth::user()->canViewCostAndProfit())
+                                            <button 
+                                                type="button" 
+                                                @click="item.showPriceEdit = !item.showPriceEdit" 
+                                                class="text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-0.5"
+                                                title="Edit Unit Selling Price"
+                                            >
+                                                <i class="bi bi-pencil-square text-[10px]"></i>
+                                                <span x-text="item.showPriceEdit ? 'Close Price' : 'Edit Price'"></span>
+                                            </button>
+                                        @endif
+                                    </div>
                                 </div>
 
                                 <!-- Stepper Quantity Controls [-] [qty] [+] -->
@@ -979,6 +1014,65 @@
                                 >
                                     <i class="bi bi-trash3"></i>
                                 </button>
+
+                                @if(Auth::user()->canViewCostAndProfit())
+                                    <!-- Editable Price & Profit Visibility Section -->
+                                    <div x-show="item.showPriceEdit" x-transition class="w-full mt-2 pt-2 border-t border-dashed border-gray-200">
+                                        <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5 text-xs">
+                                            <div class="flex items-center justify-between gap-2">
+                                                <label class="font-bold text-gray-700 whitespace-nowrap">Proposed Selling Price:</label>
+                                                <div class="relative w-32">
+                                                    <span class="absolute inset-y-0 left-0 flex items-center pl-2 pointer-events-none text-[11px] text-gray-400 font-bold">LKR</span>
+                                                    <input 
+                                                        type="number" 
+                                                        step="0.01" 
+                                                        min="0" 
+                                                        x-model.number="item.unit_price" 
+                                                        @input="updateItemPrice(index)"
+                                                        class="w-full text-right py-1 pl-9 pr-2 text-xs font-bold border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                    >
+                                                </div>
+                                            </div>
+
+                                            <div class="pt-1.5 border-t border-gray-200/80 space-y-1 text-[11px]">
+                                                <div class="flex items-center justify-between text-gray-600 font-medium">
+                                                    <span>Inventory Cost:</span>
+                                                    <template x-if="item.unit_cost !== null && item.unit_cost !== undefined">
+                                                        <span class="font-bold text-gray-800" x-text="'LKR ' + formatMoney(item.unit_cost)"></span>
+                                                    </template>
+                                                    <template x-if="item.unit_cost === null || item.unit_cost === undefined">
+                                                        <span class="text-amber-600 font-medium italic">Cost unavailable</span>
+                                                    </template>
+                                                </div>
+
+                                                <template x-if="item.unit_cost !== null && item.unit_cost !== undefined && item.unit_price !== '' && !isNaN(item.unit_price)">
+                                                    <div class="space-y-1">
+                                                        <div class="flex items-center justify-between text-gray-600 font-medium">
+                                                            <span>Estimated Unit Profit:</span>
+                                                            <span class="font-bold" :class="(item.unit_price - item.unit_cost) < 0 ? 'text-red-600' : 'text-emerald-700'" x-text="'LKR ' + formatMoney(item.unit_price - item.unit_cost)"></span>
+                                                        </div>
+                                                        <template x-if="item.quantity > 1">
+                                                            <div class="flex items-center justify-between text-gray-600 font-medium">
+                                                                <span>Estimated Total Profit:</span>
+                                                                <span class="font-bold" :class="(item.unit_price - item.unit_cost) < 0 ? 'text-red-600' : 'text-emerald-700'" x-text="'LKR ' + formatMoney((item.unit_price - item.unit_cost) * item.quantity)"></span>
+                                                            </div>
+                                                        </template>
+                                                        <div class="flex items-center justify-between text-gray-600 font-medium">
+                                                            <span>Profit Margin:</span>
+                                                            <span class="font-bold" :class="(item.unit_price - item.unit_cost) < 0 ? 'text-red-600' : 'text-emerald-700'" x-text="item.unit_price > 0 ? (((item.unit_price - item.unit_cost) / item.unit_price) * 100).toFixed(2) + '%' : '0.00%'"></span>
+                                                        </div>
+                                                        <template x-if="(item.unit_price - item.unit_cost) < 0">
+                                                            <div class="mt-1 px-2 py-1 bg-red-100 text-red-700 font-bold rounded text-[11px] flex items-center gap-1">
+                                                                <i class="bi bi-exclamation-triangle-fill text-red-600"></i>
+                                                                <span>Below Cost — Estimated Loss</span>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </div>
+                                @endif
                             </div>
                         </template>
                     </div>

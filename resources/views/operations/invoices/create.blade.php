@@ -156,7 +156,7 @@
                         <svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                         </svg>
-                        + Add Service
+                        Add Service
                     </button>
                     <button 
                         type="button" 
@@ -166,7 +166,7 @@
                         <svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                         </svg>
-                        + Add Product
+                        Add Product
                     </button>
                     <button 
                         type="button" 
@@ -176,7 +176,7 @@
                         <svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                         </svg>
-                        + Custom Line
+                        Custom Line
                     </button>
                 </div>
             </div>

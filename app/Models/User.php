@@ -55,6 +55,19 @@ class User extends Authenticatable
         return $this->role === 'staff';
     }
 
+    public function canViewCostAndProfit(): bool
+    {
+        if ($this->isAdmin()) {
+            return true;
+        }
+
+        if ($this->role === 'supervisor') {
+            return true;
+        }
+
+        return $this->hasPermission('view_costs');
+    }
+
     public function isActive(): bool
     {
         return $this->status === 'active';

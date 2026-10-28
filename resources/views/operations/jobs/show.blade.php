@@ -35,8 +35,21 @@
     $normPhone = \App\Services\PhoneNumberHelper::normalizeForWhatsApp($rawPhone) ?? '';
     $waText = "Hello {$customer?->customer_name},\n\nUpdate regarding your vehicle {$vehicle?->vehicle_number} (Job #{$jobCard->job_number}):\nStatus: {$curStatus['label']}\nTotal Services & Parts: {$totalCount} items.\n\nThank you for choosing " . (config('app.name', 'Viran Auto Care')) . "!";
 
+    $canViewCost = Auth::user()?->canViewCostAndProfit() ?? false;
+    $vehicleTypeId = $vehicleType?->id ?? $vehicle?->vehicle_type_id;
+
     // Prepare initial reactive cart payload
-    $initialServices = $jobCard->services->map(function ($s) {
+    $initialServices = $jobCard->services->map(function ($s) use ($canViewCost, $vehicleTypeId) {
+        $serviceCost = null;
+        if ($canViewCost && $s->service_id && $vehicleTypeId) {
+            $costVal = \App\Models\ServiceVehiclePrice::where('service_id', $s->service_id)
+                ->where('vehicle_type_id', $vehicleTypeId)
+                ->value('service_cost');
+            if ($costVal !== null && (float) $costVal > 0) {
+                $serviceCost = (float) $costVal;
+            }
+        }
+
         return [
             'id' => $s->id,
             'service_id' => $s->service_id,
@@ -45,6 +58,7 @@
             'technician_name' => $s->technician_name,
             'quantity' => (float) $s->quantity,
             'unit_price' => (float) $s->unit_price,
+            'unit_cost' => $serviceCost,
             'line_total' => (float) $s->line_total,
             'is_price_custom' => (bool) $s->is_price_custom,
             'is_price_pending' => (bool) $s->is_price_pending,
@@ -52,7 +66,24 @@
         ];
     })->values()->all();
 
-    $initialProducts = $jobCard->products->map(function ($p) {
+    $initialProducts = $jobCard->products->map(function ($p) use ($canViewCost) {
+        $unitCost = null;
+        if ($canViewCost) {
+            if ($p->unit_cost !== null && (float) $p->unit_cost > 0) {
+                $unitCost = (float) $p->unit_cost;
+            } else {
+                $batchCost = \App\Models\StockBatch::where('product_id', $p->product_id)
+                    ->where('status', 'active')
+                    ->where('remaining_quantity', '>', 0)
+                    ->orderBy('purchase_date', 'asc')
+                    ->orderBy('id', 'asc')
+                    ->value('inventory_unit_cost');
+                if ($batchCost !== null && (float) $batchCost > 0) {
+                    $unitCost = (float) $batchCost;
+                }
+            }
+        }
+
         return [
             'id' => $p->id,
             'product_id' => $p->product_id,
@@ -61,7 +92,7 @@
             'quantity' => (float) $p->quantity,
             'formatted_quantity' => \App\Services\QuantityFormatter::format((float) $p->quantity),
             'unit_price' => (float) $p->unit_price,
-            'unit_cost' => (float) $p->unit_cost,
+            'unit_cost' => $unitCost,
             'line_total' => (float) $p->line_total,
             'is_price_pending' => (bool) $p->is_price_pending,
             'notes' => $p->notes,
@@ -1468,13 +1499,21 @@
         },
 
         openEditItem(item, type) {
+            let cost = null;
+            if (item.unit_cost !== undefined && item.unit_cost !== null) {
+                let parsedCost = parseFloat(item.unit_cost);
+                if (!isNaN(parsedCost) && parsedCost > 0) {
+                    cost = parsedCost;
+                }
+            }
             this.editingItem = {
                 type: type,
                 id: item.id,
                 title: type === 'service' ? item.service_name : item.product_name,
-                quantity: item.quantity,
+                quantity: parseFloat(item.quantity) || 1,
                 technician_name: item.technician_name || '',
                 unit_price: item.is_price_pending ? '' : item.unit_price,
+                unit_cost: cost,
                 notes: item.notes || '',
                 is_price_custom: !!item.is_price_custom,
                 is_price_pending: !!item.is_price_pending
@@ -2261,14 +2300,7 @@
 
                                     <div class="text-right">
                                         <template x-if="srv.is_price_pending">
-                                            <div>
-                                                <span class="text-[11px] font-bold text-amber-700 block">Not Assigned</span>
-                                                @if(!$isReadOnly)
-                                                    <button type="button" @click="openEditItem(srv, 'service')" class="text-[11px] font-bold text-blue-600 underline hover:text-blue-800 inline-block">
-                                                        Edit Price
-                                                    </button>
-                                                @endif
-                                            </div>
+                                            <span class="text-[11px] font-bold text-amber-700 block whitespace-nowrap">Not Assigned</span>
                                         </template>
                                         <template x-if="!srv.is_price_pending">
                                             <div class="lv-line-total" x-text="formatMoney(srv.line_total)"></div>
@@ -2351,14 +2383,7 @@
 
                                     <div class="text-right">
                                         <template x-if="prod.is_price_pending">
-                                            <div>
-                                                <span class="text-[11px] font-bold text-amber-700 block">Not Assigned</span>
-                                                @if(!$isReadOnly)
-                                                    <button type="button" @click="openEditItem(prod, 'product')" class="text-[11px] font-bold text-blue-600 underline hover:text-blue-800 inline-block">
-                                                        Edit Price
-                                                    </button>
-                                                @endif
-                                            </div>
+                                            <span class="text-[11px] font-bold text-amber-700 block whitespace-nowrap">Not Assigned</span>
                                         </template>
                                         <template x-if="!prod.is_price_pending">
                                             <div class="lv-line-total" x-text="formatMoney(prod.line_total)"></div>
@@ -2887,6 +2912,49 @@
                     <p x-show="editingItem.is_price_pending" class="text-[11px] text-amber-700 mt-1">
                         <i class="bi bi-info-circle"></i> This price will be saved for this Job Card item without altering Master Data.
                     </p>
+
+                    @if(Auth::user()->canViewCostAndProfit())
+                        <!-- Cost & Profit Margin Analysis Section -->
+                        <div class="mt-2.5 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs">
+                            <div class="flex items-center justify-between text-gray-600 font-semibold">
+                                <span>Cost Price:</span>
+                                <template x-if="editingItem.unit_cost !== null && editingItem.unit_cost !== undefined">
+                                    <span class="font-bold text-gray-900" x-text="'LKR ' + formatMoney(editingItem.unit_cost)"></span>
+                                </template>
+                                <template x-if="editingItem.unit_cost === null || editingItem.unit_cost === undefined">
+                                    <span class="text-amber-600 font-medium italic" x-text="editingItem.type === 'service' ? 'Service cost not configured' : 'Cost unavailable'"></span>
+                                </template>
+                            </div>
+                            <div class="flex items-center justify-between text-gray-600 font-semibold">
+                                <span>New Selling Price:</span>
+                                <span class="font-bold text-gray-900" x-text="editingItem.unit_price !== '' && !isNaN(editingItem.unit_price) ? 'LKR ' + formatMoney(Number(editingItem.unit_price)) : '—'"></span>
+                            </div>
+                            <template x-if="editingItem.unit_cost !== null && editingItem.unit_cost !== undefined && editingItem.unit_price !== '' && !isNaN(editingItem.unit_price)">
+                                <div class="pt-2 border-t border-slate-200 space-y-1.5">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-gray-600 font-semibold">Estimated Unit Profit:</span>
+                                        <span class="font-bold" :class="(Number(editingItem.unit_price) - editingItem.unit_cost) < 0 ? 'text-red-600' : 'text-emerald-700'" x-text="'LKR ' + formatMoney(Number(editingItem.unit_price) - editingItem.unit_cost)"></span>
+                                    </div>
+                                    <template x-if="editingItem.quantity > 1">
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-gray-600 font-semibold">Estimated Total Profit:</span>
+                                            <span class="font-bold" :class="(Number(editingItem.unit_price) - editingItem.unit_cost) < 0 ? 'text-red-600' : 'text-emerald-700'" x-text="'LKR ' + formatMoney((Number(editingItem.unit_price) - editingItem.unit_cost) * editingItem.quantity)"></span>
+                                        </div>
+                                    </template>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-gray-600 font-semibold">Margin:</span>
+                                        <span class="font-bold" :class="(Number(editingItem.unit_price) - editingItem.unit_cost) < 0 ? 'text-red-600' : 'text-emerald-700'" x-text="Number(editingItem.unit_price) > 0 ? (((Number(editingItem.unit_price) - editingItem.unit_cost) / Number(editingItem.unit_price)) * 100).toFixed(2) + '%' : '0.00%'"></span>
+                                    </div>
+                                    <template x-if="(Number(editingItem.unit_price) - editingItem.unit_cost) < 0">
+                                        <div class="mt-1 px-2.5 py-1.5 bg-red-100 text-red-700 font-bold rounded-lg text-xs flex items-center gap-1.5">
+                                            <i class="bi bi-exclamation-triangle-fill text-red-600"></i>
+                                            <span>Below Cost — Estimated Loss</span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    @endif
                 </div>
 
                 <div>

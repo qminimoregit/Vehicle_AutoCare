@@ -17,6 +17,7 @@ use App\Models\PaymentAllocation;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\ServiceVehiclePrice;
+use App\Models\StockBatch;
 use App\Models\User;
 use App\Services\BranchContext;
 use App\Services\Inventory\StockService;
@@ -904,7 +905,21 @@ class JobCardController extends Controller
             'products',
         ]);
 
-        $services = $jobCard->services->map(function ($s) {
+        $user = Auth::user();
+        $canViewCost = $user?->canViewCostAndProfit() ?? false;
+        $vehicleTypeId = $jobCard->vehicle_type_id ?? $jobCard->vehicle?->vehicle_type_id;
+
+        $services = $jobCard->services->map(function ($s) use ($canViewCost, $vehicleTypeId) {
+            $serviceCost = null;
+            if ($canViewCost && $s->service_id && $vehicleTypeId) {
+                $costVal = ServiceVehiclePrice::where('service_id', $s->service_id)
+                    ->where('vehicle_type_id', $vehicleTypeId)
+                    ->value('service_cost');
+                if ($costVal !== null && (float) $costVal > 0) {
+                    $serviceCost = (float) $costVal;
+                }
+            }
+
             return [
                 'id' => $s->id,
                 'service_id' => $s->service_id,
@@ -913,6 +928,7 @@ class JobCardController extends Controller
                 'technician_name' => $s->technician_name,
                 'quantity' => (float) $s->quantity,
                 'unit_price' => (float) $s->unit_price,
+                'unit_cost' => $serviceCost,
                 'line_total' => (float) $s->line_total,
                 'is_price_custom' => (bool) $s->is_price_custom,
                 'is_price_pending' => (bool) $s->is_price_pending,
@@ -920,7 +936,24 @@ class JobCardController extends Controller
             ];
         })->values()->all();
 
-        $products = $jobCard->products->map(function ($p) {
+        $products = $jobCard->products->map(function ($p) use ($canViewCost) {
+            $unitCost = null;
+            if ($canViewCost) {
+                if ($p->unit_cost !== null && (float) $p->unit_cost > 0) {
+                    $unitCost = (float) $p->unit_cost;
+                } else {
+                    $batchCost = StockBatch::where('product_id', $p->product_id)
+                        ->where('status', 'active')
+                        ->where('remaining_quantity', '>', 0)
+                        ->orderBy('purchase_date', 'asc')
+                        ->orderBy('id', 'asc')
+                        ->value('inventory_unit_cost');
+                    if ($batchCost !== null && (float) $batchCost > 0) {
+                        $unitCost = (float) $batchCost;
+                    }
+                }
+            }
+
             return [
                 'id' => $p->id,
                 'product_id' => $p->product_id,
@@ -929,7 +962,7 @@ class JobCardController extends Controller
                 'quantity' => (float) $p->quantity,
                 'formatted_quantity' => QuantityFormatter::format((float) $p->quantity),
                 'unit_price' => (float) $p->unit_price,
-                'unit_cost' => (float) $p->unit_cost,
+                'unit_cost' => $unitCost,
                 'line_total' => (float) $p->line_total,
                 'is_price_pending' => (bool) $p->is_price_pending,
                 'notes' => $p->notes,
