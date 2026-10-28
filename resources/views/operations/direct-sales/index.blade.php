@@ -130,6 +130,25 @@
     background: #FEE2E2;
     color: #DC2626;
 }
+.lv-edit-btn {
+    flex: 0 0 auto;
+    border: 0;
+    background: none;
+    color: #94A3B8;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 11px;
+    transition: all 0.15s;
+}
+.lv-edit-btn:hover {
+    background: #EFF6FF;
+    color: #2563EB;
+}
 
 /* Stepper Quantity Controls [-] [qty] [+] */
 .lv-stepper {
@@ -233,6 +252,18 @@
         showSuccessModal: false,
         completedSale: null,
 
+        // Price Edit Modal State (Job Card Style)
+        showPriceModal: false,
+        editingItemIndex: null,
+        editingPriceItem: {
+            name: '',
+            sku: '',
+            quantity: 1,
+            unit_price: 0,
+            original_price: 0,
+            unit_cost: null,
+        },
+
         // Sharing State
         activeShareTab: '', // '' | 'email' | 'whatsapp'
         emailRecipient: '',
@@ -265,6 +296,8 @@
             this.whatsappRecipientPhone = '';
             this.whatsappMessageText = '';
             this.copiedWhatsApp = false;
+            this.showPriceModal = false;
+            this.editingItemIndex = null;
         },
 
         formatQty(val) {
@@ -357,17 +390,49 @@
             this.recalculatePayment();
         },
 
-        // Update item price
-        updateItemPrice(index) {
+        // Open Centered Edit Price Modal (matching Job Card Edit Part popup)
+        openPriceEdit(index) {
             let item = this.cart[index];
             if (!item) return;
-            let price = parseFloat(item.unit_price);
-            if (isNaN(price) || price < 0) {
-                price = 0;
+            this.editingItemIndex = index;
+            let currentPrice = parseFloat(item.unit_price);
+            if (isNaN(currentPrice) || currentPrice < 0) {
+                currentPrice = 0;
             }
-            item.unit_price = price;
+            this.editingPriceItem = {
+                name: item.name,
+                sku: item.sku || 'N/A',
+                quantity: item.quantity || 1,
+                unit_price: currentPrice,
+                original_price: currentPrice,
+                unit_cost: (item.unit_cost !== null && item.unit_cost !== undefined) ? Number(item.unit_cost) : null,
+            };
+            this.showPriceModal = true;
+        },
+
+        // Save Price Changes from Modal
+        savePriceEdit() {
+            if (this.editingItemIndex === null || !this.cart[this.editingItemIndex]) {
+                this.showPriceModal = false;
+                return;
+            }
+            let item = this.cart[this.editingItemIndex];
+            let price = parseFloat(this.editingPriceItem.unit_price);
+            if (isNaN(price) || price < 0) {
+                alert('Please enter a valid selling price (0 or higher).');
+                return;
+            }
+            item.unit_price = Math.round(price * 100) / 100;
             item.line_total = Math.round(item.quantity * item.unit_price * 100) / 100;
             this.recalculatePayment();
+            this.showPriceModal = false;
+            this.editingItemIndex = null;
+        },
+
+        // Cancel Price Changes
+        cancelPriceEdit() {
+            this.showPriceModal = false;
+            this.editingItemIndex = null;
         },
 
         // Increment quantity
@@ -964,17 +1029,18 @@
                                 <!-- Product Details (Name & SKU underneath) -->
                                 <div class="lv-line-main">
                                     <div class="lv-line-name" :title="item.name" x-text="item.name"></div>
-                                    <div class="flex items-center gap-2 mt-0.5">
+                                    <div class="flex items-center gap-1.5 mt-0.5">
                                         <div class="lv-line-tech" x-text="'SKU: ' + (item.sku || 'N/A')"></div>
                                         @if(Auth::user()->canViewCostAndProfit())
+                                            <span class="text-gray-300 text-xs">—</span>
                                             <button 
                                                 type="button" 
-                                                @click="item.showPriceEdit = !item.showPriceEdit" 
-                                                class="text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-0.5"
-                                                title="Edit Unit Selling Price"
+                                                @click="openPriceEdit(index)" 
+                                                class="lv-edit-btn"
+                                                title="Edit selling price"
+                                                aria-label="Edit selling price"
                                             >
-                                                <i class="bi bi-pencil-square text-[10px]"></i>
-                                                <span x-text="item.showPriceEdit ? 'Close Price' : 'Edit Price'"></span>
+                                                <i class="bi bi-pencil"></i>
                                             </button>
                                         @endif
                                     </div>
@@ -1014,65 +1080,6 @@
                                 >
                                     <i class="bi bi-trash3"></i>
                                 </button>
-
-                                @if(Auth::user()->canViewCostAndProfit())
-                                    <!-- Editable Price & Profit Visibility Section -->
-                                    <div x-show="item.showPriceEdit" x-transition class="w-full mt-2 pt-2 border-t border-dashed border-gray-200">
-                                        <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5 text-xs">
-                                            <div class="flex items-center justify-between gap-2">
-                                                <label class="font-bold text-gray-700 whitespace-nowrap">Proposed Selling Price:</label>
-                                                <div class="relative w-32">
-                                                    <span class="absolute inset-y-0 left-0 flex items-center pl-2 pointer-events-none text-[11px] text-gray-400 font-bold">LKR</span>
-                                                    <input 
-                                                        type="number" 
-                                                        step="0.01" 
-                                                        min="0" 
-                                                        x-model.number="item.unit_price" 
-                                                        @input="updateItemPrice(index)"
-                                                        class="w-full text-right py-1 pl-9 pr-2 text-xs font-bold border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                                    >
-                                                </div>
-                                            </div>
-
-                                            <div class="pt-1.5 border-t border-gray-200/80 space-y-1 text-[11px]">
-                                                <div class="flex items-center justify-between text-gray-600 font-medium">
-                                                    <span>Inventory Cost:</span>
-                                                    <template x-if="item.unit_cost !== null && item.unit_cost !== undefined">
-                                                        <span class="font-bold text-gray-800" x-text="'LKR ' + formatMoney(item.unit_cost)"></span>
-                                                    </template>
-                                                    <template x-if="item.unit_cost === null || item.unit_cost === undefined">
-                                                        <span class="text-amber-600 font-medium italic">Cost unavailable</span>
-                                                    </template>
-                                                </div>
-
-                                                <template x-if="item.unit_cost !== null && item.unit_cost !== undefined && item.unit_price !== '' && !isNaN(item.unit_price)">
-                                                    <div class="space-y-1">
-                                                        <div class="flex items-center justify-between text-gray-600 font-medium">
-                                                            <span>Estimated Unit Profit:</span>
-                                                            <span class="font-bold" :class="(item.unit_price - item.unit_cost) < 0 ? 'text-red-600' : 'text-emerald-700'" x-text="'LKR ' + formatMoney(item.unit_price - item.unit_cost)"></span>
-                                                        </div>
-                                                        <template x-if="item.quantity > 1">
-                                                            <div class="flex items-center justify-between text-gray-600 font-medium">
-                                                                <span>Estimated Total Profit:</span>
-                                                                <span class="font-bold" :class="(item.unit_price - item.unit_cost) < 0 ? 'text-red-600' : 'text-emerald-700'" x-text="'LKR ' + formatMoney((item.unit_price - item.unit_cost) * item.quantity)"></span>
-                                                            </div>
-                                                        </template>
-                                                        <div class="flex items-center justify-between text-gray-600 font-medium">
-                                                            <span>Profit Margin:</span>
-                                                            <span class="font-bold" :class="(item.unit_price - item.unit_cost) < 0 ? 'text-red-600' : 'text-emerald-700'" x-text="item.unit_price > 0 ? (((item.unit_price - item.unit_cost) / item.unit_price) * 100).toFixed(2) + '%' : '0.00%'"></span>
-                                                        </div>
-                                                        <template x-if="(item.unit_price - item.unit_cost) < 0">
-                                                            <div class="mt-1 px-2 py-1 bg-red-100 text-red-700 font-bold rounded text-[11px] flex items-center gap-1">
-                                                                <i class="bi bi-exclamation-triangle-fill text-red-600"></i>
-                                                                <span>Below Cost — Estimated Loss</span>
-                                                            </div>
-                                                        </template>
-                                                    </div>
-                                                </template>
-                                            </div>
-                                        </div>
-                                    </div>
-                                @endif
                             </div>
                         </template>
                     </div>
@@ -1487,5 +1494,144 @@
             </div>
         </div>
     </div>
+
+    @if(Auth::user()->canViewCostAndProfit())
+        <!-- ==========================================================================
+             MODAL: EDIT PRICE (MATCHING JOB CARD EDIT PART POPUP)
+             ========================================================================== -->
+        <div 
+            x-show="showPriceModal" 
+            x-transition 
+            class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0D1946]/45 backdrop-blur-xs" 
+            @keydown.escape.window="cancelPriceEdit()" 
+            @click="cancelPriceEdit()"
+            style="display: none;"
+        >
+            <div 
+                class="bg-white rounded-2xl w-full max-w-sm sm:max-w-md shadow-2xl border border-gray-200 overflow-hidden relative z-60" 
+                @click.stop
+            >
+                <!-- Modal Header -->
+                <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                    <h3 class="text-base font-extrabold text-[#0D1946] m-0 flex items-center gap-2">
+                        <i class="bi bi-pencil-square text-blue-600"></i>
+                        <span>Edit Price</span>
+                    </h3>
+                    <button 
+                        type="button" 
+                        @click="cancelPriceEdit()" 
+                        class="text-gray-400 hover:text-gray-700 border-0 bg-transparent cursor-pointer p-1"
+                        title="Close (Esc)"
+                    >
+                        <i class="bi bi-x-lg text-sm"></i>
+                    </button>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="p-5 space-y-3.5">
+                    <!-- Product Details Overview Panel -->
+                    <div class="p-3 bg-gray-50 border border-gray-200 rounded-xl space-y-1.5 text-xs">
+                        <div>
+                            <span class="text-gray-500 font-bold block mb-0.5">Product:</span>
+                            <strong class="text-sm text-gray-900 block truncate" x-text="editingPriceItem.name"></strong>
+                        </div>
+                        <div class="flex items-center justify-between pt-1 border-t border-gray-200/60">
+                            <div>
+                                <span class="text-gray-500 font-bold">SKU:</span>
+                                <span class="font-mono text-gray-800 font-semibold ml-1" x-text="editingPriceItem.sku || 'N/A'"></span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500 font-bold">Quantity:</span>
+                                <span class="font-bold text-gray-900 ml-1" x-text="formatQty(editingPriceItem.quantity)"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Editable Field: Unit Selling Price -->
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">
+                            Unit Selling Price (LKR) <span class="text-red-500">*</span>
+                        </label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-xs text-gray-400 font-bold">LKR</span>
+                            <input 
+                                type="number" 
+                                x-model.number="editingPriceItem.unit_price" 
+                                min="0" 
+                                step="0.01" 
+                                placeholder="0.00" 
+                                class="w-full text-sm border-gray-300 rounded-lg py-2 pl-12 pr-3 border font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                @keydown.enter.prevent="savePriceEdit()"
+                            >
+                        </div>
+                        <p class="text-[11px] text-gray-500 mt-1">
+                            This updates the selling price for this cart item without changing Master Data.
+                        </p>
+                    </div>
+
+                    <!-- Profit Summary Analysis Section -->
+                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs">
+                        <div class="flex items-center justify-between text-gray-600 font-semibold">
+                            <span>Cost Price:</span>
+                            <template x-if="editingPriceItem.unit_cost !== null && editingPriceItem.unit_cost !== undefined">
+                                <span class="font-bold text-gray-900" x-text="'LKR ' + formatMoney(editingPriceItem.unit_cost)"></span>
+                            </template>
+                            <template x-if="editingPriceItem.unit_cost === null || editingPriceItem.unit_cost === undefined">
+                                <span class="text-amber-600 font-medium italic">Cost unavailable</span>
+                            </template>
+                        </div>
+                        <div class="flex items-center justify-between text-gray-600 font-semibold">
+                            <span>New Selling Price:</span>
+                            <span class="font-bold text-gray-900" x-text="editingPriceItem.unit_price !== '' && !isNaN(editingPriceItem.unit_price) ? 'LKR ' + formatMoney(Number(editingPriceItem.unit_price)) : '—'"></span>
+                        </div>
+
+                        <template x-if="editingPriceItem.unit_cost !== null && editingPriceItem.unit_cost !== undefined && editingPriceItem.unit_price !== '' && !isNaN(editingPriceItem.unit_price)">
+                            <div class="pt-2 border-t border-slate-200 space-y-1.5">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-600 font-semibold">Estimated Unit Profit:</span>
+                                    <span class="font-bold" :class="(Number(editingPriceItem.unit_price) - editingPriceItem.unit_cost) < 0 ? 'text-red-600' : 'text-emerald-700'" x-text="'LKR ' + formatMoney(Number(editingPriceItem.unit_price) - editingPriceItem.unit_cost)"></span>
+                                </div>
+                                <template x-if="editingPriceItem.quantity > 1">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-gray-600 font-semibold">Estimated Total Profit:</span>
+                                        <span class="font-bold" :class="(Number(editingPriceItem.unit_price) - editingPriceItem.unit_cost) < 0 ? 'text-red-600' : 'text-emerald-700'" x-text="'LKR ' + formatMoney((Number(editingPriceItem.unit_price) - editingPriceItem.unit_cost) * editingPriceItem.quantity)"></span>
+                                    </div>
+                                </template>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-600 font-semibold">Profit Margin (%):</span>
+                                    <span class="font-bold" :class="(Number(editingPriceItem.unit_price) - editingPriceItem.unit_cost) < 0 ? 'text-red-600' : 'text-emerald-700'" x-text="Number(editingPriceItem.unit_price) > 0 ? (((Number(editingPriceItem.unit_price) - editingPriceItem.unit_cost) / Number(editingPriceItem.unit_price)) * 100).toFixed(2) + '%' : '0.00%'"></span>
+                                </div>
+                                <template x-if="(Number(editingPriceItem.unit_price) - editingPriceItem.unit_cost) < 0">
+                                    <div class="mt-1 px-2.5 py-1.5 bg-red-100 text-red-700 font-bold rounded-lg text-xs flex items-center gap-1.5">
+                                        <i class="bi bi-exclamation-triangle-fill text-red-600"></i>
+                                        <span>Below Cost — Estimated Loss</span>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Modal Footer / Actions -->
+                <div class="px-5 py-3.5 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-2.5">
+                    <button 
+                        type="button" 
+                        @click="cancelPriceEdit()" 
+                        class="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 transition cursor-pointer min-h-[36px]"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        type="button" 
+                        @click="savePriceEdit()" 
+                        class="px-5 py-2 text-xs font-bold text-white bg-[#0D1946] hover:bg-[#1A2E70] rounded-lg shadow-xs transition cursor-pointer min-h-[36px] flex items-center gap-1.5"
+                    >
+                        <i class="bi bi-check2"></i>
+                        <span>Save Changes</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
 </div>
 @endsection
