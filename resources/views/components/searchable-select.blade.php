@@ -59,6 +59,7 @@
 @endphp
 
 <div 
+    {{ $attributes->merge(['class' => 'relative w-full ' . $class]) }}
     x-data="searchableSelect({
         name: @js($name),
         elementId: @js($elementId),
@@ -73,7 +74,6 @@
         autoSubmit: @js($autoSubmit)
     })"
     @keydown.escape.window="close()"
-    class="relative w-full {{ $class }}"
     data-searchable-select="{{ $name }}"
 >
     <!-- Hidden Form Input that Submits the Actual Database ID -->

@@ -195,11 +195,11 @@
                     </button>
                 </div>
 
-                <div class="overflow-x-auto">
+                <div class="overflow-x-auto min-h-[380px] pb-12">
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50/80">
                             <tr>
-                                <th scope="col" class="px-3 py-2.5 text-left text-xs font-bold text-gray-700 uppercase tracking-wider w-72">
+                                <th scope="col" class="px-3 py-2.5 text-left text-xs font-bold text-gray-700 uppercase tracking-wider w-80 min-w-[280px]">
                                     Product *
                                 </th>
                                 <th scope="col" class="px-2 py-2.5 text-center text-xs font-bold text-gray-700 uppercase tracking-wider w-20">
@@ -224,20 +224,133 @@
                         <tbody class="divide-y divide-gray-200 bg-white">
                             <template x-for="(item, index) in items" :key="index">
                                 <tr class="hover:bg-gray-50/50">
-                                    <!-- Product Dropdown -->
-                                    <td class="px-3 py-2">
-                                        <select 
-                                            :name="`items[${index}][product_id]`" 
-                                            x-model="item.product_id"
-                                            @change="onProductChange(index)"
-                                            required
-                                            class="block w-full py-2 px-2.5 text-sm text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] bg-white"
+                                    <!-- Searchable Product Selector -->
+                                    <td class="px-3 py-2 relative" x-data="{
+                                        open: false,
+                                        query: '',
+                                        highlightedIndex: 0,
+                                        init() {
+                                            if (item.product_id) {
+                                                const prod = allProducts.find(p => p.id == item.product_id);
+                                                if (prod) {
+                                                    this.query = prod.name + (prod.sku ? ' (' + prod.sku + ')' : '');
+                                                }
+                                            }
+                                        },
+                                        get filteredProducts() {
+                                            const q = (this.query || '').trim().toLowerCase();
+                                            if (!q) {
+                                                return allProducts.slice(0, 25);
+                                            }
+                                            return allProducts.filter(p => {
+                                                const name = (p.name || '').toLowerCase();
+                                                const sku = (p.sku || '').toLowerCase();
+                                                const part = (p.part_number || '').toLowerCase();
+                                                return name.includes(q) || sku.includes(q) || part.includes(q);
+                                            }).slice(0, 25);
+                                        },
+                                        select(p) {
+                                            item.product_id = p.id;
+                                            item.uom_name = p.uom ? p.uom.name : '-';
+                                            item.selling_price_snapshot = p.selling_price || 0;
+                                            this.query = p.name + (p.sku ? ' (' + p.sku + ')' : '');
+                                            this.open = false;
+                                        },
+                                        clear() {
+                                            item.product_id = '';
+                                            item.uom_name = '-';
+                                            item.selling_price_snapshot = 0;
+                                            this.query = '';
+                                            this.open = false;
+                                        },
+                                        onKeydown(e) {
+                                            if (!this.open) {
+                                                if (e.key === 'ArrowDown' || e.key === 'Enter') {
+                                                    this.open = true;
+                                                    e.preventDefault();
+                                                }
+                                                return;
+                                            }
+                                            if (e.key === 'ArrowDown') {
+                                                e.preventDefault();
+                                                const count = this.filteredProducts.length;
+                                                if (count > 0) {
+                                                    this.highlightedIndex = (this.highlightedIndex + 1) % count;
+                                                }
+                                            } else if (e.key === 'ArrowUp') {
+                                                e.preventDefault();
+                                                const count = this.filteredProducts.length;
+                                                if (count > 0) {
+                                                    this.highlightedIndex = (this.highlightedIndex - 1 + count) % count;
+                                                }
+                                            } else if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                const prods = this.filteredProducts;
+                                                if (prods.length > 0 && this.highlightedIndex >= 0 && this.highlightedIndex < prods.length) {
+                                                    this.select(prods[this.highlightedIndex]);
+                                                }
+                                            } else if (e.key === 'Escape') {
+                                                this.open = false;
+                                            }
+                                        }
+                                    }" @click.outside="open = false">
+                                        <!-- Hidden product_id input for form submission -->
+                                        <input type="hidden" :name="`items[${index}][product_id]`" :value="item.product_id" required>
+
+                                        <div class="relative">
+                                            <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400">
+                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                                </svg>
+                                            </div>
+                                            <input 
+                                                type="text"
+                                                x-model="query"
+                                                @focus="open = true"
+                                                @input="open = true; highlightedIndex = 0"
+                                                @keydown="onKeydown($event)"
+                                                placeholder="Search product name, SKU or part number..."
+                                                class="block w-full pl-8 pr-7 py-2 text-xs sm:text-sm text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B1849] focus:border-[#0B1849] bg-white"
+                                                autocomplete="off"
+                                            />
+                                            <button 
+                                                type="button" 
+                                                x-show="query.length > 0" 
+                                                @click="clear()" 
+                                                class="absolute inset-y-0 right-0 pr-2 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                                                title="Clear product selection"
+                                            >
+                                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                            </button>
+                                        </div>
+
+                                        <!-- Search results dropdown panel -->
+                                        <div 
+                                            x-show="open" 
+                                            x-transition
+                                            class="absolute left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto min-w-[280px]"
+                                            style="display: none;"
                                         >
-                                            <option value="">Select product...</option>
-                                            <template x-for="p in allProducts" :key="p.id">
-                                                <option :value="p.id" x-text="`${p.name} ${p.sku ? '('+p.sku+')' : ''}`"></option>
+                                            <template x-for="(p, pIndex) in filteredProducts" :key="p.id">
+                                                <div 
+                                                    @click="select(p)" 
+                                                    @mouseenter="highlightedIndex = pIndex"
+                                                    :class="{'bg-[#0B1849]/10 text-[#0B1849]': highlightedIndex === pIndex, 'text-gray-700': highlightedIndex !== pIndex}"
+                                                    class="px-3 py-2 cursor-pointer border-b border-gray-50 last:border-b-0 text-left transition"
+                                                >
+                                                    <div class="font-semibold text-xs text-gray-900" x-text="p.name"></div>
+                                                    <div class="text-[11px] text-gray-500 flex items-center gap-2 mt-0.5">
+                                                        <span x-show="p.sku" class="font-mono bg-gray-100 px-1 rounded text-[10px]" x-text="'SKU: ' + p.sku"></span>
+                                                        <span x-show="p.uom" x-text="'UOM: ' + (p.uom?.name || '-')"></span>
+                                                    </div>
+                                                </div>
                                             </template>
-                                        </select>
+                                            <div x-show="filteredProducts.length === 0" class="px-3 py-3 text-xs text-gray-400 text-center">
+                                                No products found matching "<span class="font-semibold" x-text="query"></span>"
+                                            </div>
+                                        </div>
                                     </td>
 
                                     <!-- UOM Display -->

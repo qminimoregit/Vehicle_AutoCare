@@ -14,6 +14,7 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\Vehicle;
+use App\Models\VehicleType;
 use App\Services\BranchContext;
 use App\Services\Inventory\StockService;
 use App\Services\NumberToWordsHelper;
@@ -24,6 +25,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class InvoiceController extends Controller
@@ -117,6 +119,8 @@ class InvoiceController extends Controller
 
         $customers = Customer::where('status', 'active')->orderBy('customer_name')->get();
         $vehicles = Vehicle::with(['customer', 'vehicleType'])->orderBy('vehicle_number')->get();
+        $vehicleTypes = VehicleType::active()->orderBy('name')->get();
+        $vehicleTypes = VehicleType::active()->orderBy('name')->get();
         $services = Service::active()->orderBy('name')->get();
 
         $products = Product::active()->orderBy('name')->get()->map(function ($product) {
@@ -127,8 +131,10 @@ class InvoiceController extends Controller
 
         $company = CompanySetting::getSettings();
         $suggestedNumber = Invoice::generateInvoiceNumber();
+        $selectedCustomerId = $request->query('customer_id');
+        $selectedVehicleId = $request->query('vehicle_id');
 
-        return view('operations.invoices.create', compact('customers', 'vehicles', 'services', 'products', 'company', 'suggestedNumber'));
+        return view('operations.invoices.create', compact('customers', 'vehicles', 'vehicleTypes', 'services', 'products', 'company', 'suggestedNumber', 'selectedCustomerId', 'selectedVehicleId'));
     }
 
     /**
@@ -141,7 +147,14 @@ class InvoiceController extends Controller
         }
 
         $validated = $request->validate([
-            'customer_id' => ['required', 'exists:customers,id'],
+            'customer_id' => ['nullable', 'exists:customers,id'],
+            'vehicle_id' => ['nullable', 'exists:vehicles,id'],
+            'customer_search' => ['nullable', 'string'],
+            'new_customer_name' => ['nullable', 'string', 'max:150'],
+            'new_customer_mobile' => ['nullable', 'string', 'max:50'],
+            'new_customer_email' => ['nullable', 'email', 'max:150'],
+            'new_vehicle_number' => ['nullable', 'string', 'max:50'],
+            'new_vehicle_type_id' => ['nullable', 'exists:vehicle_types,id'],
             'invoice_date' => ['required', 'date'],
             'due_date' => ['nullable', 'date', 'after_or_equal:invoice_date'],
             'subject' => ['nullable', 'string', 'max:255'],
@@ -165,10 +178,129 @@ class InvoiceController extends Controller
         ]);
 
         $activeBranchId = BranchContext::getActiveBranchId();
-        $customer = Customer::findOrFail($validated['customer_id']);
 
         DB::beginTransaction();
         try {
+            // 1. Resolve Customer & Vehicle from direct inputs or customer_search fallback
+            $customerId = $validated['customer_id'] ?? null;
+            $vehicleId = $validated['vehicle_id'] ?? null;
+
+            if (empty($customerId) && empty($vehicleId) && ! empty($request->input('customer_search'))) {
+                $searchVal = trim((string) $request->input('customer_search'));
+                if (str_starts_with($searchVal, 'v_')) {
+                    $parsedVehId = substr($searchVal, 2);
+                    if (is_numeric($parsedVehId) && Vehicle::where('id', $parsedVehId)->exists()) {
+                        $vehicleId = (int) $parsedVehId;
+                    }
+                } elseif (str_starts_with($searchVal, 'c_')) {
+                    $parsedCustId = substr($searchVal, 2);
+                    if (is_numeric($parsedCustId) && Customer::where('id', $parsedCustId)->exists()) {
+                        $customerId = (int) $parsedCustId;
+                    }
+                } elseif (is_numeric($searchVal) && Customer::where('id', $searchVal)->exists()) {
+                    $customerId = (int) $searchVal;
+                }
+            }
+
+            $customer = null;
+            $vehicle = null;
+
+            // Pre-load vehicle if vehicle_id is provided
+            if (! empty($vehicleId) && is_numeric($vehicleId)) {
+                $vehicle = Vehicle::with(['customer', 'vehicleType'])->find($vehicleId);
+            }
+
+            // Resolve Customer
+            if (! empty($customerId)) {
+                $customer = Customer::findOrFail($customerId);
+            } elseif ($vehicle && $vehicle->customer) {
+                // Auto-resolve customer from vehicle owner relation
+                $customer = $vehicle->customer;
+                $customerId = $customer->id;
+            } elseif ($vehicle && $vehicle->customer_id) {
+                // Direct lookup fallback for vehicle owner
+                $customer = Customer::find($vehicle->customer_id);
+                if ($customer) {
+                    $customerId = $customer->id;
+                }
+            }
+            
+            if (! $customer && ! empty($validated['new_customer_name'])) {
+                $mobile = trim((string) ($validated['new_customer_mobile'] ?? ''));
+                if ($mobile === '') {
+                    throw ValidationException::withMessages([
+                        'new_customer_mobile' => 'Customer mobile number is required when adding a new customer.',
+                    ]);
+                }
+
+                $matchingCustomers = Customer::where('phone', $mobile)->get();
+                if ($matchingCustomers->count() === 1) {
+                    $customer = $matchingCustomers->first();
+                } elseif ($matchingCustomers->count() > 1) {
+                    throw ValidationException::withMessages([
+                        'new_customer_mobile' => 'Multiple customers found with mobile number '.$mobile.'. Please select from search.',
+                    ]);
+                } else {
+                    $customer = Customer::create([
+                        'customer_name' => trim((string) $validated['new_customer_name']),
+                        'phone' => $mobile,
+                        'email' => ! empty($validated['new_customer_email']) ? trim((string) $validated['new_customer_email']) : null,
+                        'customer_type' => 'individual',
+                        'status' => 'active',
+                    ]);
+                }
+                $customerId = $customer->id;
+            } elseif (! $customer) {
+                throw ValidationException::withMessages([
+                    'customer_id' => 'Please select an existing customer or vehicle, or add a new customer.',
+                ]);
+            }
+
+            // 2. Resolve Vehicle & Validate Ownership
+            if ($vehicle) {
+                $vehicleId = $vehicle->id;
+                // Enforce vehicle ownership: Cannot reassign vehicle belonging to another customer
+                if ($vehicle->customer_id && $customer && $vehicle->customer_id !== $customer->id) {
+                    $otherOwner = $vehicle->customer?->customer_name ?? 'another customer';
+                    throw ValidationException::withMessages([
+                        'vehicle_id' => "This vehicle is registered to {$otherOwner}. It cannot be assigned to {$customer->customer_name}.",
+                    ]);
+                }
+            } elseif (! empty($validated['new_vehicle_number'])) {
+                $rawPlate = trim((string) $validated['new_vehicle_number']);
+                $normalized = Vehicle::normalizeNumber($rawPlate);
+
+                if (empty($validated['new_vehicle_type_id'])) {
+                    throw ValidationException::withMessages([
+                        'new_vehicle_type_id' => 'Vehicle type is required when specifying a vehicle number.',
+                    ]);
+                }
+
+                $existingVehicle = Vehicle::with(['customer', 'vehicleType'])->where('vehicle_number_normalized', $normalized)->first();
+                if ($existingVehicle) {
+                    if ($existingVehicle->customer_id === $customer->id) {
+                        $vehicle = $existingVehicle;
+                        $vehicleId = $existingVehicle->id;
+                    } else {
+                        $otherOwner = $existingVehicle->customer?->customer_name ?? 'another customer';
+                        throw ValidationException::withMessages([
+                            'new_vehicle_number' => "This vehicle is already registered to {$otherOwner}. Please select it from search or verify the vehicle number.",
+                        ]);
+                    }
+                } else {
+                    $vehicle = Vehicle::create([
+                        'customer_id' => $customer->id,
+                        'branch_id' => $activeBranchId,
+                        'vehicle_type_id' => $validated['new_vehicle_type_id'],
+                        'vehicle_number' => $rawPlate,
+                        'vehicle_number_normalized' => $normalized,
+                        'current_mileage' => 0,
+                    ]);
+                    $vehicle->load('vehicleType');
+                    $vehicleId = $vehicle->id;
+                }
+            }
+
             $invoiceNumber = Invoice::generateInvoiceNumber();
 
             $subtotal = 0.0;
@@ -230,15 +362,28 @@ class InvoiceController extends Controller
             $additionalCharges = (float) ($validated['additional_charges'] ?? 0);
             $grandTotal = max(0, $taxableSubtotal + $taxAmount + $additionalCharges);
 
+            $displayCustomerName = $customer->customer_name;
+            $displayVehiclePlate = $vehicle ? $vehicle->vehicle_number : null;
+            $displayVehicleType = $vehicle ? $vehicle->vehicleType?->name : null;
+            $displayMakeModel = $vehicle ? ($vehicle->make_model ?: ($vehicle->brand ? trim($vehicle->brand.' '.$vehicle->model) : null)) : null;
+
             $customerSnapshot = [
-                'customer_name' => $customer->customer_name,
+                'customer_name' => $displayCustomerName,
                 'phone' => $customer->phone,
                 'email' => $customer->email,
                 'customer_type' => $customer->customer_type,
                 'company_name' => $customer->company_name,
                 'tax_number' => $customer->tax_number,
                 'address' => $customer->address,
+                'is_manual' => false,
+                'vehicle_number' => $displayVehiclePlate,
+                'vehicle_type' => $displayVehicleType,
+                'vehicle_make_model' => $displayMakeModel,
             ];
+
+            $defaultSubject = $displayVehiclePlate
+                ? "Direct Invoice for {$displayCustomerName} ({$displayVehiclePlate})"
+                : "Direct Invoice for {$displayCustomerName}";
 
             $invoice = Invoice::create([
                 'invoice_number' => $invoiceNumber,
@@ -247,7 +392,7 @@ class InvoiceController extends Controller
                 'due_date' => $validated['due_date'] ?? null,
                 'customer_id' => $customer->id,
                 'invoice_type' => 'manual',
-                'subject' => $validated['subject'] ?? "Direct Invoice for {$customer->customer_name}",
+                'subject' => $validated['subject'] ?: $defaultSubject,
                 'reference' => $validated['reference'] ?? null,
                 'subtotal' => $subtotal,
                 'discount_type' => $docDiscType,
@@ -275,7 +420,10 @@ class InvoiceController extends Controller
 
             return redirect()->route('operations.invoices.show', $invoice)
                 ->with('success', "Invoice #{$invoice->invoice_number} created successfully.");
-        } catch (Exception $e) {
+        } catch (ValidationException $ve) {
+            DB::rollBack();
+            throw $ve;
+        } catch (\Throwable $e) {
             DB::rollBack();
 
             return back()->withInput()->with('error', "Failed to create invoice: {$e->getMessage()}");

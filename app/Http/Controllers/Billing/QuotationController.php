@@ -14,6 +14,7 @@ use App\Models\Quotation;
 use App\Models\QuotationItem;
 use App\Models\Service;
 use App\Models\Vehicle;
+use App\Models\VehicleType;
 use App\Services\BranchContext;
 use App\Services\Inventory\StockService;
 use App\Services\NumberToWordsHelper;
@@ -23,6 +24,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class QuotationController extends Controller
@@ -102,6 +104,7 @@ class QuotationController extends Controller
     {
         $customers = Customer::where('status', 'active')->orderBy('customer_name')->get();
         $vehicles = Vehicle::with(['customer', 'vehicleType'])->orderBy('vehicle_number')->get();
+        $vehicleTypes = VehicleType::active()->orderBy('name')->get();
         $services = Service::active()->orderBy('name')->get();
 
         $products = Product::active()->orderBy('name')->get()->map(function ($product) {
@@ -120,6 +123,7 @@ class QuotationController extends Controller
         return view('billing.quotations.create', compact(
             'customers',
             'vehicles',
+            'vehicleTypes',
             'services',
             'products',
             'company',
@@ -135,8 +139,13 @@ class QuotationController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'customer_id' => ['required', 'exists:customers,id'],
+            'customer_id' => ['nullable', 'exists:customers,id'],
             'vehicle_id' => ['nullable', 'exists:vehicles,id'],
+            'new_customer_name' => ['nullable', 'string', 'max:150'],
+            'new_customer_mobile' => ['nullable', 'string', 'max:50'],
+            'new_customer_email' => ['nullable', 'email', 'max:150'],
+            'new_vehicle_number' => ['nullable', 'string', 'max:50'],
+            'new_vehicle_type_id' => ['nullable', 'exists:vehicle_types,id'],
             'quotation_date' => ['required', 'date'],
             'expiry_date' => ['nullable', 'date', 'after_or_equal:quotation_date'],
             'subject' => ['nullable', 'string', 'max:255'],
@@ -160,12 +169,87 @@ class QuotationController extends Controller
         ]);
 
         $activeBranchId = BranchContext::getActiveBranchId();
-        $customer = Customer::findOrFail($validated['customer_id']);
-        $vehicle = ! empty($validated['vehicle_id']) ? Vehicle::find($validated['vehicle_id']) : null;
         $company = CompanySetting::getSettings();
 
         DB::beginTransaction();
         try {
+            // 1. Resolve Customer (Existing or Auto-Register)
+            $customer = null;
+            if (! empty($validated['customer_id'])) {
+                $customer = Customer::findOrFail($validated['customer_id']);
+            } elseif (! empty($validated['new_customer_name'])) {
+                $mobile = trim((string) ($validated['new_customer_mobile'] ?? ''));
+                if ($mobile === '') {
+                    throw ValidationException::withMessages([
+                        'new_customer_mobile' => 'Customer mobile number is required when adding a new customer.',
+                    ]);
+                }
+
+                $matchingCustomers = Customer::where('phone', $mobile)->get();
+                if ($matchingCustomers->count() === 1) {
+                    $customer = $matchingCustomers->first();
+                } elseif ($matchingCustomers->count() > 1) {
+                    throw ValidationException::withMessages([
+                        'new_customer_mobile' => 'Multiple customers found with mobile number '.$mobile.'. Please select from search.',
+                    ]);
+                } else {
+                    $customer = Customer::create([
+                        'customer_name' => trim((string) $validated['new_customer_name']),
+                        'phone' => $mobile,
+                        'email' => ! empty($validated['new_customer_email']) ? trim((string) $validated['new_customer_email']) : null,
+                        'customer_type' => 'individual',
+                        'status' => 'active',
+                    ]);
+                }
+            } else {
+                throw ValidationException::withMessages([
+                    'customer_id' => 'Please select an existing customer or vehicle, or add a new customer.',
+                ]);
+            }
+
+            // 2. Resolve Vehicle (Existing or Auto-Register)
+            $vehicle = null;
+            $vehicleId = null;
+            if (! empty($validated['vehicle_id']) && is_numeric($validated['vehicle_id'])) {
+                $vehicle = Vehicle::with('vehicleType')->find($validated['vehicle_id']);
+                if ($vehicle) {
+                    $vehicleId = $vehicle->id;
+                }
+            } elseif (! empty($validated['new_vehicle_number'])) {
+                $rawPlate = trim((string) $validated['new_vehicle_number']);
+                $normalized = Vehicle::normalizeNumber($rawPlate);
+
+                if (empty($validated['new_vehicle_type_id'])) {
+                    throw ValidationException::withMessages([
+                        'new_vehicle_type_id' => 'Vehicle type is required when specifying a vehicle number.',
+                    ]);
+                }
+
+                $existingVehicle = Vehicle::with(['customer', 'vehicleType'])->where('vehicle_number_normalized', $normalized)->first();
+                if ($existingVehicle) {
+                    if ($existingVehicle->customer_id === $customer->id) {
+                        $vehicle = $existingVehicle;
+                        $vehicleId = $existingVehicle->id;
+                    } else {
+                        $otherOwner = $existingVehicle->customer?->customer_name ?? 'another customer';
+                        throw ValidationException::withMessages([
+                            'new_vehicle_number' => "This vehicle is already registered to {$otherOwner}. Please select it from search or verify the vehicle number.",
+                        ]);
+                    }
+                } else {
+                    $vehicle = Vehicle::create([
+                        'customer_id' => $customer->id,
+                        'branch_id' => $activeBranchId,
+                        'vehicle_type_id' => $validated['new_vehicle_type_id'],
+                        'vehicle_number' => $rawPlate,
+                        'vehicle_number_normalized' => $normalized,
+                        'current_mileage' => 0,
+                    ]);
+                    $vehicle->load('vehicleType');
+                    $vehicleId = $vehicle->id;
+                }
+            }
+
             $quotationNumber = Quotation::generateQuotationNumber($activeBranchId);
 
             // Calculate item totals
@@ -229,7 +313,6 @@ class QuotationController extends Controller
             $additionalCharges = (float) ($validated['additional_charges'] ?? 0);
             $grandTotal = max(0, $taxableSubtotal + $taxAmount + $additionalCharges);
 
-            // Snapshots
             $customerSnapshot = [
                 'name' => $customer->customer_name,
                 'phone' => $customer->phone,
@@ -238,14 +321,20 @@ class QuotationController extends Controller
                 'company_name' => $customer->company_name,
                 'tax_number' => $customer->tax_number,
                 'address' => $customer->address,
+                'is_manual' => false,
             ];
 
-            $vehicleSnapshot = $vehicle ? [
-                'vehicle_number' => $vehicle->vehicle_number,
-                'make_model' => $vehicle->make_model,
-                'vehicle_type' => $vehicle->vehicleType?->name,
-                'current_mileage' => $vehicle->current_mileage,
-            ] : null;
+            if ($vehicle) {
+                $vehicleSnapshot = [
+                    'vehicle_number' => $vehicle->vehicle_number,
+                    'make_model' => $vehicle->make_model ?: ($vehicle->brand ? trim($vehicle->brand.' '.$vehicle->model) : null),
+                    'vehicle_type' => $vehicle->vehicleType?->name,
+                    'current_mileage' => $vehicle->current_mileage,
+                    'is_registered' => true,
+                ];
+            } else {
+                $vehicleSnapshot = null;
+            }
 
             $companySnapshot = [
                 'company_name' => $company->company_name,
@@ -256,14 +345,21 @@ class QuotationController extends Controller
                 'tax_number' => $company->tax_number,
             ];
 
+            $displayCustomerName = $customerSnapshot['name'];
+            $displayVehiclePlate = $vehicleSnapshot['vehicle_number'] ?? null;
+
+            $defaultSubject = $displayVehiclePlate
+                ? "Service Quotation for {$displayVehiclePlate}"
+                : "Quotation for {$displayCustomerName}";
+
             $quotation = Quotation::create([
                 'branch_id' => $activeBranchId,
                 'customer_id' => $customer->id,
-                'vehicle_id' => $vehicle?->id,
+                'vehicle_id' => $vehicleId,
                 'quotation_number' => $quotationNumber,
                 'quotation_date' => $validated['quotation_date'],
                 'expiry_date' => $validated['expiry_date'] ?? null,
-                'subject' => $validated['subject'] ?? ($vehicle ? "Service Quotation for {$vehicle->vehicle_number}" : "Quotation for {$customer->customer_name}"),
+                'subject' => $validated['subject'] ?: $defaultSubject,
                 'reference' => $validated['reference'] ?? null,
                 'subtotal' => $subtotal,
                 'discount_type' => $docDiscType,
@@ -291,7 +387,10 @@ class QuotationController extends Controller
 
             return redirect()->route('billing.quotations.show', $quotation)
                 ->with('success', "Quotation #{$quotation->quotation_number} created successfully.");
-        } catch (Exception $e) {
+        } catch (ValidationException $ve) {
+            DB::rollBack();
+            throw $ve;
+        } catch (\Throwable $e) {
             DB::rollBack();
 
             return back()->withInput()->with('error', "Failed to create quotation: {$e->getMessage()}");

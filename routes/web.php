@@ -493,6 +493,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/employees', [SearchController::class, 'employees'])->name('employees');
         Route::get('/customers', [SearchController::class, 'customers'])->name('customers');
         Route::get('/vehicles', [SearchController::class, 'vehicles'])->name('vehicles');
+        Route::get('/customers-and-vehicles', [SearchController::class, 'customersAndVehicles'])->name('customers-and-vehicles');
         Route::get('/suppliers', [SearchController::class, 'suppliers'])->name('suppliers');
         Route::get('/products', [SearchController::class, 'products'])->name('products');
         Route::get('/services', [SearchController::class, 'services'])->name('services');

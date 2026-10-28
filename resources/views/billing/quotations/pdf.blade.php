@@ -292,39 +292,50 @@
         <tr>
             <td class="info-td">
                 <div class="info-heading">Customer Information</div>
-                <div class="customer-name">{{ $quotation->customer->customer_name }}</div>
-                @if($quotation->customer->customer_type === 'company' && $quotation->customer->company_name)
+                <div class="customer-name">{{ $quotation->customer_snapshot['name'] ?? $quotation->customer->customer_name }}</div>
+                @if(($quotation->customer_snapshot['company_name'] ?? $quotation->customer->company_name))
                     <div style="font-weight: bold; color: #1e3a8a; margin-top: 2px;">
-                        Company: {{ $quotation->customer->company_name }}
+                        Company: {{ $quotation->customer_snapshot['company_name'] ?? $quotation->customer->company_name }}
                     </div>
                 @endif
                 <div style="color: #4b5563; margin-top: 3px;">
-                    @if($quotation->customer->phone)
-                        <div>Phone: {{ $quotation->customer->phone }}</div>
+                    @php
+                        $pdfPhone = $quotation->customer_snapshot['phone'] ?? $quotation->customer->phone;
+                        $pdfEmail = $quotation->customer_snapshot['email'] ?? $quotation->customer->email;
+                        $pdfTax = $quotation->customer_snapshot['tax_number'] ?? $quotation->customer->tax_number;
+                        $pdfAddress = $quotation->customer_snapshot['address'] ?? $quotation->customer->address;
+                    @endphp
+                    @if($pdfPhone)
+                        <div>Phone: {{ $pdfPhone }}</div>
                     @endif
-                    @if($quotation->customer->email)
-                        <div>Email: {{ $quotation->customer->email }}</div>
+                    @if($pdfEmail)
+                        <div>Email: {{ $pdfEmail }}</div>
                     @endif
-                    @if($quotation->customer->tax_number)
-                        <div>Tax No: {{ $quotation->customer->tax_number }}</div>
+                    @if($pdfTax)
+                        <div>Tax No: {{ $pdfTax }}</div>
                     @endif
-                    @if($quotation->customer->address)
-                        <div>Address: {{ $quotation->customer->address }}</div>
+                    @if($pdfAddress)
+                        <div>Address: {{ $pdfAddress }}</div>
                     @endif
                 </div>
             </td>
             <td class="info-td">
                 <div class="info-heading">Vehicle & Estimate Details</div>
-                @if($quotation->vehicle)
-                    <div class="vehicle-badge">{{ $quotation->vehicle->vehicle_number }}</div>
+                @php
+                    $pdfVNum = $quotation->vehicle?->vehicle_number ?? ($quotation->vehicle_snapshot['vehicle_number'] ?? null);
+                    $pdfVType = $quotation->vehicle?->vehicleType?->name ?? ($quotation->vehicle_snapshot['vehicle_type'] ?? null);
+                    $pdfVMakeModel = $quotation->vehicle?->make_model ?? ($quotation->vehicle_snapshot['make_model'] ?? null);
+                @endphp
+                @if($pdfVNum)
+                    <div class="vehicle-badge">{{ $pdfVNum }}</div>
                     <div style="color: #4b5563; margin-top: 4px;">
-                        @if($quotation->vehicle->make_model)
-                            <div>Make / Model: <strong>{{ $quotation->vehicle->make_model }}</strong></div>
+                        @if($pdfVMakeModel)
+                            <div>Make / Model: <strong>{{ $pdfVMakeModel }}</strong></div>
                         @endif
-                        @if($quotation->vehicle->vehicleType)
-                            <div>Type: {{ $quotation->vehicle->vehicleType->name }}</div>
+                        @if($pdfVType)
+                            <div>Type: {{ $pdfVType }}</div>
                         @endif
-                        @if($quotation->vehicle->year)
+                        @if($quotation->vehicle?->year)
                             <div>Year: {{ $quotation->vehicle->year }}</div>
                         @endif
                     </div>

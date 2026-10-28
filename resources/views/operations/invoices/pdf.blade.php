@@ -310,28 +310,39 @@
     </table>
 
     <!-- Customer and Source Information -->
+    @php
+        $pdfCustSnap = $invoice->customer_snapshot ?? [];
+        $pdfCustomerName = $pdfCustSnap['customer_name'] ?? $invoice->customer?->customer_name;
+        $pdfCustomerPhone = $pdfCustSnap['phone'] ?? $invoice->customer?->phone;
+        $pdfCustomerEmail = $pdfCustSnap['email'] ?? $invoice->customer?->email;
+        $pdfCustomerTax = $pdfCustSnap['tax_number'] ?? $invoice->customer?->tax_number;
+        $pdfCustomerAddress = $pdfCustSnap['address'] ?? $invoice->customer?->address;
+        $pdfSnapVehicle = $pdfCustSnap['vehicle_number'] ?? null;
+        $pdfSnapType = $pdfCustSnap['vehicle_type'] ?? null;
+        $pdfSnapMakeModel = $pdfCustSnap['vehicle_make_model'] ?? null;
+    @endphp
     <table class="info-table">
         <tr>
             <td class="info-td">
                 <div class="info-heading">Billed To</div>
-                <div class="customer-name">{{ $invoice->customer->customer_name }}</div>
-                @if($invoice->customer->customer_type === 'company' && $invoice->customer->company_name)
+                <div class="customer-name">{{ $pdfCustomerName }}</div>
+                @if($invoice->customer && $invoice->customer->customer_type === 'company' && $invoice->customer->company_name)
                     <div style="font-weight: bold; color: #1e3a8a; margin-top: 2px;">
                         Company: {{ $invoice->customer->company_name }}
                     </div>
                 @endif
                 <div style="color: #4b5563; margin-top: 3px;">
-                    @if($invoice->customer->phone)
-                        <div>Phone: {{ $invoice->customer->phone }}</div>
+                    @if($pdfCustomerPhone)
+                        <div>Phone: {{ $pdfCustomerPhone }}</div>
                     @endif
-                    @if($invoice->customer->email)
-                        <div>Email: {{ $invoice->customer->email }}</div>
+                    @if($pdfCustomerEmail)
+                        <div>Email: {{ $pdfCustomerEmail }}</div>
                     @endif
-                    @if($invoice->customer->tax_number)
-                        <div>Tax No: {{ $invoice->customer->tax_number }}</div>
+                    @if($pdfCustomerTax)
+                        <div>Tax No: {{ $pdfCustomerTax }}</div>
                     @endif
-                    @if($invoice->customer->address)
-                        <div>Address: {{ $invoice->customer->address }}</div>
+                    @if($pdfCustomerAddress)
+                        <div>Address: {{ $pdfCustomerAddress }}</div>
                     @endif
                 </div>
             </td>
@@ -354,6 +365,16 @@
                         <div>Quotation: <strong>#{{ $invoice->quotation->quotation_number }}</strong></div>
                         @if($invoice->quotation->vehicle->make_model)
                             <div>Make/Model: {{ $invoice->quotation->vehicle->make_model }}</div>
+                        @endif
+                    </div>
+                @elseif($pdfSnapVehicle)
+                    <div class="vehicle-badge">{{ $pdfSnapVehicle }}</div>
+                    <div style="color: #4b5563; margin-top: 4px;">
+                        @if($pdfSnapMakeModel)
+                            <div>Make/Model: {{ $pdfSnapMakeModel }}</div>
+                        @endif
+                        @if($pdfSnapType)
+                            <div>Type: {{ $pdfSnapType }}</div>
                         @endif
                     </div>
                 @elseif($invoice->invoice_type === 'direct_sale')

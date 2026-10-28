@@ -144,7 +144,7 @@ class SearchController extends Controller
         $term = trim((string) $request->query('q', ''));
         $customerId = $request->query('customer_id');
 
-        $query = Vehicle::with('customer');
+        $query = Vehicle::with(['customer', 'vehicleType']);
 
         if (! empty($customerId)) {
             $query->where('customer_id', $customerId);
@@ -168,14 +168,133 @@ class SearchController extends Controller
         $vehicles = $query->orderBy('vehicle_number')->limit(20)->get();
 
         return response()->json($vehicles->map(function ($v) {
+            $makeModel = $v->make_model ?: ($v->brand ? trim($v->brand.' '.$v->model) : '');
+
             return [
                 'id' => $v->id,
-                'label' => $v->vehicle_number.($v->make_model ? ' ('.$v->make_model.')' : ($v->brand ? ' ('.$v->brand.' '.$v->model.')' : '')),
+                'label' => $v->vehicle_number.($makeModel ? ' ('.$makeModel.')' : ''),
                 'subtext' => 'Owner: '.($v->customer?->customer_name ?? 'N/A').($v->customer?->phone ? ' • '.$v->customer->phone : ''),
                 'customer_id' => $v->customer_id,
                 'vehicle_number' => $v->vehicle_number,
+                'make_model' => $makeModel,
+                'vehicle_type' => $v->vehicleType?->name ?? '',
+                'vehicle_type_id' => $v->vehicle_type_id,
+                'owner_name' => $v->customer?->customer_name ?? '',
+                'owner_phone' => $v->customer?->phone ?? '',
             ];
         }));
+    }
+
+    /**
+     * Unified Search for Customers and Vehicles (for Quotations & Invoices).
+     */
+    public function customersAndVehicles(Request $request): JsonResponse
+    {
+        $vehicleId = $request->query('vehicle_id');
+        $customerId = $request->query('customer_id');
+
+        if (! empty($vehicleId)) {
+            $v = Vehicle::with(['customer', 'vehicleType'])->find($vehicleId);
+            if ($v) {
+                return response()->json([[
+                    'id' => 'v_'.$v->id,
+                    'customer_id' => $v->customer_id,
+                    'vehicle_id' => $v->id,
+                    'customer_name' => $v->customer?->customer_name ?? '',
+                    'customer_phone' => $v->customer?->phone ?? '',
+                    'customer_email' => $v->customer?->email ?? '',
+                    'vehicle_number' => $v->vehicle_number,
+                    'vehicle_type' => $v->vehicleType?->name ?? '',
+                    'vehicle_type_id' => $v->vehicle_type_id,
+                    'label' => $v->vehicle_number.' — '.($v->customer?->customer_name ?? 'N/A'),
+                    'subtext' => 'Vehicle: '.$v->vehicle_number.($v->vehicleType ? ' ('.$v->vehicleType->name.')' : '').' • Owner: '.($v->customer?->customer_name ?? 'N/A').($v->customer?->phone ? ' • '.$v->customer->phone : ''),
+                ]]);
+            }
+        }
+
+        if (! empty($customerId)) {
+            $c = Customer::find($customerId);
+            if ($c) {
+                return response()->json([[
+                    'id' => 'c_'.$c->id,
+                    'customer_id' => $c->id,
+                    'vehicle_id' => null,
+                    'customer_name' => $c->customer_name,
+                    'customer_phone' => $c->phone,
+                    'customer_email' => $c->email,
+                    'vehicle_number' => null,
+                    'vehicle_type' => '',
+                    'vehicle_type_id' => null,
+                    'label' => $c->customer_name.($c->company_name ? ' — ['.$c->company_name.']' : '').' (Customer)',
+                    'subtext' => 'Phone: '.($c->phone ?? 'N/A').($c->email ? ' • '.$c->email : ''),
+                ]]);
+            }
+        }
+
+        $term = trim((string) $request->query('q', ''));
+        $results = collect();
+
+        // 1. Search Vehicles (match plate, make/model, or owner name/phone)
+        $vehicleQuery = Vehicle::with(['customer', 'vehicleType']);
+        if ($term !== '') {
+            $normalized = Vehicle::normalizeNumber($term);
+            $vehicleQuery->where(function ($q) use ($term, $normalized) {
+                $q->where('vehicle_number', 'like', "%{$term}%")
+                    ->orWhere('vehicle_number_normalized', 'like', "%{$normalized}%")
+                    ->orWhere('make_model', 'like', "%{$term}%")
+                    ->orWhereHas('customer', function ($cq) use ($term) {
+                        $cq->where('customer_name', 'like', "%{$term}%")
+                            ->orWhere('phone', 'like', "%{$term}%");
+                    });
+            });
+        }
+        $vehicles = $vehicleQuery->orderBy('vehicle_number')->limit(15)->get();
+
+        foreach ($vehicles as $v) {
+            $typeName = $v->vehicleType?->name ?? '';
+            $results->push([
+                'id' => 'v_'.$v->id,
+                'customer_id' => $v->customer_id,
+                'vehicle_id' => $v->id,
+                'customer_name' => $v->customer?->customer_name ?? '',
+                'customer_phone' => $v->customer?->phone ?? '',
+                'customer_email' => $v->customer?->email ?? '',
+                'vehicle_number' => $v->vehicle_number,
+                'vehicle_type' => $typeName,
+                'vehicle_type_id' => $v->vehicle_type_id,
+                'label' => $v->vehicle_number.' — '.($v->customer?->customer_name ?? 'N/A'),
+                'subtext' => 'Vehicle: '.$v->vehicle_number.($typeName ? ' ('.$typeName.')' : '').' • Owner: '.($v->customer?->customer_name ?? 'N/A').($v->customer?->phone ? ' • '.$v->customer->phone : ''),
+            ]);
+        }
+
+        // 2. Search Customers (including those without vehicles)
+        $customerQuery = Customer::query()->where('status', 'active');
+        if ($term !== '') {
+            $customerQuery->where(function ($q) use ($term) {
+                $q->where('customer_name', 'like', "%{$term}%")
+                    ->orWhere('phone', 'like', "%{$term}%")
+                    ->orWhere('company_name', 'like', "%{$term}%");
+            });
+        }
+        $customers = $customerQuery->orderBy('customer_name')->limit(15)->get();
+
+        foreach ($customers as $c) {
+            $results->push([
+                'id' => 'c_'.$c->id,
+                'customer_id' => $c->id,
+                'vehicle_id' => null,
+                'customer_name' => $c->customer_name,
+                'customer_phone' => $c->phone,
+                'customer_email' => $c->email,
+                'vehicle_number' => null,
+                'vehicle_type' => '',
+                'vehicle_type_id' => null,
+                'label' => $c->customer_name.($c->company_name ? ' — ['.$c->company_name.']' : '').' (Customer)',
+                'subtext' => 'Phone: '.($c->phone ?? 'N/A').($c->email ? ' • '.$c->email : ''),
+            ]);
+        }
+
+        return response()->json($results->values()->take(25));
     }
 
     /**

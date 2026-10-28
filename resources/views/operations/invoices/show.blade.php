@@ -278,15 +278,24 @@
         </div>
 
         <!-- Bill To / Customer & Vehicle Info -->
+        @php
+            $custSnap = $invoice->customer_snapshot ?? [];
+            $dispCustomerName = $custSnap['customer_name'] ?? $invoice->customer?->customer_name;
+            $dispPhone = $custSnap['phone'] ?? $invoice->customer?->phone;
+            $dispAddress = $custSnap['address'] ?? $invoice->customer?->address;
+            $snapVehicle = $custSnap['vehicle_number'] ?? null;
+            $snapType = $custSnap['vehicle_type'] ?? null;
+            $snapMakeModel = $custSnap['vehicle_make_model'] ?? null;
+        @endphp
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-slate-50/70 p-5 rounded-xl border border-gray-100 text-xs sm:text-sm">
             <div>
                 <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">Billed To</span>
-                <h3 class="font-bold text-gray-900 text-base">{{ $invoice->customer->customer_name }}</h3>
-                @if($invoice->customer->phone)
-                    <p class="text-gray-600 mt-0.5"><strong>Phone:</strong> {{ $invoice->customer->phone }}</p>
+                <h3 class="font-bold text-gray-900 text-base">{{ $dispCustomerName }}</h3>
+                @if($dispPhone)
+                    <p class="text-gray-600 mt-0.5"><strong>Phone:</strong> {{ $dispPhone }}</p>
                 @endif
-                @if($invoice->customer->address)
-                    <p class="text-gray-500 mt-0.5">{{ $invoice->customer->address }}</p>
+                @if($dispAddress)
+                    <p class="text-gray-500 mt-0.5">{{ $dispAddress }}</p>
                 @endif
             </div>
 
@@ -303,6 +312,16 @@
                     @if($invoice->jobCard->next_service_mileage > 0)
                         <div class="text-[11px] text-[#0B1849] font-semibold mt-1">
                             Next Service Due: {{ number_format($invoice->jobCard->next_service_mileage) }} km
+                        </div>
+                    @endif
+                </div>
+            @elseif($snapVehicle)
+                <div class="sm:text-right">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">Vehicle Details</span>
+                    <div class="font-bold text-gray-900 text-base tracking-wide">{{ $snapVehicle }}</div>
+                    @if($snapType || $snapMakeModel)
+                        <div class="text-xs text-gray-600 mt-0.5">
+                            {{ $snapType }} {{ $snapMakeModel ? '• '.$snapMakeModel : '' }}
                         </div>
                     @endif
                 </div>

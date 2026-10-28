@@ -222,46 +222,57 @@
             <div>
                 <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Prepared For</span>
                 <div class="text-sm font-bold text-gray-900">
-                    {{ $quotation->customer->customer_name }}
+                    {{ $quotation->customer_snapshot['name'] ?? $quotation->customer->customer_name }}
                 </div>
-                @if($quotation->customer->customer_type === 'company' && $quotation->customer->company_name)
+                @if(($quotation->customer_snapshot['company_name'] ?? $quotation->customer->company_name))
                     <div class="text-xs text-blue-700 font-semibold mt-0.5 flex items-center space-x-1">
                         <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                         </svg>
-                        <span>{{ $quotation->customer->company_name }}</span>
+                        <span>{{ $quotation->customer_snapshot['company_name'] ?? $quotation->customer->company_name }}</span>
                     </div>
                 @endif
                 <div class="text-xs text-gray-600 mt-1 space-y-0.5">
-                    @if($quotation->customer->phone)
-                        <div>Phone: {{ $quotation->customer->phone }}</div>
+                    @php
+                        $dispPhone = $quotation->customer_snapshot['phone'] ?? $quotation->customer->phone;
+                        $dispEmail = $quotation->customer_snapshot['email'] ?? $quotation->customer->email;
+                        $dispAddress = $quotation->customer_snapshot['address'] ?? $quotation->customer->address;
+                    @endphp
+                    @if($dispPhone)
+                        <div>Phone: {{ $dispPhone }}</div>
                     @endif
-                    @if($quotation->customer->email)
-                        <div>Email: {{ $quotation->customer->email }}</div>
+                    @if($dispEmail)
+                        <div>Email: {{ $dispEmail }}</div>
                     @endif
-                    @if($quotation->customer->address)
-                        <div>Address: {{ $quotation->customer->address }}</div>
+                    @if($dispAddress)
+                        <div>Address: {{ $dispAddress }}</div>
                     @endif
                 </div>
             </div>
 
             <div>
                 <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Target Vehicle / Scope</span>
-                @if($quotation->vehicle)
+                @php
+                    $vNum = $quotation->vehicle?->vehicle_number ?? ($quotation->vehicle_snapshot['vehicle_number'] ?? null);
+                    $vType = $quotation->vehicle?->vehicleType?->name ?? ($quotation->vehicle_snapshot['vehicle_type'] ?? null);
+                    $vMakeModel = $quotation->vehicle?->make_model ?? ($quotation->vehicle_snapshot['make_model'] ?? null);
+                    $vMileage = $quotation->vehicle?->current_mileage ?? ($quotation->vehicle_snapshot['current_mileage'] ?? null);
+                @endphp
+                @if($vNum)
                     <div class="flex items-center space-x-2">
                         <span class="px-2.5 py-1 rounded text-xs font-black bg-gray-900 text-white tracking-wide">
-                            {{ $quotation->vehicle->vehicle_number }}
+                            {{ $vNum }}
                         </span>
-                        @if($quotation->vehicle->vehicleType)
-                            <span class="text-xs text-gray-500 font-medium">({{ $quotation->vehicle->vehicleType->name }})</span>
+                        @if($vType)
+                            <span class="text-xs text-gray-500 font-medium">({{ $vType }})</span>
                         @endif
                     </div>
                     <div class="text-xs text-gray-600 mt-1.5 space-y-0.5">
-                        @if($quotation->vehicle->make_model)
-                            <div>Model: {{ $quotation->vehicle->make_model }}</div>
+                        @if($vMakeModel)
+                            <div>Model: {{ $vMakeModel }}</div>
                         @endif
-                        @if($quotation->vehicle->current_mileage)
-                            <div>Mileage: {{ number_format($quotation->vehicle->current_mileage) }} KM</div>
+                        @if($vMileage)
+                            <div>Mileage: {{ number_format($vMileage) }} KM</div>
                         @endif
                     </div>
                 @else
